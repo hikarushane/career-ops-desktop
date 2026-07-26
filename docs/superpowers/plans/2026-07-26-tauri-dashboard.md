@@ -388,6 +388,100 @@ Turns the data layer into the payload the whole frontend reads. Includes the dir
   - `func resolvePDF(root, company string) string` — returns a root-relative path when exactly one `output/*.pdf` matches the company slug, else `""`.
   - `func slugify(s string) string` — lowercases, replaces every run of non-alphanumeric bytes with `-`, trims leading and trailing `-`.
 
+- [ ] **Step 0: Write `summary.go` — report field extraction**
+
+`data.LoadReportSummary` extracts nothing from any real report. Its regexes want a Spanish, bold, pipe-table form; across the repo's 30 reports, `Arquetipo` appears 0 times, `**TL;DR**|` 0, `**Remote**|` 0, `**Comp**|` 0. This is the one place the sidecar reimplements instead of delegating. Full reasoning and measurements: spec §4.1.
+
+Real reports use two forms, and both must match:
+
+```
+**Archetype:** Technical PM (Intern-level)      ← header colon form
+| Archetype | Technical PM (Intern) |           ← table row form
+```
+
+Create `dashboard/cmd/career-data/summary.go`:
+
+```go
+package main
+
+import (
+	"regexp"
+	"strings"
+)
+
+// Report summary extraction.
+//
+// data.LoadReportSummary cannot do this: its regexes require a bold,
+// pipe-table form and the literal Spanish word "Arquetipo", which no report
+// in this repo uses. Fixing it means editing dashboard/internal/data/, a
+// system path that update-system.mjs reverts — so extraction lives here.
+// See docs/superpowers/specs/2026-07-26-tauri-dashboard-design.md §4.1.
+
+// fieldPattern builds the two matchers for one field label. label is a regex
+// fragment, so alternations like "Comp(?:ensation)?" are allowed.
+func fieldPattern(label string) []*regexp.Regexp {
+	return []*regexp.Regexp{
+		// **Label:** value
+		regexp.MustCompile(`(?mi)^\*\*` + label + `:\*\*[ \t]*(.+?)[ \t]*$`),
+		// | Label | value |
+		regexp.MustCompile(`(?mi)^\|[ \t]*` + label + `[ \t]*\|[ \t]*([^|\r\n]+)`),
+	}
+}
+
+var (
+	patArchetype = fieldPattern(`Archetype`)
+	patTlDr      = fieldPattern(`TL;DR`)
+	patRemote    = fieldPattern(`Remote`)
+	// Reports record compensation inconsistently; accept the variants that
+	// actually occur. Coverage is 9/30 — a property of the data, not the
+	// matcher. Unmatched fields render as an em dash in the UI.
+	patComp = fieldPattern(`Comp(?:ensation)?(?:\s+assessment)?`)
+)
+
+// firstMatch returns the first capture any pattern yields, cleaned.
+func firstMatch(text string, pats []*regexp.Regexp) string {
+	for _, p := range pats {
+		if m := p.FindStringSubmatch(text); m != nil {
+			if v := cleanField(m[1]); v != "" {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
+// cleanField strips table padding and markdown bold from a captured value.
+func cleanField(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimRight(s, "|")
+	s = strings.TrimSpace(s)
+	for len(s) >= 4 && strings.HasPrefix(s, "**") && strings.HasSuffix(s, "**") {
+		s = strings.TrimSpace(s[2 : len(s)-2])
+	}
+	return s
+}
+
+// extractSummary pulls the four preview-card fields out of a report's
+// markdown. Values are returned untruncated; the UI truncates for display.
+func extractSummary(markdown string) (archetype, tldr, remote, comp string) {
+	return firstMatch(markdown, patArchetype),
+		firstMatch(markdown, patTlDr),
+		firstMatch(markdown, patRemote),
+		firstMatch(markdown, patComp)
+}
+```
+
+Write `dashboard/cmd/career-data/summary_test.go` covering, at minimum: the header-colon form; the table-row form; a report carrying both, where the header form wins; a bold value inside a table cell (`| Archetype | **Platform** |`); a field that is absent, returning `""`; and `Compensation` and `Comp assessment` both matching the comp field.
+
+Then confirm the real corpus, which is the whole point of this change:
+
+```bash
+cd dashboard && go run ./cmd/career-data list --path .. \
+  | python3 -c "import json,sys; a=json.load(sys.stdin)['applications']; print({k: sum(1 for x in a if x[k]) for k in ('archetype','tldr','remote','compEstimate')}, 'of', len(a))"
+```
+
+Expected, over the repo's real reports: archetype 30, tldr 30, remote 24, comp 9. Anything near zero means the patterns regressed to the data layer's behavior.
+
 - [ ] **Step 1: Create the fixture tracker**
 
 Create `dashboard/cmd/career-data/testdata/career-ops/data/applications.md`. Every row here is a trap that has to survive parsing and, later, writing:
@@ -417,22 +511,29 @@ Create `dashboard/cmd/career-data/testdata/career-ops/reports/001-offerpad-2026-
 ```markdown
 # 001 — Offerpad — Staff Engineer
 
+**Date:** 2026-07-01
+**Archetype:** Platform / Infra
 **Score:** 4.6/5
 **URL:** https://jobs.example.test/offerpad/staff-engineer
-**PDF:** ✅
 **Legitimacy:** verified
+**PDF:** ✅
+**TL;DR:** Strong infra match, comp band above target, remote-friendly team
+**Remote:** Remote (EU)
 
-| Field | Value |
-|-------|-------|
+---
+
+## A) Role Summary
+
+| Dimension | Value |
+|-----------|-------|
 | Archetype | Platform / Infra |
-| TL;DR | Strong infra match, comp band above target, remote-friendly team |
-| Remote | Remote (EU) |
+| Domain | Developer infrastructure |
 | Comp | 90-110k EUR |
-
-## Block A — Role Summary
 
 Fixture content.
 ```
+
+This mirrors the shape of the repo's real reports — English header-colon fields above a plain table — rather than the Spanish bold-pipe form `data.LoadReportSummary` demands. `extractSummary` must handle it, and the fixture is worthless as a fixture if it does not look like real data.
 
 Create a non-empty placeholder PDF so the glob has something to find:
 
@@ -588,6 +689,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -719,8 +821,11 @@ func runList(root string) (ListResult, error) {
 			JobURL:       a.JobURL,
 		}
 		if a.ReportPath != "" {
-			item.Archetype, item.TlDr, item.Remote, item.CompEstimate =
-				data.LoadReportSummary(root, a.ReportPath)
+			// extractSummary, not data.LoadReportSummary — see summary.go for why.
+			if content, err := os.ReadFile(filepath.Join(root, a.ReportPath)); err == nil {
+				item.Archetype, item.TlDr, item.Remote, item.CompEstimate =
+					extractSummary(string(content))
+			}
 		}
 		if a.HasPDF {
 			item.PDFPath = resolvePDF(root, a.Company)
@@ -913,7 +1018,7 @@ func runReport(root, rel string) (ReportResult, error) {
 	}
 
 	res := ReportResult{OK: true, Path: rel, Markdown: string(content)}
-	res.Archetype, res.TlDr, res.Remote, res.Comp = data.LoadReportSummary(root, rel)
+	res.Archetype, res.TlDr, res.Remote, res.Comp = extractSummary(res.Markdown)
 	return res, nil
 }
 ```

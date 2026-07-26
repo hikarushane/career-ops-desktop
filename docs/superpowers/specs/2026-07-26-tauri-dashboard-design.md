@@ -92,7 +92,7 @@ The trade this buys: when upstream improves the parser, the sidecar inherits the
 
 ### 3.2 Read and write are split
 
-**Read** calls the existing exported functions listed above.
+**Read** calls the existing exported functions listed above, with one exception: report summary extraction, which `LoadReportSummary` cannot perform on real data. See §4.1.
 
 **Write** is implemented inside the sidecar, in `dashboard/cmd/career-data/writer.go`. It does not call `data.UpdateApplicationStatus`, for the reasons in §2.3.
 
@@ -159,7 +159,34 @@ career-data doctor      --path <dir>
 
 `metrics.byStatus` keys are `NormalizeStatus` output — lowercase, not the display casing in the `status` field (career.go:446-447). The frontend maps them back to labels for display.
 
-`tldr` here is the value returned by `LoadReportSummary`, which truncates at 120 characters. That is fine for the table preview card — the untruncated text is available in the full markdown from `report`. Re-implementing the extraction regexes in the sidecar to avoid truncation would duplicate logic and is rejected.
+**Summary extraction is the one place the sidecar does not call the data layer.** `data.LoadReportSummary` extracts nothing from any real report. Its regexes (career.go:19-26) require a bold, pipe-table form and, for the archetype, the literal Spanish word `Arquetipo`:
+
+```
+reArchetype       \*\*Arquetipo(?:\s+detectado)?\*\*\s*\|
+reArchetypeColon  \*\*Arquetipo:\*\*
+reTlDr            \*\*TL;DR\*\*\s*\|
+reRemote          \*\*Remote\*\*\s*\|
+reComp            \*\*Comp\*\*\s*\|
+```
+
+Real reports use an English header-colon form (`**Archetype:** Technical PM`) or a plain table row (`| Archetype | Technical PM |`). Measured across all 30 reports in this repo: `Arquetipo` appears in 0, `**TL;DR**|` in 0, `**Remote**|` in 0, `**Comp**|` in 0. All four fields come back empty for every report, which is why the existing TUI's preview panel shows nothing for them today.
+
+The sidecar therefore extracts these four fields itself, in `cmd/career-data/summary.go`, matching both real forms. Measured coverage:
+
+| Field | `LoadReportSummary` | `extractSummary` |
+|---|---|---|
+| Archetype | 0/30 | 30/30 |
+| TL;DR | 0/30 | 30/30 |
+| Remote | 0/30 | 24/30 |
+| Comp | 0/30 | 9/30 |
+
+Comp's 9/30 is a property of the data, not the matcher: the reports record compensation inconsistently (`**Comp assessment:**`, `| Comp |`, `| Compensation |`, `**Salary benchmarks:**`). Fields that do not match render as `—`.
+
+This reverses an earlier decision in this spec, which rejected re-implementing the extraction on the grounds that it would duplicate logic. Duplicating logic that returns nothing has no value to protect. Everything else — parsing, metrics, status normalization — still goes through the data layer unchanged, so the drift argument still holds where it applies.
+
+`extractSummary` returns untruncated values; `LoadReportSummary` capped `tldr` at 120 characters. The table preview card truncates for display with CSS instead, so the full text stays available to the pane.
+
+The correct long-term fix is upstream: the regexes in `career.go` should accept the English and colon forms. That is an issue against `santifer/career-ops`, not a change this project can make — editing a system path would be reverted by the next update.
 
 `pdfPath` is resolved by globbing `output/*.pdf` and matching against a slug of the company name. `generate-pdf.mjs` takes its output path as a caller-supplied argument (generate-pdf.mjs:81-99), so there is no naming convention to rely on. A unique match sets `pdfPath`; zero or multiple matches leave it empty and set `hasPdf` from the tracker column alone. The UI does not guess.
 
@@ -380,6 +407,9 @@ Recorded deliberately, not forgotten:
 
 ---
 
-## 13. Known issue, not fixed here
+## 13. Known issues, not fixed here
 
-`data.UpdateApplicationStatus` and `replaceStatusInLine` (career.go:545-583) remain unsafe for the TUI, which still calls them. Fixing that means editing a system-layer file, which an update would revert. The correct route is an upstream issue against `santifer/career-ops`. This design routes around the bug rather than fixing it, and the sidecar's writer is where a correct implementation now lives.
+Two bugs in `dashboard/internal/data/career.go` affect the TUI and cannot be fixed from this project — editing a system path would be reverted by the next `update-system.mjs apply`. Both deserve upstream issues against `santifer/career-ops`. The sidecar routes around each, and is where a correct implementation now lives.
+
+1. **Unsafe status writeback.** `UpdateApplicationStatus` and `replaceStatusInLine` (career.go:545-583) replace the first occurrence of the old status anywhere in the row, so a company name or notes cell containing a status string gets corrupted. See §2.3 and §5.
+2. **Summary extraction matches nothing.** `LoadReportSummary`'s regexes (career.go:19-26) require a Spanish, bold, pipe-table form that no report in this repo uses, so Archetype, TL;DR, Remote and Comp are empty for all 30. See §4.1.
