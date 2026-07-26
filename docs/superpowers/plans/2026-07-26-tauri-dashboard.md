@@ -25,6 +25,10 @@ Every task's requirements implicitly include this section.
 - **macOS only.** No Windows or Linux packaging in this plan.
 - **Commit messages in English.** Conventional Commits prefix (`feat:`, `fix:`, `test:`, `chore:`).
 - **Work happens on the `tauri-dashboard` branch**, which already exists and holds the spec commit.
+- **Never run `git add -A`, `git add .`, or `git commit -a`.** Stage only the paths your task created or modified, exactly as each commit step lists them. See the next constraint for why.
+- **The working tree is dirty before you start, and that is expected.** 167 tracked files differ from HEAD by CRLF line endings only; 16 more are deleted (`LEGAL_DISCLAIMER.md`, six localized READMEs, `config/profile.example.yml`, the `examples/` tree); `.gitignore`, `CLAUDE.md`, and `interview-prep/story-bank.md` carry unrelated local edits. None of it belongs to this plan. Do not restore, delete, commit, or normalize any of it, and do not "clean up" the tree.
+
+  Because of this, every verification step in this plan uses `--ignore-cr-at-eol` and compares content rather than asserting a clean `git status`. A bare `git status --porcelain` will always look dirty here; that is not a failure signal.
 
 ## File Structure
 
@@ -332,8 +336,8 @@ Expected: PASS — three tests.
 
 - [ ] **Step 6: Verify `go.mod` is untouched and the TUI still builds**
 
-Run: `cd dashboard && git diff --exit-code go.mod go.sum && go build ./... && go test ./...`
-Expected: no diff output, exit 0, all existing tests pass.
+Run: `cd dashboard && git diff --ignore-cr-at-eol --exit-code -- go.mod go.sum && go build ./... && go test ./...`
+Expected: no diff output, exit 0, all existing tests pass. `--ignore-cr-at-eol` is required: these files already differ from HEAD by line endings alone, so a bare `--exit-code` fails before your change is even considered.
 
 - [ ] **Step 7: Run it against the real repo**
 
@@ -748,8 +752,8 @@ Expected: PASS — eight tests (Task 1's three plus five new).
 
 - [ ] **Step 8: Confirm nothing under `dashboard/` outside `cmd/` changed**
 
-Run: `cd dashboard && git status --porcelain -- . | grep -v 'cmd/career-data' || echo CLEAN`
-Expected: `CLEAN`.
+Run: `cd dashboard && git diff --ignore-cr-at-eol --stat -- . ':(exclude)cmd/career-data' | grep . && echo DIRTY || echo CLEAN`
+Expected: `CLEAN`. This asserts no *content* change to the existing TUI. A bare `git status` cannot be used: the tree already shows fifteen dirty paths under `dashboard/` from the pre-existing CRLF divergence.
 
 - [ ] **Step 9: Commit**
 
@@ -1660,8 +1664,13 @@ Expected: PASS — twenty-six tests.
 
 - [ ] **Step 6: Confirm the TUI is untouched and still green**
 
-Run: `cd dashboard && git diff --exit-code go.mod go.sum && go test ./... && git status --porcelain -- . | grep -v 'cmd/career-data' || echo CLEAN`
-Expected: no `go.mod` diff, all tests pass, `CLEAN`.
+```bash
+cd dashboard
+git diff --ignore-cr-at-eol --exit-code -- go.mod go.sum && echo "go.mod unchanged"
+go test ./...
+git diff --ignore-cr-at-eol --stat -- . ':(exclude)cmd/career-data' | grep . && echo DIRTY || echo CLEAN
+```
+Expected: `go.mod unchanged`, every package green, `CLEAN`.
 
 - [ ] **Step 7: Commit**
 
@@ -3823,9 +3832,11 @@ Delivers acceptance criteria 5 and 6, and closes the loop on the constraint the 
 - [ ] **Step 1: Verify acceptance criterion 5**
 
 ```bash
-cd dashboard && git diff --exit-code go.mod go.sum && go build ./... && go test ./...
+cd dashboard
+git diff --ignore-cr-at-eol --exit-code -- go.mod go.sum && echo "go.mod unchanged"
+go build ./... && go test ./...
 ```
-Expected: no `go.mod` or `go.sum` diff, and every package green, including the pre-existing `internal/data` and `internal/ui/screens` tests.
+Expected: `go.mod unchanged`, and every package green, including the pre-existing `internal/data` and `internal/ui/screens` tests.
 
 - [ ] **Step 2: Verify acceptance criterion 6 without running a real update**
 
@@ -3846,8 +3857,10 @@ Restore the branch state:
 
 ```bash
 git checkout HEAD -- dashboard/
-git status --porcelain dashboard/ || echo CLEAN
+git diff --ignore-cr-at-eol --stat -- dashboard/ | grep . && echo DIRTY || echo CLEAN
 ```
+
+Expected: `CLEAN`. Note one harmless side effect: both checkouts rewrite `dashboard/`'s tracked files from git, so their line endings come back as LF. Those files were CRLF before this step, which is why they showed as dirty. Fewer dirty paths after this step is the expected outcome, not a problem — and no file content changes.
 
 - [ ] **Step 3: Confirm `desktop/` is outside every system path**
 
