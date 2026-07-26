@@ -71,6 +71,21 @@ func run(args []string) int {
 		}
 		return emit(runDoctor(*path))
 
+	case "list":
+		fs := flag.NewFlagSet("list", flag.ContinueOnError)
+		path := fs.String("path", "", "career-ops root directory")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *path == "" {
+			return fail("usage", "--path is required")
+		}
+		res, err := runList(*path)
+		if err != nil {
+			return fail("not-found", "applications.md not found under "+*path)
+		}
+		return emit(res)
+
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		return fail("usage", "unknown command: "+cmd)
