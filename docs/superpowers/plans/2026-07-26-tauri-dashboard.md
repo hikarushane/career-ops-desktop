@@ -495,9 +495,11 @@ cd dashboard && go run ./cmd/career-data list --path .. \
   | python3 -c "import json,sys; a=json.load(sys.stdin)['applications']; print({k: sum(1 for x in a if x[k]) for k in ('archetype','tldr','remote','compEstimate')}, 'of', len(a))"
 ```
 
-Expected, over the repo's real reports: **archetype 30, tldr 30, remote 24, comp 3**. Archetype or tldr near zero means the patterns regressed to the data layer's behavior.
+**The gate is archetype 30, tldr 30, remote 24.** Any of those near zero means the patterns regressed to the data layer's behavior, which is the bug this whole change exists to fix.
 
-Comp is genuinely 3. An earlier revision of this plan said 9; that came from a controller measurement whose pattern `^\*\*Comp[a-z ]*:\*\*` also matched `**Company:**` in six reports and `**Company hiring signals:**` in one. The real ceiling is 4 across every variant present, and one of those four is the scoring-table row the guard now rejects. The reports simply do not record compensation often.
+**Comp is reported, not asserted.** It measures 2. Do not tune the patterns to move it: the reports do not record compensation as a field, and the four that come closest write multi-line market-research blocks (`**Salary benchmarks (Germany, 2025–2026):**` followed by bullets) that would not fit the card's one line even if extracted. The `Salary\s+benchmarks` alternative in `patComp` currently matches nothing real; it is kept because it costs nothing and would match a clean one-line form if a future report used one.
+
+If your measured comp differs from 2, report the number and which reports moved. Do not change code to reach it.
 
 - [ ] **Step 1: Create the fixture tracker**
 
@@ -4105,6 +4107,8 @@ git commit -m "docs(desktop): document setup, architecture and write safety"
 ## Notes for the implementer
 
 **When a step's expected output does not match.** Stop and read the actual output before adjusting code. Several steps deliberately ask you to verify Go's JSON casing (Task 7 Step 1) and the rate scale (Task 12 Step 4) against real output rather than trusting this document, because those values come from structs without JSON tags and cannot be changed from here.
+
+**Never tune code to hit a number this plan predicts.** Task 2 burned three rounds on one field because the plan stated a coverage figure the controller had estimated from an ad-hoc grep rather than measured by running the code. Each time, the implementer was right and the document was wrong. If your measurement disagrees with a stated figure, report the measurement and what produced it. A number in this plan is a hypothesis; your run is the evidence.
 
 **When you are tempted to edit a file under `dashboard/` outside `cmd/career-data/`.** Don't. The next `update-system.mjs apply` reverts it. If the data layer genuinely needs a change, that is an upstream issue against `santifer/career-ops`, and the sidecar works around it in the meantime — the same route the status writer took.
 

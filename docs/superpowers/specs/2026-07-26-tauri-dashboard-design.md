@@ -178,9 +178,15 @@ The sidecar therefore extracts these four fields itself, in `cmd/career-data/sum
 | Archetype | 0/30 | 30/30 |
 | TL;DR | 0/30 | 30/30 |
 | Remote | 0/30 | 24/30 |
-| Comp | 0/30 | 3/30 |
+| Comp | 0/30 | 2/30 |
 
-Comp's 3/30 is a property of the data, not the matcher. The reports record compensation rarely and inconsistently — `**Comp assessment:**` in 1, `**Salary benchmarks:**` in 1, `| Compensation |` in 1 — so 4 is the ceiling across every variant present, and the fourth is rejected on purpose.
+Comp's 2/30 is a property of the data, not the matcher, and chasing it further was explicitly abandoned. The reports do not record compensation as a field. What they have instead:
+
+- `**Comp assessment:**` and `| Compensation |` — one report each, genuine one-line values, both matched.
+- `| Comp | 1.0 | … |` — a scoring-table row, rejected on purpose (below).
+- `**Salary benchmarks (Germany, 2025–2026):**`, `**Celonis Solutions Engineer salary benchmarks:**`, and a bare `**Salary benchmarks:**` whose value is a four-item bulleted list on the following lines — four reports, none matched.
+
+That last group is why the ceiling does not matter. Those are multi-line market-research blocks, not preview-card fields; extracting them would mean block parsing, and the result would not fit the one line the card gives it. The report pane already shows the full markdown beside the card, so a reader who wants compensation detail has it. Two rounds were spent widening this matcher for a field that tops out at four reports; the third decision was to stop.
 
 That fourth is worth stating, because it drove a design choice. Reports score dimensions in tables shaped `| Dimension | Score | Rationale |`, and one dimension is named `Comp`:
 
@@ -190,7 +196,7 @@ That fourth is worth stating, because it drove a design choice. Reports score di
 
 A naive table-row match captures `1.0` and the preview card reads "Comp: 1.0". `extractSummary` therefore discards any capture that is only a number and falls through to the next pattern. A wrong figure about the user's own job search is worse than an em dash, which is what an unmatched field renders as.
 
-An earlier revision of this spec claimed 9/30. That number came from a measurement whose pattern also matched `**Company:**`, which appears in six reports and has nothing to do with compensation.
+Earlier revisions of this spec claimed 9/30, then 3/30. Both were wrong, and the reason is worth recording: the numbers came from ad-hoc greps rather than from running the implementation against the corpus. The first pattern also matched `**Company:**`, which appears in six reports and has nothing to do with compensation. The second did not account for the scoring-table guard removing a match. Corpus figures in this document are now taken from `career-data list` output, not estimated.
 
 This reverses an earlier decision in this spec, which rejected re-implementing the extraction on the grounds that it would duplicate logic. Duplicating logic that returns nothing has no value to protect. Everything else — parsing, metrics, status normalization — still goes through the data layer unchanged, so the drift argument still holds where it applies.
 
