@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -133,8 +134,11 @@ func runList(root string) (ListResult, error) {
 			JobURL:       a.JobURL,
 		}
 		if a.ReportPath != "" {
-			item.Archetype, item.TlDr, item.Remote, item.CompEstimate =
-				data.LoadReportSummary(root, a.ReportPath)
+			// extractSummary, not data.LoadReportSummary — see summary.go for why.
+			if content, err := os.ReadFile(filepath.Join(root, a.ReportPath)); err == nil {
+				item.Archetype, item.TlDr, item.Remote, item.CompEstimate =
+					extractSummary(string(content))
+			}
 		}
 		if a.HasPDF {
 			item.PDFPath = resolvePDF(root, a.Company)
