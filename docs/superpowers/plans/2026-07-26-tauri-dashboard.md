@@ -25,6 +25,7 @@ Every task's requirements implicitly include this section.
 - **macOS only.** No Windows or Linux packaging in this plan.
 - **Commit messages in English.** Conventional Commits prefix (`feat:`, `fix:`, `test:`, `chore:`).
 - **Work happens on the `tauri-dashboard` branch**, which already exists and holds the spec commit.
+- **Never write to the real `data/applications.md`.** The repo is fully onboarded and that file records an actual job search: 30 reports, real companies, real statuses. It cannot be regenerated. Every write-path test and every manual verification of `set-status` runs against `desktop/fixtures/career-ops/` or a `t.TempDir()`. Reading the real data is fine and useful; writing to it is not.
 - **Never run `git add -A`, `git add .`, or `git commit -a`.** Stage only the paths your task created or modified, exactly as each commit step lists them. See the next constraint for why.
 - **The working tree is dirty before you start, and that is expected.** 167 tracked files differ from HEAD by CRLF line endings only; 16 more are deleted (`LEGAL_DISCLAIMER.md`, six localized READMEs, `config/profile.example.yml`, the `examples/` tree); `.gitignore`, `CLAUDE.md`, and `interview-prep/story-bank.md` carry unrelated local edits. None of it belongs to this plan. Do not restore, delete, commit, or normalize any of it, and do not "clean up" the tree.
 
@@ -341,12 +342,19 @@ Expected: no diff output, exit 0, all existing tests pass. `--ignore-cr-at-eol` 
 
 - [ ] **Step 7: Run it against the real repo**
 
-Run: `cd dashboard && go run ./cmd/career-data doctor --path ..`
-Expected, since this repo has never been onboarded:
+Run both, because they exercise opposite branches:
 
-```json
-{"ok":true,"careerOpsPath":"..","trackerPath":null,"missing":["cv.md","config/profile.yml","modes/_profile.md","portals.yml","data/applications.md"],"ready":false}
+```bash
+cd dashboard
+go run ./cmd/career-data doctor --path ..        # the real, onboarded repo
+go run ./cmd/career-data doctor --path /tmp      # a directory with nothing
 ```
+
+Expected from the real repo: `"ready":true`, `"missing":[]`, and `trackerPath` pointing at `../data/applications.md`. The repo is fully onboarded — `cv.md`, `config/profile.yml`, `modes/_profile.md`, `portals.yml` and the tracker all exist.
+
+Expected from `/tmp`: `"ready":false` and all five paths listed in `missing`, in the order `onboardingFiles` declares them.
+
+Note for anyone reading an earlier revision of this plan: it asserted the repo was un-onboarded and predicted the second output for the first command. That was a controller error — the check behind it ran from inside `dashboard/`, so every relative path missed.
 
 - [ ] **Step 8: Commit**
 
@@ -2441,13 +2449,25 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 7: Verify acceptance criterion 1**
+- [ ] **Step 7: Create the empty fixture**
 
-Run: `cd desktop && npm run tauri:dev`, then use the folder button to select `/Users/shane_yeh/Projects/career-ops`.
+The empty state needs a directory that genuinely has no tracker. The real repo is fully onboarded, so it cannot serve as one.
 
-Expected: the empty state lists all five missing files with their explanations. This is the first real screen this repo can show.
+```bash
+mkdir -p desktop/fixtures/empty-career-ops
+printf '# Placeholder\n\nA career-ops root with nothing set up, for verifying the empty state.\nThe directory must exist and stay otherwise empty.\n' > desktop/fixtures/empty-career-ops/README.md
+```
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 8: Verify acceptance criterion 1, both branches**
+
+Run `cd desktop && npm run tauri:dev`, then use the folder button to select each of these in turn:
+
+1. `desktop/fixtures/empty-career-ops` → the empty state lists all five missing files with their explanations.
+2. `/Users/shane_yeh/Projects/career-ops` → **not** the empty state. This repo is onboarded, so `doctor` returns `ready: true` and the app falls through to the placeholder that Task 9 replaces with the pipeline.
+
+Both branches matter. An empty state that also fires on a healthy repo is worse than none.
+
+- [ ] **Step 9: Commit**
 
 ```bash
 git add desktop/
@@ -2498,7 +2518,11 @@ In `desktop/vite.config.ts`, add a `test` block alongside the existing config:
 
 - [ ] **Step 2: Create the UI development fixture**
 
-This one is realistic, unlike the Go testdata fixture, which is deliberately nasty. Create `desktop/fixtures/career-ops/data/applications.md`:
+This one is realistic, unlike the Go testdata fixture, which is deliberately nasty.
+
+The real repo has 30 reports and a live tracker, so it is tempting to develop against that instead. Don't. The fixture exists for two reasons that outlive the data question: it is deterministic, so a parity test asserting exact row order stays valid, and it is safe to write to, which the real tracker is not. Read the real data freely when you want to see how messy real rows get; point the write path at the fixture only.
+
+Create `desktop/fixtures/career-ops/data/applications.md`:
 
 ```markdown
 # Applications Tracker

@@ -41,11 +41,17 @@ Consequences:
 
 The repo currently sits at v1.8.0 with v1.22.0 available upstream, so an update will happen.
 
-### 2.2 The repo has never been onboarded
+### 2.2 The repo holds real user data
 
-`cv.md`, `config/profile.yml`, `modes/_profile.md`, `portals.yml`, and `data/applications.md` do not exist. Neither do the `data/`, `reports/`, or `output/` directories.
+**Corrected 2026-07-26.** An earlier draft of this spec claimed the repo had never been onboarded. That was wrong — the check behind it ran from `dashboard/`, so every relative path missed. The repo is fully onboarded: `cv.md` (454 lines), `config/profile.yml`, `modes/_profile.md`, `portals.yml` (1029 lines), `data/applications.md` with real applications, 30 files in `reports/`, and 2 in `output/`.
 
-The TUI currently exits with status 1 on launch (main.go:162-165). There is no real data to develop or test a UI against, so the design must supply fixtures and must treat the empty state as a designed screen rather than a fallback.
+Two consequences, pulling in opposite directions.
+
+**Development gets easier.** There is real data to build and verify against, including the messy shapes only real usage produces.
+
+**Writing gets dangerous.** `data/applications.md` is now live user data recording an actual job search. Every write-path test and every manual verification runs against `desktop/fixtures/career-ops/`, never the real tracker. This is not a preference; a bug in the writer would destroy records that cannot be regenerated.
+
+The empty state (§6.3) is still required — a new user's repo has no tracker, and the app must say so rather than render an empty table. It is simply no longer the first screen *this* repo will show, so it is verified against a deliberately empty fixture rather than against the working tree.
 
 ### 2.3 The existing status writeback is unsafe
 
@@ -263,7 +269,7 @@ Four blocks, drawn as SVG rather than character cells:
 
 The app invokes `doctor` on launch. When `ready` is false it shows the empty state instead of the pipeline: which files are missing, and that onboarding happens in the CLI.
 
-This is the only screen reachable with no data, and it is the first screen this repo will actually show. It gets designed properly — not treated as a fallback.
+This is the only screen reachable with no data, and it is what a new user sees before onboarding. It gets designed properly — not treated as a fallback.
 
 ---
 
@@ -365,10 +371,10 @@ Recorded deliberately, not forgotten:
 
 ## 12. Acceptance criteria
 
-1. On this repo as it stands today (no user data), the app launches and shows the empty state listing the missing files.
+1. Pointed at `desktop/fixtures/empty-career-ops/` — a directory with no tracker — the app shows the empty state listing the missing files. Pointed at the real repo, it shows the pipeline instead.
 2. Against `desktop/fixtures/career-ops/`, all eight filter tabs, four sort modes, search, and grouped/flat produce the same row sets as the TUI on the same fixture.
-3. Changing one row's status yields a `git diff data/applications.md` touching exactly that row's status cell — no other cell, no line-ending change.
-4. With the app open, editing `applications.md` externally and then changing a status in the app is rejected with `stale` and leaves the file unmodified.
+3. Changing one row's status **in the fixture** yields a `git diff` touching exactly that row's status cell — no other cell, no line-ending change. Never run this against the real `data/applications.md`.
+4. With the app open on the fixture, editing the fixture tracker externally and then changing a status in the app is rejected with `stale` and leaves the file unmodified.
 5. `cd dashboard && go test ./...` passes.
 6. After `node update-system.mjs apply`, both `desktop/` and `dashboard/cmd/career-data/` are intact and the app still builds.
 
