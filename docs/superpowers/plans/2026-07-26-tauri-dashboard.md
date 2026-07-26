@@ -433,16 +433,25 @@ var (
 	patTlDr      = fieldPattern(`TL;DR`)
 	patRemote    = fieldPattern(`Remote`)
 	// Reports record compensation inconsistently; accept the variants that
-	// actually occur. Coverage is 9/30 — a property of the data, not the
+	// actually occur. Coverage is 3/30 — a property of the data, not the
 	// matcher. Unmatched fields render as an em dash in the UI.
-	patComp = fieldPattern(`Comp(?:ensation)?(?:\s+assessment)?`)
+	patComp = fieldPattern(`(?:Comp(?:ensation)?(?:\s+assessment)?|Salary\s+benchmarks)`)
 )
+
+// bareNumber matches a value that is only a number. Reports score dimensions
+// in tables shaped `| Dimension | Score | Rationale |`, and some of those
+// dimensions are named "Comp" — so the table-row matcher can capture a score
+// like "1.0" instead of a compensation figure. A preview card reading
+// "Comp: 1.0" is worse than one reading "—", so such captures are discarded
+// and matching falls through to the next pattern.
+var bareNumber = regexp.MustCompile(`^\d+(?:\.\d+)?$`)
 
 // firstMatch returns the first capture any pattern yields, cleaned.
 func firstMatch(text string, pats []*regexp.Regexp) string {
 	for _, p := range pats {
 		if m := p.FindStringSubmatch(text); m != nil {
-			if v := cleanField(m[1]); v != "" {
+			v := cleanField(m[1])
+			if v != "" && !bareNumber.MatchString(v) {
 				return v
 			}
 		}
@@ -471,7 +480,13 @@ func extractSummary(markdown string) (archetype, tldr, remote, comp string) {
 }
 ```
 
-Write `dashboard/cmd/career-data/summary_test.go` covering, at minimum: the header-colon form; the table-row form; a report carrying both, where the header form wins; a bold value inside a table cell (`| Archetype | **Platform** |`); a field that is absent, returning `""`; and `Compensation` and `Comp assessment` both matching the comp field.
+Write `dashboard/cmd/career-data/summary_test.go` covering, at minimum: the header-colon form; the table-row form; a report carrying both, where the header form wins; a bold value inside a table cell (`| Archetype | **Platform** |`); a field that is absent, returning `""`; `Compensation`, `Comp assessment` and `Salary benchmarks` all matching the comp field; and the scoring-table guard — given
+
+```
+| Comp | 1.0 | €800–1,500/month vs €52,000+/year minimum |
+```
+
+`comp` must come back `""`, not `"1.0"`. That row shape is real (reports/001), and showing a score where a salary belongs is worse than showing nothing.
 
 Then confirm the real corpus, which is the whole point of this change:
 
@@ -480,7 +495,9 @@ cd dashboard && go run ./cmd/career-data list --path .. \
   | python3 -c "import json,sys; a=json.load(sys.stdin)['applications']; print({k: sum(1 for x in a if x[k]) for k in ('archetype','tldr','remote','compEstimate')}, 'of', len(a))"
 ```
 
-Expected, over the repo's real reports: archetype 30, tldr 30, remote 24, comp 9. Anything near zero means the patterns regressed to the data layer's behavior.
+Expected, over the repo's real reports: **archetype 30, tldr 30, remote 24, comp 3**. Archetype or tldr near zero means the patterns regressed to the data layer's behavior.
+
+Comp is genuinely 3. An earlier revision of this plan said 9; that came from a controller measurement whose pattern `^\*\*Comp[a-z ]*:\*\*` also matched `**Company:**` in six reports and `**Company hiring signals:**` in one. The real ceiling is 4 across every variant present, and one of those four is the scoring-table row the guard now rejects. The reports simply do not record compensation often.
 
 - [ ] **Step 1: Create the fixture tracker**
 

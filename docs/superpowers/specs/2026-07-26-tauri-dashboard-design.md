@@ -178,9 +178,19 @@ The sidecar therefore extracts these four fields itself, in `cmd/career-data/sum
 | Archetype | 0/30 | 30/30 |
 | TL;DR | 0/30 | 30/30 |
 | Remote | 0/30 | 24/30 |
-| Comp | 0/30 | 9/30 |
+| Comp | 0/30 | 3/30 |
 
-Comp's 9/30 is a property of the data, not the matcher: the reports record compensation inconsistently (`**Comp assessment:**`, `| Comp |`, `| Compensation |`, `**Salary benchmarks:**`). Fields that do not match render as `—`.
+Comp's 3/30 is a property of the data, not the matcher. The reports record compensation rarely and inconsistently — `**Comp assessment:**` in 1, `**Salary benchmarks:**` in 1, `| Compensation |` in 1 — so 4 is the ceiling across every variant present, and the fourth is rejected on purpose.
+
+That fourth is worth stating, because it drove a design choice. Reports score dimensions in tables shaped `| Dimension | Score | Rationale |`, and one dimension is named `Comp`:
+
+```
+| Comp | 1.0 | €800–1,500/month vs €52,000+/year minimum — structurally impossible |
+```
+
+A naive table-row match captures `1.0` and the preview card reads "Comp: 1.0". `extractSummary` therefore discards any capture that is only a number and falls through to the next pattern. A wrong figure about the user's own job search is worse than an em dash, which is what an unmatched field renders as.
+
+An earlier revision of this spec claimed 9/30. That number came from a measurement whose pattern also matched `**Company:**`, which appears in six reports and has nothing to do with compensation.
 
 This reverses an earlier decision in this spec, which rejected re-implementing the extraction on the grounds that it would duplicate logic. Duplicating logic that returns nothing has no value to protect. Everything else — parsing, metrics, status normalization — still goes through the data layer unchanged, so the drift argument still holds where it applies.
 
