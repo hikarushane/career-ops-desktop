@@ -29,16 +29,25 @@ var (
 	patTlDr      = fieldPattern(`TL;DR`)
 	patRemote    = fieldPattern(`Remote`)
 	// Reports record compensation inconsistently; accept the variants that
-	// actually occur. Coverage is 9/30 — a property of the data, not the
+	// actually occur. Coverage is 3/30 — a property of the data, not the
 	// matcher. Unmatched fields render as an em dash in the UI.
-	patComp = fieldPattern(`Comp(?:ensation)?(?:\s+assessment)?`)
+	patComp = fieldPattern(`(?:Comp(?:ensation)?(?:\s+assessment)?|Salary\s+benchmarks)`)
 )
+
+// bareNumber matches a value that is only a number. Reports score dimensions
+// in tables shaped `| Dimension | Score | Rationale |`, and some of those
+// dimensions are named "Comp" — so the table-row matcher can capture a score
+// like "1.0" instead of a compensation figure. A preview card reading
+// "Comp: 1.0" is worse than one reading "—", so such captures are discarded
+// and matching falls through to the next pattern.
+var bareNumber = regexp.MustCompile(`^\d+(?:\.\d+)?$`)
 
 // firstMatch returns the first capture any pattern yields, cleaned.
 func firstMatch(text string, pats []*regexp.Regexp) string {
 	for _, p := range pats {
 		if m := p.FindStringSubmatch(text); m != nil {
-			if v := cleanField(m[1]); v != "" {
+			v := cleanField(m[1])
+			if v != "" && !bareNumber.MatchString(v) {
 				return v
 			}
 		}

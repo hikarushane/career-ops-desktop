@@ -92,15 +92,50 @@ func TestExtractSummaryAbsentFieldReturnsEmpty(t *testing.T) {
 
 func TestExtractSummaryCompAliases(t *testing.T) {
 	cases := map[string]string{
-		"**Compensation:** 100k EUR\n":      "100k EUR",
-		"**Comp assessment:** 80-90k EUR\n": "80-90k EUR",
-		"| Compensation | 70k EUR |\n":      "70k EUR",
-		"| Comp assessment | 60k EUR |\n":   "60k EUR",
+		"**Compensation:** 100k EUR\n":         "100k EUR",
+		"**Comp assessment:** 80-90k EUR\n":    "80-90k EUR",
+		"| Compensation | 70k EUR |\n":         "70k EUR",
+		"| Comp assessment | 60k EUR |\n":      "60k EUR",
+		"**Salary benchmarks:** 90-110k EUR\n": "90-110k EUR",
+		"| Salary benchmarks | 50-65k EUR |\n": "50-65k EUR",
 	}
 	for md, want := range cases {
 		_, _, _, comp := extractSummary(md)
 		if comp != want {
 			t.Errorf("extractSummary(%q) comp = %q, want %q", md, comp, want)
 		}
+	}
+}
+
+// TestExtractSummaryScoringTableGuardRejectsBareNumber covers the shape
+// found in reports/001: a scoring-dimension table row
+// "| Dimension | Score | Rationale |" where one dimension happens to be
+// named "Comp". The old table-row matcher captured the score column
+// ("1.0") as if it were a compensation figure. A preview card reading
+// "Comp: 1.0" states a wrong number about the user's own job search, which
+// is worse than the em dash an unmatched field renders as, so this must
+// come back "".
+func TestExtractSummaryScoringTableGuardRejectsBareNumber(t *testing.T) {
+	md := "| Dimension | Score | Rationale |\n" +
+		"|---|---|---|\n" +
+		"| Comp | 1.0 | €800–1,500/month vs €52,000+/year minimum — structurally impossible |\n"
+
+	_, _, _, comp := extractSummary(md)
+	if comp != "" {
+		t.Errorf("comp = %q, want empty (scoring-table score must not be mistaken for a comp figure)", comp)
+	}
+}
+
+// TestExtractSummaryTableRowProseSurvivesGuard mirrors reports/029's real
+// shape: a "Field | Value" table row whose value is prose, not a bare
+// number. The guard must reject only pure-number captures, so this must
+// keep matching.
+func TestExtractSummaryTableRowProseSurvivesGuard(t *testing.T) {
+	md := "| Compensation | Entry-level; no salary disclosed — consistent with graduate programs |\n"
+
+	_, _, _, comp := extractSummary(md)
+	want := "Entry-level; no salary disclosed — consistent with graduate programs"
+	if comp != want {
+		t.Errorf("comp = %q, want %q (prose values must survive the bare-number guard)", comp, want)
 	}
 }
