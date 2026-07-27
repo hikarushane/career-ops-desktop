@@ -8,6 +8,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -83,6 +84,25 @@ func run(args []string) int {
 		res, err := runList(*path)
 		if err != nil {
 			return fail("not-found", "applications.md not found under "+*path)
+		}
+		return emit(res)
+
+	case "report":
+		fs := flag.NewFlagSet("report", flag.ContinueOnError)
+		path := fs.String("path", "", "career-ops root directory")
+		file := fs.String("file", "", "report path, relative to the root")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *path == "" || *file == "" {
+			return fail("usage", "--path and --file are both required")
+		}
+		res, err := runReport(*path, *file)
+		switch {
+		case errors.Is(err, errPathEscape):
+			return fail("invalid-path", "report path resolves outside the career-ops root")
+		case err != nil:
+			return fail("io-error", err.Error())
 		}
 		return emit(res)
 
