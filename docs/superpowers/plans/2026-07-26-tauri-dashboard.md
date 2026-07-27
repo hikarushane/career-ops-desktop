@@ -1257,14 +1257,55 @@ func TestStatusSpanIgnoresEarlierMatches(t *testing.T) {
 }
 
 func TestStatusSpanMixedTabFormat(t *testing.T) {
-	raw := "| 1\t2026-07-01\tAcme\tBackend\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tInterview soon"
+	// Three separators between the leading pipe and the first cell, all of
+	// which ParseApplications collapses via TrimSpace (career.go:58-62).
+	// Getting this wrong shifts every cell index by one, and the writer
+	// splices the status over the Score cell — silent data corruption.
+	for _, raw := range []string{
+		"| 1\t2026-07-01\tAcme\tBackend\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tInterview soon",
+		"|\t1\t2026-07-01\tAcme\tBackend\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tInterview soon",
+		"|  \t1\t2026-07-01\tAcme\tBackend\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tInterview soon",
+	} {
+		start, end, ok := statusSpan(raw)
+		if !ok {
+			t.Errorf("ok = false for %q", raw)
+			continue
+		}
+		if got := raw[start:end]; got != "Applied" {
+			t.Errorf("statusSpan = %q, want %q, for %q", got, "Applied", raw)
+		}
+	}
+}
+
+// cellSpans must agree with ParseApplications about where a row begins.
+// TrimSpace is unicode-aware, so a row led by a non-breaking space is a data
+// row to the parser; if this function only skipped ASCII blanks it would
+// reject the row and the status would be unwritable.
+func TestStatusSpanUnicodeLeadingSpace(t *testing.T) {
+	raw := " | 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Applied | ✅ | [002](reports/002.md) | n |"
 
 	start, end, ok := statusSpan(raw)
 	if !ok {
-		t.Fatal("ok = false, want true")
+		t.Fatal("ok = false, want true for an NBSP-led row")
 	}
 	if got := raw[start:end]; got != "Applied" {
-		t.Fatalf("raw[start:end] = %q, want %q", got, "Applied")
+		t.Errorf("statusSpan = %q, want %q", got, "Applied")
+	}
+}
+
+// A blank status cell is refused rather than written into. The parser accepts
+// such a row with an empty status, so the two deliberately differ here: a
+// zero-width span gives the optimistic lock nothing to compare, and a blank
+// status is malformed per AGENTS.md's canonical-states rule anyway. Refusing
+// to write is the safe direction; `node normalize-statuses.mjs` is the fix.
+func TestStatusSpanRefusesEmptyStatusCell(t *testing.T) {
+	raw := "| 1 | 2026-07-01 | Acme | Dev | 4.0/5 |  | ✅ | [002](reports/002.md) | n |"
+
+	if _, _, ok := statusSpan(raw); ok {
+		t.Error("statusSpan accepted a blank status cell; want refusal")
+	}
+	if _, _, ok := statusReplaceSpan(raw); ok {
+		t.Error("statusReplaceSpan accepted a blank status cell; want refusal")
 	}
 }
 
@@ -1365,7 +1406,10 @@ Create `dashboard/cmd/career-data/rows.go`:
 ```go
 package main
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // statusCellIndex is the 0-based position of the Status column in
 // applications.md rows:
@@ -1385,18 +1429,13 @@ const minCells = 8
 // the row contains a tab, pipe-separated otherwise. Spans are offsets into
 // raw, so surrounding whitespace and delimiters are recoverable.
 func cellSpans(raw string) [][2]int {
-	lead := 0
-	for lead < len(raw) && (raw[lead] == ' ' || raw[lead] == '\t') {
-		lead++
-	}
-	end := len(raw)
-	for end > lead {
-		c := raw[end-1]
-		if c != ' ' && c != '\t' && c != '\r' && c != '\n' {
-			break
-		}
-		end--
-	}
+	// ParseApplications trims the whole line with strings.TrimSpace before
+	// anything else (career.go:47), and TrimSpace is unicode-aware — it
+	// removes NBSP and friends, not only ASCII blanks. Mirror it exactly:
+	// if this function and the parser disagree about where the row begins,
+	// they disagree about which cell is the status cell.
+	lead := len(raw) - len(strings.TrimLeftFunc(raw, unicode.IsSpace))
+	end := lead + len(strings.TrimRightFunc(raw[lead:], unicode.IsSpace))
 	if lead >= end || raw[lead] != '|' {
 		return nil
 	}
@@ -1404,8 +1443,15 @@ func cellSpans(raw string) [][2]int {
 	body := raw[lead:end]
 
 	if strings.ContainsRune(body, '\t') {
-		// Mixed format: a leading "|" then tab-separated cells.
-		return splitSpans(body[1:], '\t', lead+1)
+		// Mixed format: a leading "|", then TrimSpace, then tab-separated
+		// cells (career.go:58-62). That second trim is load-bearing. Without
+		// it a row whose pipe is followed by a tab — "|\t1\t2026-07-01\t…" —
+		// yields an empty leading cell and shifts every index by one, so the
+		// writer would splice the status over the Score cell.
+		inner := body[1:]
+		trimmed := strings.TrimLeftFunc(inner, unicode.IsSpace)
+		off := lead + 1 + (len(inner) - len(trimmed))
+		return splitSpans(trimmed, '\t', off)
 	}
 
 	// Pure pipe format: drop the outer pipes, then split on "|".
@@ -1521,10 +1567,80 @@ func spliceStatus(raw, newStatus string) (string, bool) {
 }
 ```
 
+- [ ] **Step 3b: Write the parser-parity test**
+
+This is the test that catches the whole class of bug this task can produce. `cellSpans` is a second implementation of `ParseApplications`'s splitting rules; if the two ever disagree about which cell is the status, the writer edits a different cell than the reader reports, silently. Rather than assert the rules by hand, run both over the same rows and compare.
+
+Create `dashboard/cmd/career-data/rows_parity_test.go`:
+
+```go
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/santifer/career-ops/dashboard/internal/data"
+)
+
+// parseOne runs the real ParseApplications over a tracker holding exactly one
+// candidate row, and reports whether the parser accepted it plus the status it
+// extracted. This is the oracle: rows.go must agree with it.
+func parseOne(t *testing.T, row string) (accepted bool, status string) {
+	t.Helper()
+	root := t.TempDir()
+	body := "# Applications Tracker\n\n" +
+		"| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n" +
+		"|---|------|---------|------|-------|--------|-----|--------|-------|\n" +
+		row + "\n"
+	if err := os.WriteFile(filepath.Join(root, "applications.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	apps := data.ParseApplications(root)
+	if len(apps) == 0 {
+		return false, ""
+	}
+	return true, apps[0].Status
+}
+
+func TestCellSpansAgreesWithParser(t *testing.T) {
+	rows := []string{
+		"| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Applied | ✅ | [002](reports/002.md) | n |",
+		"| 1\t2026-07-01\tAcme\tDev\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tn",
+		"|\t1\t2026-07-01\tAcme\tDev\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tn",
+		"|  \t1\t2026-07-01\tAcme\tDev\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tn",
+		"| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Applied | ✅ | [002](reports/002.md) | n",
+		"| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Applied | ✅ | [002](reports/002.md) |",
+		"   | 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Applied | ✅ | [002](reports/002.md) | n |",
+		" | 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Applied | ✅ | [002](reports/002.md) | n |",
+		"| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Applied | ✅ | [002](reports/002.md) | n |\r",
+		"| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | **Applied** | ✅ | [002](reports/002.md) | n |",
+		"|| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Applied | ✅ | [002](reports/002.md) | n ||",
+		"| 1 | 2026-07-01 | Offerpad | Offer Eng | 4.6/5 | Offer | ✅ | [001](reports/001.md) | Offer note |",
+		"| 7 | 2026-07-01 | Café Naïve 株式会社 | Ingénieur — Données | 4.6/5 | Applied | ✅ | [007](reports/007.md) | ✅❌ — señor |",
+	}
+
+	for _, row := range rows {
+		accepted, want := parseOne(t, row)
+		start, end, ok := statusReplaceSpan(row)
+		if !ok {
+			if accepted && want != "" {
+				t.Errorf("rows.go refused a row the parser accepted with status %q: %q", want, row)
+			}
+			continue
+		}
+		if got := row[start:end]; got != want {
+			t.Errorf("cell mismatch: rows.go would edit %q, parser reports %q\n  row: %q", got, want, row)
+		}
+	}
+}
+```
+
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `cd dashboard && go test ./cmd/career-data/ -run 'TestStatusSpan|TestSpliceStatus' -v`
-Expected: PASS — seven tests.
+Run: `cd dashboard && go test ./cmd/career-data/ -run 'TestStatusSpan|TestSpliceStatus|TestCellSpans' -v`
+Expected: PASS. `TestCellSpansAgreesWithParser` is the one to watch — it fails loudly on any splitting rule that drifts from the parser.
 
 - [ ] **Step 5: Run the whole package**
 
