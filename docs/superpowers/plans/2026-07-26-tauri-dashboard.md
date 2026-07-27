@@ -433,7 +433,7 @@ var (
 	patTlDr      = fieldPattern(`TL;DR`)
 	patRemote    = fieldPattern(`Remote`)
 	// Reports record compensation inconsistently; accept the variants that
-	// actually occur. Coverage is 3/30 — a property of the data, not the
+	// actually occur. Coverage is 2/30 — a property of the data, not the
 	// matcher. Unmatched fields render as an em dash in the UI.
 	patComp = fieldPattern(`(?:Comp(?:ensation)?(?:\s+assessment)?|Salary\s+benchmarks)`)
 )
