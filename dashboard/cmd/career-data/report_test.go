@@ -73,6 +73,23 @@ func TestSafeJoinSymlinkEscape(t *testing.T) {
 	}
 }
 
+// resolvedRoot is what safeJoin's return value can be compared against.
+//
+// safeJoin resolves symlinks on the root before building its result, so its
+// return value is always a fully resolved path. On macOS t.TempDir() hands
+// back something under /var/folders/…, and /var is a symlink to private/var —
+// so the raw TempDir path never prefix-matches safeJoin's output. Comparing
+// against the unresolved path fails on every macOS machine while the code is
+// perfectly correct.
+func resolvedRoot(t *testing.T, root string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", root, err)
+	}
+	return resolved
+}
+
 // A missing file that genuinely lives inside root must stay a missing file,
 // not become an escape. This is the regression the symlink fix could cause.
 func TestSafeJoinAllowsMissingFileInsideRoot(t *testing.T) {
@@ -85,8 +102,9 @@ func TestSafeJoinAllowsMissingFileInsideRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("safeJoin for a missing file inside root: %v", err)
 	}
-	if !strings.HasPrefix(got, root) {
-		t.Errorf("safeJoin = %q, want a path under %q", got, root)
+	want := resolvedRoot(t, root)
+	if !strings.HasPrefix(got, want+string(filepath.Separator)) {
+		t.Errorf("safeJoin = %q, want a path under %q", got, want)
 	}
 }
 
@@ -99,7 +117,8 @@ func TestSafeJoinAllowsMissingDirInsideRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("safeJoin for a missing nested path inside root: %v", err)
 	}
-	if !strings.HasPrefix(got, root) {
-		t.Errorf("safeJoin = %q, want a path under %q", got, root)
+	want := resolvedRoot(t, root)
+	if !strings.HasPrefix(got, want+string(filepath.Separator)) {
+		t.Errorf("safeJoin = %q, want a path under %q", got, want)
 	}
 }
