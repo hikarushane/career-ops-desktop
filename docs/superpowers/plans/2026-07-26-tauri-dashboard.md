@@ -2671,26 +2671,32 @@ Create `desktop/fixtures/career-ops/data/applications.md`:
 Create three reports so the split pane has content. `desktop/fixtures/career-ops/reports/001-anthropic-2026-07-20.md`:
 
 ```markdown
-# 001 — Anthropic — Applied AI Engineer
+# Evaluation: Anthropic — Applied AI Engineer
 
+**Date:** 2026-07-20
+**Archetype:** Applied AI
 **Score:** 4.8/5
 **URL:** https://jobs.example.test/anthropic/applied-ai-engineer
+**Legitimacy:** High Confidence
 **PDF:** ✅
-**Legitimacy:** verified
+**TL;DR:** Best archetype match in the pipeline; comp above target and the team is remote-first
+**Remote:** Remote (EU)
+**Comp assessment:** 120-150k EUR
 
-| Field | Value |
-|-------|-------|
+---
+
+## A) Role Summary
+
+| Dimension | Value |
+|-----------|-------|
 | Archetype | Applied AI |
-| TL;DR | Best archetype match in the pipeline; comp above target and the team is remote-first |
-| Remote | Remote (EU) |
-| Comp | 120-150k EUR |
-
-## Block A — Role Summary
+| Domain | AI safety research tooling |
+| Function | Applied engineering |
 
 Fixture content for UI development. Long enough to exercise scrolling in the
-report pane, with a table above to exercise remark-gfm.
+report pane, with tables to exercise remark-gfm.
 
-## Block B — CV Match
+## B) Match with CV
 
 | Requirement | Evidence | Gap |
 |-------------|----------|-----|
@@ -2701,48 +2707,56 @@ report pane, with a table above to exercise remark-gfm.
 `desktop/fixtures/career-ops/reports/002-retool-2026-07-18.md`:
 
 ```markdown
-# 002 — Retool — Forward Deployed Engineer
+# Evaluation: Retool — Forward Deployed Engineer
 
+**Date:** 2026-07-18
+**Archetype:** Solutions / FDE
 **Score:** 4.4/5
 **URL:** https://jobs.example.test/retool/forward-deployed-engineer
+**Legitimacy:** High Confidence
 **PDF:** ✅
-**Legitimacy:** verified
+**TL;DR:** Customer-facing build work; referral in hand, but heavy travel expectation
+**Remote:** Remote (EU), 25% travel
 
-| Field | Value |
-|-------|-------|
-| Archetype | Solutions / FDE |
-| TL;DR | Customer-facing build work; referral in hand, but heavy travel expectation |
-| Remote | Remote (EU), 25% travel |
-| Comp | 100-125k EUR |
+---
 
-## Block A — Role Summary
+## A) Role Summary
 
 Fixture content. Shorter than 001 on purpose, so the report pane is exercised
-with both a long and a short document.
+with both a long and a short document. This one deliberately omits any
+compensation field, so the preview card's em-dash fallback gets exercised.
 ```
 
 `desktop/fixtures/career-ops/reports/008-travelperk-2026-07-02.md`:
 
 ```markdown
-# 008 — Travelperk — Engineering Manager
+# Evaluation: Travelperk — Engineering Manager
 
+**Date:** 2026-07-02
+**Archetype:** Engineering Leadership
 **Score:** 4.2/5
 **URL:** https://jobs.example.test/travelperk/engineering-manager
+**Legitimacy:** High Confidence
 **PDF:** ✅
-**Legitimacy:** verified
+**TL;DR:** First management role; strong team, comp at the low end of target
+**Remote:** Hybrid (Barcelona)
 
-| Field | Value |
-|-------|-------|
+---
+
+## A) Role Summary
+
+| Dimension | Value |
+|-----------|-------|
 | Archetype | Engineering Leadership |
-| TL;DR | First management role; strong team, comp at the low end of target |
-| Remote | Hybrid (Barcelona) |
-| Comp | 85-100k EUR |
-
-## Block A — Role Summary
+| Compensation | 85-100k EUR |
 
 Fixture content. This row carries the Offer status, so it is the one to use when
-checking that the Offer group sorts first after Interview.
+checking that the Offer group sorts first after Interview. Its compensation sits
+in a table row rather than a header field, so it exercises `extractSummary`'s
+second matcher.
 ```
+
+All three fixtures follow the shape of the repo's real reports: English `**Field:**` header lines above `## A) …` sections, not the `## Block A — …` headings an earlier revision of this plan used. Real reports use `## A) Role Summary`; a fixture that diverges from that cannot catch extraction bugs, and it already caused one stale test assertion in Task 3.
 
 The other seven rows deliberately have no report file. That exercises the "this row has no linked report" branch in Task 10 without needing a separate fixture.
 
