@@ -11,7 +11,10 @@ func TestRunReportReadsMarkdownAndSummary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runReport: %v", err)
 	}
-	if !strings.Contains(res.Markdown, "Block A — Role Summary") {
+	// "A) Role Summary" is the heading real reports use, and the fixture was
+	// rewritten to match them in Task 2. An earlier revision of this plan
+	// asserted "Block A — Role Summary", which no report or fixture contains.
+	if !strings.Contains(res.Markdown, "A) Role Summary") {
 		t.Errorf("Markdown does not contain the report body")
 	}
 	if res.Archetype != "Platform / Infra" {
