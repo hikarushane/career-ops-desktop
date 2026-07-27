@@ -24,6 +24,36 @@ type ReportResult struct {
 	Comp      string `json:"comp"`
 }
 
+// resolveNearest resolves symlinks on the deepest ancestor of p that exists,
+// then re-appends the components that do not.
+//
+// filepath.EvalSymlinks fails all-or-nothing when any component is missing.
+// Falling back to the unresolved lexical path on that error is unsafe: a
+// symlinked directory inside root pointing outside it, asked for a leaf that
+// does not exist, yields a path that still textually sits under root and
+// passes a prefix check while resolving outside root at the OS level.
+// Resolving the existing ancestor closes that hole while leaving ordinary
+// missing files inside root reported as missing, not as escapes.
+func resolveNearest(p string) (string, error) {
+	var missing []string
+	cur := p
+	for {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			out := resolved
+			for i := len(missing) - 1; i >= 0; i-- {
+				out = filepath.Join(out, missing[i])
+			}
+			return out, nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return "", errPathEscape
+		}
+		missing = append(missing, filepath.Base(cur))
+		cur = parent
+	}
+}
+
 // safeJoin resolves rel under root and confirms the result stays inside it,
 // after symlinks are followed on whichever ancestors already exist.
 func safeJoin(root, rel string) (string, error) {
@@ -38,11 +68,13 @@ func safeJoin(root, rel string) (string, error) {
 		absRoot = resolved
 	}
 
-	target := filepath.Join(absRoot, filepath.FromSlash(rel))
-	if resolved, err := filepath.EvalSymlinks(target); err == nil {
-		target = resolved
+	target, err := resolveNearest(filepath.Join(absRoot, filepath.FromSlash(rel)))
+	if err != nil {
+		return "", err
 	}
 
+	// absRoot+Separator, not a bare prefix — otherwise /rootsuffix passes as
+	// being inside /root.
 	if target != absRoot && !strings.HasPrefix(target, absRoot+string(filepath.Separator)) {
 		return "", errPathEscape
 	}
