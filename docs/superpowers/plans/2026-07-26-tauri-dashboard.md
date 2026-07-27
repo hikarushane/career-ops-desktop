@@ -1209,9 +1209,13 @@ The approach is a **byte-span splice, not a split-and-rejoin.** Splitting a row 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
 - Produces:
-  - `func statusSpan(raw string) (start, end int, ok bool)` — byte offsets into `raw` of the status cell's trimmed content. `ok` is false when `raw` is not a data row.
-  - `func spliceStatus(raw, newStatus string) (string, bool)`
+  - `func statusSpan(raw string) (start, end int, ok bool)` — byte offsets of the status cell's value, **excluding** any markdown bold markers. This is the comparison span: writer.go's optimistic lock matches it against the canonical status the caller supplies. `ok` is false when `raw` is not a data row.
+  - `func statusReplaceSpan(raw string) (start, end int, ok bool)` — the same cell **including** bold markers. This is the replacement span.
+  - `func spliceStatus(raw, newStatus string) (string, bool)` — splices over the replacement span.
+  - `func cellSpans(raw string) [][2]int` and `func trimSpan(raw string, span [2]int) (int, int)` — Task 5 calls both directly to read cell 7, the report link.
   - `const statusCellIndex = 5`
+
+**Why two spans.** A legacy row may hold `**Applied**`. The lock has to see `Applied` so it can match the canonical value the frontend sends — otherwise every bold row reads as stale and becomes unwritable. The splice has to cover `**Applied**` so the rewrite yields `Offer` rather than `**Offer**`, because AGENTS.md forbids markdown bold in the status field. One span cannot satisfy both.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1308,8 +1312,9 @@ func TestSpliceStatusPreservesCellPadding(t *testing.T) {
 }
 
 func TestSpliceStatusHandlesBoldMarkers(t *testing.T) {
-	// Legacy rows wrap the status in markdown bold. NormalizeStatus tolerates
-	// it, so the span covers the markers and the splice removes them.
+	// Legacy rows wrap the status in markdown bold. AGENTS.md forbids bold in
+	// the status field, so the splice covers the markers and normalizes them
+	// away rather than producing "**Offer**".
 	raw := "| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | **Applied** | ❌ | [002](reports/002.md) | n |"
 	want := "| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Offer | ❌ | [002](reports/002.md) | n |"
 
@@ -1319,6 +1324,31 @@ func TestSpliceStatusHandlesBoldMarkers(t *testing.T) {
 	}
 	if got != want {
 		t.Errorf("spliceStatus:\n got %q\nwant %q", got, want)
+	}
+}
+
+// The comparison span and the replacement span deliberately differ on a bold
+// row. statusSpan must yield the bare value so writer.go's optimistic lock can
+// match it against the canonical status the caller supplies; if it included
+// the markers, every legacy bold row would read as stale and become
+// unwritable.
+func TestStatusSpanExcludesBoldMarkers(t *testing.T) {
+	raw := "| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | **Applied** | ❌ | [002](reports/002.md) | n |"
+
+	start, end, ok := statusSpan(raw)
+	if !ok {
+		t.Fatal("statusSpan ok = false, want true")
+	}
+	if got := raw[start:end]; got != "Applied" {
+		t.Errorf("statusSpan value = %q, want %q", got, "Applied")
+	}
+
+	rStart, rEnd, ok := statusReplaceSpan(raw)
+	if !ok {
+		t.Fatal("statusReplaceSpan ok = false, want true")
+	}
+	if got := raw[rStart:rEnd]; got != "**Applied**" {
+		t.Errorf("statusReplaceSpan value = %q, want %q", got, "**Applied**")
 	}
 }
 ```
@@ -1402,8 +1432,10 @@ func splitSpans(s string, sep byte, base int) [][2]int {
 	return append(spans, [2]int{base + start, base + len(s)})
 }
 
-// trimSpan narrows a raw cell span to its content: whitespace, stray pipes,
-// carriage returns, and markdown bold markers are excluded on both sides.
+// trimSpan narrows a raw cell span to its content: whitespace, stray pipes and
+// carriage returns are excluded on both sides. Markdown bold markers are KEPT —
+// stripBold removes those, and the two are separate on purpose. See the note
+// above statusSpan.
 func trimSpan(raw string, span [2]int) (int, int) {
 	s, e := span[0], span[1]
 	isPad := func(c byte) bool {
@@ -1415,6 +1447,11 @@ func trimSpan(raw string, span [2]int) (int, int) {
 	for e > s && isPad(raw[e-1]) {
 		e--
 	}
+	return s, e
+}
+
+// stripBold narrows a span past any markdown bold markers wrapping it.
+func stripBold(raw string, s, e int) (int, int) {
 	for e-s >= 4 && strings.HasPrefix(raw[s:e], "**") && strings.HasSuffix(raw[s:e], "**") {
 		s += 2
 		e -= 2
@@ -1422,14 +1459,48 @@ func trimSpan(raw string, span [2]int) (int, int) {
 	return s, e
 }
 
-// statusSpan locates the status cell's content within a tracker row.
-func statusSpan(raw string) (start, end int, ok bool) {
+// isDataRow reports whether raw is a tracker data row rather than a header,
+// separator, or short line.
+func isDataRow(raw string) ([][2]int, bool) {
 	spans := cellSpans(raw)
 	if len(spans) < minCells || statusCellIndex >= len(spans) {
+		return nil, false
+	}
+	if h := strings.TrimSpace(raw); strings.HasPrefix(h, "|---") || strings.HasPrefix(h, "| #") {
+		return nil, false
+	}
+	return spans, true
+}
+
+// statusSpan locates the status cell's *value* — bold markers excluded.
+//
+// Comparison and replacement need different spans, which is why there are two
+// functions. A legacy row may hold "**Applied**". The optimistic lock in
+// writer.go compares this span against the canonical status the caller last
+// saw ("Applied"), so the markers must be outside it or every bold row would
+// read as stale. Replacement has the opposite need — see statusReplaceSpan.
+func statusSpan(raw string) (start, end int, ok bool) {
+	spans, ok := isDataRow(raw)
+	if !ok {
 		return 0, 0, false
 	}
-	// Header and separator rows parse as cells but are not data.
-	if h := strings.TrimSpace(raw); strings.HasPrefix(h, "|---") || strings.HasPrefix(h, "| #") {
+	s, e := trimSpan(raw, spans[statusCellIndex])
+	s, e = stripBold(raw, s, e)
+	if s >= e {
+		return 0, 0, false
+	}
+	return s, e, true
+}
+
+// statusReplaceSpan locates the range spliceStatus overwrites: the status
+// cell's value *including* any bold markers around it.
+//
+// AGENTS.md requires canonical statuses with no markdown bold in the status
+// field, so rewriting "**Applied**" must yield "Offer", not "**Offer**".
+// Splicing over the markers normalizes the row on the way past.
+func statusReplaceSpan(raw string) (start, end int, ok bool) {
+	spans, ok := isDataRow(raw)
+	if !ok {
 		return 0, 0, false
 	}
 	s, e := trimSpan(raw, spans[statusCellIndex])
@@ -1439,10 +1510,10 @@ func statusSpan(raw string) (start, end int, ok bool) {
 	return s, e, true
 }
 
-// spliceStatus replaces the status cell's content and returns the rewritten
-// row. Every byte outside [start,end) is preserved exactly.
+// spliceStatus replaces the status cell and returns the rewritten row. Every
+// byte outside the replaced range is preserved exactly.
 func spliceStatus(raw, newStatus string) (string, bool) {
-	start, end, ok := statusSpan(raw)
+	start, end, ok := statusReplaceSpan(raw)
 	if !ok {
 		return raw, false
 	}
@@ -1474,6 +1545,8 @@ git commit -m "feat(sidecar): locate the status cell by byte span, not string re
 The only code in this project that writes user data. `applications.md` cannot be regenerated, so this task carries four protections and the heaviest test coverage.
 
 **On line endings:** splitting the file on `"\n"` leaves any `"\r"` attached to the end of each line, and rejoining with `"\n"` reproduces those bytes exactly. No terminator detection is needed, and CRLF survives for free. `trimSpan` already excludes a trailing `"\r"` from the status span, so the splice never reaches it.
+
+This repo's own `data/applications.md` is LF-only — it is gitignored, so it was never touched by the CRLF divergence that affects the tracked files. The CRLF handling still matters: `desktop/fixtures/career-ops/` and any other user's checkout may differ, and a writer that silently normalizes line endings would rewrite every row of such a file.
 
 **Files:**
 - Create: `dashboard/cmd/career-data/writer.go`
