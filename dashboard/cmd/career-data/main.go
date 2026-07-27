@@ -106,6 +106,48 @@ func run(args []string) int {
 		}
 		return emit(res)
 
+	case "set-status":
+		fs := flag.NewFlagSet("set-status", flag.ContinueOnError)
+		path := fs.String("path", "", "career-ops root directory")
+		number := fs.String("report-number", "", "report number, e.g. 001")
+		expect := fs.String("expect-status", "", "the status the caller last saw")
+		next := fs.String("status", "", "the new status")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *path == "" || *number == "" || *expect == "" || *next == "" {
+			return fail("usage", "--path, --report-number, --expect-status and --status are all required")
+		}
+
+		res, err := setStatus(*path, *number, *expect, *next)
+		var stale *staleError
+		switch {
+		case errors.As(err, &stale):
+			_ = emit(struct {
+				OK           bool   `json:"ok"`
+				Error        string `json:"error"`
+				Message      string `json:"message"`
+				ActualStatus string `json:"actualStatus"`
+			}{
+				OK:    false,
+				Error: "stale",
+				Message: fmt.Sprintf(
+					"Row %s currently reads %q, expected %q. The file changed outside the app.",
+					*number, stale.Actual, *expect),
+				ActualStatus: stale.Actual,
+			})
+			return 1
+		case errors.Is(err, errInvalidStatus):
+			return fail("invalid-status", err.Error())
+		case errors.Is(err, errRowNotFound):
+			return fail("not-found", err.Error())
+		case errors.Is(err, errNoTracker):
+			return fail("not-found", "applications.md not found under "+*path)
+		case err != nil:
+			return fail("io-error", err.Error())
+		}
+		return emit(res)
+
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		return fail("usage", "unknown command: "+cmd)
