@@ -992,6 +992,23 @@ func TestSafeJoinSymlinkEscape(t *testing.T) {
 	}
 }
 
+// resolvedRoot is what safeJoin's return value can be compared against.
+//
+// safeJoin resolves symlinks on the root before building its result, so its
+// return value is always a fully resolved path. On macOS t.TempDir() hands
+// back something under /var/folders/…, and /var is a symlink to private/var —
+// so the raw TempDir path never prefix-matches safeJoin's output. Comparing
+// against the unresolved path fails on every macOS machine while the code is
+// perfectly correct.
+func resolvedRoot(t *testing.T, root string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", root, err)
+	}
+	return resolved
+}
+
 // A missing file that genuinely lives inside root must stay a missing file,
 // not become an escape. This is the regression the symlink fix could cause.
 func TestSafeJoinAllowsMissingFileInsideRoot(t *testing.T) {
@@ -1004,8 +1021,9 @@ func TestSafeJoinAllowsMissingFileInsideRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("safeJoin for a missing file inside root: %v", err)
 	}
-	if !strings.HasPrefix(got, root) {
-		t.Errorf("safeJoin = %q, want a path under %q", got, root)
+	want := resolvedRoot(t, root)
+	if !strings.HasPrefix(got, want+string(filepath.Separator)) {
+		t.Errorf("safeJoin = %q, want a path under %q", got, want)
 	}
 }
 
@@ -1018,8 +1036,9 @@ func TestSafeJoinAllowsMissingDirInsideRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("safeJoin for a missing nested path inside root: %v", err)
 	}
-	if !strings.HasPrefix(got, root) {
-		t.Errorf("safeJoin = %q, want a path under %q", got, root)
+	want := resolvedRoot(t, root)
+	if !strings.HasPrefix(got, want+string(filepath.Separator)) {
+		t.Errorf("safeJoin = %q, want a path under %q", got, want)
 	}
 }
 ```
@@ -4217,6 +4236,8 @@ git commit -m "docs(desktop): document setup, architecture and write safety"
 **When a step's expected output does not match.** Stop and read the actual output before adjusting code. Several steps deliberately ask you to verify Go's JSON casing (Task 7 Step 1) and the rate scale (Task 12 Step 4) against real output rather than trusting this document, because those values come from structs without JSON tags and cannot be changed from here.
 
 **Never tune code to hit a number this plan predicts.** Task 2 burned three rounds on one field because the plan stated a coverage figure the controller had estimated from an ad-hoc grep rather than measured by running the code. Each time, the implementer was right and the document was wrong. If your measurement disagrees with a stated figure, report the measurement and what produced it. A number in this plan is a hypothesis; your run is the evidence.
+
+**A failing test may be the test's fault.** Several of this plan's tests were written by the controller without being run. When one fails, diagnose before assuming the implementation is wrong — and never edit the implementation to satisfy a test you have not first confirmed is correct. Two concrete traps already hit: a heading string no fixture contained, and comparing a path against an unresolved `t.TempDir()` on macOS, where `/var` is a symlink to `private/var`. Report the diagnosis rather than patching around it.
 
 **When you are tempted to edit a file under `dashboard/` outside `cmd/career-data/`.** Don't. The next `update-system.mjs apply` reverts it. If the data layer genuinely needs a change, that is an upstream issue against `santifer/career-ops`, and the sidecar works around it in the meantime — the same route the status writer took.
 
