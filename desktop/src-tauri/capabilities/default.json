@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "career-ops desktop dashboard",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "store:default",
+    "opener:allow-open-path",
+    "opener:allow-open-url",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [{ "name": "binaries/career-data", "args": true, "sidecar": true }]
+    }
+  ]
+}
