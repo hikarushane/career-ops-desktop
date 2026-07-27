@@ -3572,7 +3572,7 @@ Add `import ReportPane from '../components/ReportPane';` and stop ignoring the `
 Run: `cd desktop && VITE_CAREER_OPS_PATH=./fixtures/career-ops npm run tauri:dev`
 
 Check, in order:
-1. Selecting the Anthropic row renders its report, and the Block B markdown table has visible borders — that confirms `remark-gfm` is active.
+1. Selecting the Anthropic row renders its report, and the "B) Match with CV" markdown table has visible borders — that confirms `remark-gfm` is active.
 2. "Open job posting" opens `https://jobs.example.test/...` in the system browser.
 3. A row whose report has no `**URL:**` shows a disabled "No job URL" button rather than opening about:blank.
 4. Selecting a row with no `reportPath` shows the card with "This row has no linked report" and does not spin forever.
