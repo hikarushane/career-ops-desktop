@@ -67,8 +67,10 @@ func splitSpans(s string, sep byte, base int) [][2]int {
 	return append(spans, [2]int{base + start, base + len(s)})
 }
 
-// trimSpan narrows a raw cell span to its content: whitespace, stray pipes,
-// carriage returns, and markdown bold markers are excluded on both sides.
+// trimSpan narrows a raw cell span to its content: whitespace, stray pipes and
+// carriage returns are excluded on both sides. Markdown bold markers are KEPT —
+// stripBold removes those, and the two are separate on purpose. See the note
+// above statusSpan.
 func trimSpan(raw string, span [2]int) (int, int) {
 	s, e := span[0], span[1]
 	isPad := func(c byte) bool {
@@ -80,6 +82,11 @@ func trimSpan(raw string, span [2]int) (int, int) {
 	for e > s && isPad(raw[e-1]) {
 		e--
 	}
+	return s, e
+}
+
+// stripBold narrows a span past any markdown bold markers wrapping it.
+func stripBold(raw string, s, e int) (int, int) {
 	for e-s >= 4 && strings.HasPrefix(raw[s:e], "**") && strings.HasSuffix(raw[s:e], "**") {
 		s += 2
 		e -= 2
@@ -87,14 +94,48 @@ func trimSpan(raw string, span [2]int) (int, int) {
 	return s, e
 }
 
-// statusSpan locates the status cell's content within a tracker row.
-func statusSpan(raw string) (start, end int, ok bool) {
+// isDataRow reports whether raw is a tracker data row rather than a header,
+// separator, or short line.
+func isDataRow(raw string) ([][2]int, bool) {
 	spans := cellSpans(raw)
 	if len(spans) < minCells || statusCellIndex >= len(spans) {
+		return nil, false
+	}
+	if h := strings.TrimSpace(raw); strings.HasPrefix(h, "|---") || strings.HasPrefix(h, "| #") {
+		return nil, false
+	}
+	return spans, true
+}
+
+// statusSpan locates the status cell's *value* — bold markers excluded.
+//
+// Comparison and replacement need different spans, which is why there are two
+// functions. A legacy row may hold "**Applied**". The optimistic lock in
+// writer.go compares this span against the canonical status the caller last
+// saw ("Applied"), so the markers must be outside it or every bold row would
+// read as stale. Replacement has the opposite need — see statusReplaceSpan.
+func statusSpan(raw string) (start, end int, ok bool) {
+	spans, ok := isDataRow(raw)
+	if !ok {
 		return 0, 0, false
 	}
-	// Header and separator rows parse as cells but are not data.
-	if h := strings.TrimSpace(raw); strings.HasPrefix(h, "|---") || strings.HasPrefix(h, "| #") {
+	s, e := trimSpan(raw, spans[statusCellIndex])
+	s, e = stripBold(raw, s, e)
+	if s >= e {
+		return 0, 0, false
+	}
+	return s, e, true
+}
+
+// statusReplaceSpan locates the range spliceStatus overwrites: the status
+// cell's value *including* any bold markers around it.
+//
+// AGENTS.md requires canonical statuses with no markdown bold in the status
+// field, so rewriting "**Applied**" must yield "Offer", not "**Offer**".
+// Splicing over the markers normalizes the row on the way past.
+func statusReplaceSpan(raw string) (start, end int, ok bool) {
+	spans, ok := isDataRow(raw)
+	if !ok {
 		return 0, 0, false
 	}
 	s, e := trimSpan(raw, spans[statusCellIndex])
@@ -104,10 +145,10 @@ func statusSpan(raw string) (start, end int, ok bool) {
 	return s, e, true
 }
 
-// spliceStatus replaces the status cell's content and returns the rewritten
-// row. Every byte outside [start,end) is preserved exactly.
+// spliceStatus replaces the status cell and returns the rewritten row. Every
+// byte outside the replaced range is preserved exactly.
 func spliceStatus(raw, newStatus string) (string, bool) {
-	start, end, ok := statusSpan(raw)
+	start, end, ok := statusReplaceSpan(raw)
 	if !ok {
 		return raw, false
 	}

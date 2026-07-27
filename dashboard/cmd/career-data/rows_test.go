@@ -88,8 +88,9 @@ func TestSpliceStatusPreservesCellPadding(t *testing.T) {
 }
 
 func TestSpliceStatusHandlesBoldMarkers(t *testing.T) {
-	// Legacy rows wrap the status in markdown bold. NormalizeStatus tolerates
-	// it, so the span covers the markers and the splice removes them.
+	// Legacy rows wrap the status in markdown bold. AGENTS.md forbids bold in
+	// the status field, so the splice covers the markers and normalizes them
+	// away rather than producing "**Offer**".
 	raw := "| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | **Applied** | ❌ | [002](reports/002.md) | n |"
 	want := "| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Offer | ❌ | [002](reports/002.md) | n |"
 
@@ -99,5 +100,30 @@ func TestSpliceStatusHandlesBoldMarkers(t *testing.T) {
 	}
 	if got != want {
 		t.Errorf("spliceStatus:\n got %q\nwant %q", got, want)
+	}
+}
+
+// The comparison span and the replacement span deliberately differ on a bold
+// row. statusSpan must yield the bare value so writer.go's optimistic lock can
+// match it against the canonical status the caller supplies; if it included
+// the markers, every legacy bold row would read as stale and become
+// unwritable.
+func TestStatusSpanExcludesBoldMarkers(t *testing.T) {
+	raw := "| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | **Applied** | ❌ | [002](reports/002.md) | n |"
+
+	start, end, ok := statusSpan(raw)
+	if !ok {
+		t.Fatal("statusSpan ok = false, want true")
+	}
+	if got := raw[start:end]; got != "Applied" {
+		t.Errorf("statusSpan value = %q, want %q", got, "Applied")
+	}
+
+	rStart, rEnd, ok := statusReplaceSpan(raw)
+	if !ok {
+		t.Fatal("statusReplaceSpan ok = false, want true")
+	}
+	if got := raw[rStart:rEnd]; got != "**Applied**" {
+		t.Errorf("statusReplaceSpan value = %q, want %q", got, "**Applied**")
 	}
 }
