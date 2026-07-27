@@ -1674,8 +1674,8 @@ This repo's own `data/applications.md` is LF-only — it is gitignored, so it wa
 - Produces:
   - `type SetStatusResult struct { OK bool; ReportNumber string; OldStatus string; NewStatus string; Backup string }`
   - `func setStatus(root, reportNumber, expect, next string) (SetStatusResult, error)`
-  - `var errRowNotFound`, `var errStale`, `var errInvalidStatus`
-  - `type staleError struct { Actual string }` implementing `error`, so the handler can report the value it actually found.
+  - `var errRowNotFound`, `var errInvalidStatus`
+  - `type staleError struct { Actual string }` implementing `error`, matched with `errors.As` so the handler can report the value it actually found on disk. There is deliberately no `errStale` sentinel — the actual status has to travel with the error, which a bare sentinel cannot carry.
   - `var canonicalStatuses = []string{"Evaluated", "Applied", "Responded", "Interview", "Offer", "Rejected", "Discarded", "SKIP"}`
 
 - [ ] **Step 1: Write the failing test**
