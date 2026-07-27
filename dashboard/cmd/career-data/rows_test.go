@@ -33,14 +33,55 @@ func TestStatusSpanIgnoresEarlierMatches(t *testing.T) {
 }
 
 func TestStatusSpanMixedTabFormat(t *testing.T) {
-	raw := "| 1\t2026-07-01\tAcme\tBackend\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tInterview soon"
+	// Three separators between the leading pipe and the first cell, all of
+	// which ParseApplications collapses via TrimSpace (career.go:58-62).
+	// Getting this wrong shifts every cell index by one, and the writer
+	// splices the status over the Score cell — silent data corruption.
+	for _, raw := range []string{
+		"| 1\t2026-07-01\tAcme\tBackend\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tInterview soon",
+		"|\t1\t2026-07-01\tAcme\tBackend\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tInterview soon",
+		"|  \t1\t2026-07-01\tAcme\tBackend\t4.0/5\tApplied\t❌\t[002](reports/002.md)\tInterview soon",
+	} {
+		start, end, ok := statusSpan(raw)
+		if !ok {
+			t.Errorf("ok = false for %q", raw)
+			continue
+		}
+		if got := raw[start:end]; got != "Applied" {
+			t.Errorf("statusSpan = %q, want %q, for %q", got, "Applied", raw)
+		}
+	}
+}
+
+// cellSpans must agree with ParseApplications about where a row begins.
+// TrimSpace is unicode-aware, so a row led by a non-breaking space is a data
+// row to the parser; if this function only skipped ASCII blanks it would
+// reject the row and the status would be unwritable.
+func TestStatusSpanUnicodeLeadingSpace(t *testing.T) {
+	raw := " | 1 | 2026-07-01 | Acme | Dev | 4.0/5 | Applied | ✅ | [002](reports/002.md) | n |"
 
 	start, end, ok := statusSpan(raw)
 	if !ok {
-		t.Fatal("ok = false, want true")
+		t.Fatal("ok = false, want true for an NBSP-led row")
 	}
 	if got := raw[start:end]; got != "Applied" {
-		t.Fatalf("raw[start:end] = %q, want %q", got, "Applied")
+		t.Errorf("statusSpan = %q, want %q", got, "Applied")
+	}
+}
+
+// A blank status cell is refused rather than written into. The parser accepts
+// such a row with an empty status, so the two deliberately differ here: a
+// zero-width span gives the optimistic lock nothing to compare, and a blank
+// status is malformed per AGENTS.md's canonical-states rule anyway. Refusing
+// to write is the safe direction; `node normalize-statuses.mjs` is the fix.
+func TestStatusSpanRefusesEmptyStatusCell(t *testing.T) {
+	raw := "| 1 | 2026-07-01 | Acme | Dev | 4.0/5 |  | ✅ | [002](reports/002.md) | n |"
+
+	if _, _, ok := statusSpan(raw); ok {
+		t.Error("statusSpan accepted a blank status cell; want refusal")
+	}
+	if _, _, ok := statusReplaceSpan(raw); ok {
+		t.Error("statusReplaceSpan accepted a blank status cell; want refusal")
 	}
 }
 

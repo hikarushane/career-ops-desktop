@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // statusCellIndex is the 0-based position of the Status column in
 // applications.md rows:
@@ -20,18 +23,13 @@ const minCells = 8
 // the row contains a tab, pipe-separated otherwise. Spans are offsets into
 // raw, so surrounding whitespace and delimiters are recoverable.
 func cellSpans(raw string) [][2]int {
-	lead := 0
-	for lead < len(raw) && (raw[lead] == ' ' || raw[lead] == '\t') {
-		lead++
-	}
-	end := len(raw)
-	for end > lead {
-		c := raw[end-1]
-		if c != ' ' && c != '\t' && c != '\r' && c != '\n' {
-			break
-		}
-		end--
-	}
+	// ParseApplications trims the whole line with strings.TrimSpace before
+	// anything else (career.go:47), and TrimSpace is unicode-aware — it
+	// removes NBSP and friends, not only ASCII blanks. Mirror it exactly:
+	// if this function and the parser disagree about where the row begins,
+	// they disagree about which cell is the status cell.
+	lead := len(raw) - len(strings.TrimLeftFunc(raw, unicode.IsSpace))
+	end := lead + len(strings.TrimRightFunc(raw[lead:], unicode.IsSpace))
 	if lead >= end || raw[lead] != '|' {
 		return nil
 	}
@@ -39,8 +37,15 @@ func cellSpans(raw string) [][2]int {
 	body := raw[lead:end]
 
 	if strings.ContainsRune(body, '\t') {
-		// Mixed format: a leading "|" then tab-separated cells.
-		return splitSpans(body[1:], '\t', lead+1)
+		// Mixed format: a leading "|", then TrimSpace, then tab-separated
+		// cells (career.go:58-62). That second trim is load-bearing. Without
+		// it a row whose pipe is followed by a tab — "|\t1\t2026-07-01\t…" —
+		// yields an empty leading cell and shifts every index by one, so the
+		// writer would splice the status over the Score cell.
+		inner := body[1:]
+		trimmed := strings.TrimLeftFunc(inner, unicode.IsSpace)
+		off := lead + 1 + (len(inner) - len(trimmed))
+		return splitSpans(trimmed, '\t', off)
 	}
 
 	// Pure pipe format: drop the outer pipes, then split on "|".
