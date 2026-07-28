@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { doctor, isError, type DoctorResult } from './api';
+import { doctor, isError, listApplications, type DoctorResult, type ListResult } from './api';
 import { loadRoot, pickRoot } from './config';
 import EmptyState from './screens/EmptyState';
+import Pipeline from './screens/Pipeline';
 
 export default function App() {
   const [root, setRoot] = useState<string | null>(null);
   const [probe, setProbe] = useState<DoctorResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<ListResult | null>(null);
+  const [screen, setScreen] = useState<'pipeline' | 'progress'>('pipeline');
 
   const refresh = useCallback(async (path: string) => {
     setError(null);
@@ -23,10 +26,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    loadRoot().then((p) => {
-      setRoot(p);
-      if (p) refresh(p);
-    });
+    // .catch, not just .then: a corrupt settings.json or a filesystem
+    // permissions error here would otherwise become an unhandled promise
+    // rejection, and the UI would silently fall back to the "no folder
+    // selected" empty state instead of surfacing the real failure.
+    loadRoot()
+      .then((p) => {
+        setRoot(p);
+        if (p) refresh(p);
+      })
+      .catch((e) => setError(String(e)));
   }, [refresh]);
 
   const onPick = useCallback(async () => {
@@ -35,6 +44,15 @@ export default function App() {
     setRoot(picked);
     await refresh(picked);
   }, [refresh]);
+
+  const reload = useCallback(async () => {
+    if (!root) return;
+    const r = await listApplications(root);
+    if (isError(r)) { setError(r.message); return; }
+    setData(r);
+  }, [root]);
+
+  useEffect(() => { if (probe?.ready) reload(); }, [probe, reload]);
 
   if (error) {
     return (
@@ -49,5 +67,17 @@ export default function App() {
     return <EmptyState root={root} missing={probe?.missing ?? []} onPick={onPick} />;
   }
 
-  return <pre style={{ padding: 16 }}>ready — pipeline lands in Task 9</pre>;
+  if (!data) return <main style={{ padding: 48 }}>Loading…</main>;
+
+  return (
+    <div className="shell">
+      <nav className="nav">
+        <button aria-current={screen === 'pipeline'} onClick={() => setScreen('pipeline')}>Pipeline</button>
+        <button aria-current={screen === 'progress'} onClick={() => setScreen('progress')}>Progress</button>
+      </nav>
+      {screen === 'pipeline'
+        ? <Pipeline root={root!} data={data} onReload={reload} />
+        : <div className="pane" style={{ padding: 16 }}>Progress lands in Task 12</div>}
+    </div>
+  );
 }

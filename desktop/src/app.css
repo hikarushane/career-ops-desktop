@@ -1,0 +1,49 @@
+.shell { display: grid; grid-template-columns: 180px 1fr; height: 100vh; }
+
+.nav { background: var(--surface); padding: 16px 8px; display: flex; flex-direction: column; gap: 4px; }
+.nav button {
+  background: none; border: 0; color: var(--subtext); text-align: left;
+  padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;
+}
+.nav button[aria-current='true'] { background: var(--overlay); color: var(--text); }
+
+.pane { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+
+.metrics { display: flex; gap: 24px; padding: 12px 16px; border-bottom: 1px solid var(--surface); }
+.metric-label { color: var(--subtext); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+.metric-value { font-size: 20px; font-variant-numeric: tabular-nums; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--surface); }
+.tab {
+  background: none; border: 1px solid transparent; color: var(--subtext);
+  padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 12px;
+}
+.tab[aria-pressed='true'] { background: var(--overlay); color: var(--text); }
+.toolbar input, .toolbar select {
+  background: var(--surface); color: var(--text); border: 1px solid var(--overlay);
+  border-radius: 4px; padding: 4px 8px; font-size: 13px;
+}
+
+.split { display: grid; grid-template-columns: 1fr 1fr; flex: 1; min-height: 0; }
+.split > * { overflow: auto; min-width: 0; }
+
+table.apps { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.apps th {
+  position: sticky; top: 0; background: var(--base); text-align: left;
+  padding: 6px 8px; border-bottom: 1px solid var(--overlay);
+  color: var(--subtext); font-weight: 500; cursor: pointer; white-space: nowrap;
+}
+table.apps td { padding: 6px 8px; border-bottom: 1px solid var(--surface); }
+table.apps tr[aria-selected='true'] { background: var(--surface); }
+table.apps tr.group-head td {
+  background: var(--surface); color: var(--subtext); font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 0;
+}
+
+.score { font-variant-numeric: tabular-nums; text-align: right; }
+.score.high { color: var(--score-high); font-weight: 600; }
+.score.mid { color: var(--score-mid); }
+.score.neutral { color: var(--score-neutral); }
+.score.low { color: var(--score-low); }
+
+.status-pill { padding: 2px 8px; border-radius: 999px; background: var(--surface); font-size: 12px; }
