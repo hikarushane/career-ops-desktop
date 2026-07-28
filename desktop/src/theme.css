@@ -1,0 +1,65 @@
+:root {
+  /* Catppuccin Latte */
+  --base: #eff1f5;
+  --surface: #dce0e8;
+  --overlay: #9ca0b0;
+  --text: #4c4f69;
+  --subtext: #5c5f77;
+  --blue: #1e66f5;
+  --mauve: #8839ef;
+  --green: #40a02b;
+  --yellow: #df8e1d;
+  --sky: #04a5e5;
+  --peach: #fe640b;
+  --red: #d20f39;
+  --pink: #ea76cb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Catppuccin Mocha */
+    --base: #1e1e2e;
+    --surface: #313244;
+    --overlay: #45475a;
+    --text: #cdd6f4;
+    --subtext: #a6adc8;
+    --blue: #89b4fa;
+    --mauve: #cba6f7;
+    --green: #a6e3a1;
+    --yellow: #f9e2af;
+    --sky: #89dceb;
+    --peach: #fab387;
+    --red: #f38ba8;
+    --pink: #f5c2e7;
+  }
+}
+
+/* Status colors, from pipeline.go:1094-1105 */
+:root {
+  --status-interview: var(--green);
+  --status-offer: var(--green);
+  --status-applied: var(--sky);
+  --status-responded: var(--blue);
+  --status-evaluated: var(--text);
+  --status-skip: var(--red);
+  --status-rejected: var(--subtext);
+  --status-discarded: var(--subtext);
+}
+
+/* Score bands, from pipeline.go:1081-1091 */
+:root {
+  --score-high: var(--green);
+  --score-mid: var(--yellow);
+  --score-neutral: var(--text);
+  --score-low: var(--red);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--base);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+}

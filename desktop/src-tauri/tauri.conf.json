@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "desktop",
   "version": "0.1.0",
-  "identifier": "com.shane_yeh.desktop",
+  "identifier": "io.career-ops.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1430",
