@@ -3858,8 +3858,26 @@ export default function ReportPane({ root, app }: Props) {
       </div>
 
       {error && <pre style={{ color: 'var(--red)', whiteSpace: 'pre-wrap' }}>{error}</pre>}
-      {!error && !report && app.reportPath && <div style={{ color: 'var(--subtext)' }}>Loading report…</div>}
-      {!app.reportPath && <div style={{ color: 'var(--subtext)' }}>This row has no linked report.</div>}
+      {!error && !report && app.reportPath && !missing && (
+        <div style={{ color: 'var(--subtext)' }}>Loading report…</div>
+      )}
+
+      {/*
+        Two distinct conditions, deliberately not merged. A row with no link
+        is normal. A row whose linked file is gone is a tracker integrity
+        problem the user should hear about by name — saying "no linked
+        report" there would hide a missing file behind an ordinary-looking
+        message. verify-pipeline.mjs is the tool that finds the rest.
+      */}
+      {!app.reportPath && (
+        <div style={{ color: 'var(--subtext)' }}>This row has no linked report.</div>
+      )}
+      {app.reportPath && missing && (
+        <div style={{ color: 'var(--peach)' }}>
+          The tracker links <code>{app.reportPath}</code>, but that file is missing.
+          Run <code>node verify-pipeline.mjs</code> to check for other broken links.
+        </div>
+      )}
       {report && (
         <div className="md">
           <Markdown remarkPlugins={[remarkGfm]}>{report.markdown}</Markdown>
@@ -3891,7 +3909,7 @@ Check, in order:
 1. Selecting the Anthropic row renders its report, and the "B) Match with CV" markdown table has visible borders — that confirms `remark-gfm` is active.
 2. "Open job posting" opens `https://jobs.example.test/...` in the system browser.
 3. A row whose report has no `**URL:**` shows a disabled "No job URL" button rather than opening about:blank.
-4. Selecting a row with no `reportPath` shows the card with "This row has no linked report" and does not spin forever.
+4. A row whose linked report file does not exist shows the missing-file warning naming the path, not the generic "no linked report" message. Note the fixture cannot produce a genuinely empty `reportPath`: the Go tracker parser does not check whether the file exists, so all ten fixture rows carry a link while only three files are present. Seven rows therefore exercise the *missing-file* branch, and the empty-`reportPath` branch is reachable only from a tracker row with no link at all.
 
 - [ ] **Step 6: Commit**
 
