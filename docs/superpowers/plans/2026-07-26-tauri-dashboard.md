@@ -3938,6 +3938,8 @@ Delivers acceptance criteria 3 and 4. The only task where the desktop app writes
 
 **No optimistic UI.** The cell keeps showing the old value until the sidecar confirms the write and the reload returns. A failed write therefore never leaves the screen disagreeing with the file.
 
+> **`Pipeline.tsx` accumulates across Tasks 9, 10 and 11 — layer onto the file on disk, never paste this plan's earlier version over it.** Task 9's listing renders a placeholder in the right half of `.split`; Task 10 replaced that with `<ReportPane>`. Any task brief cut before Task 10 still embeds the placeholder version, so pasting it verbatim silently deletes the report pane. The same applies to `AppTable.tsx`, which gains props in Task 11. Apply the deltas each step describes to the current file and let `tsc` and the tests confirm nothing regressed.
+
 - [ ] **Step 1: Add banner styles to `app.css`**
 
 ```css
