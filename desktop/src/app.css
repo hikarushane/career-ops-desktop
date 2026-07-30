@@ -47,3 +47,26 @@ table.apps tr.group-head td {
 .score.low { color: var(--score-low); }
 
 .status-pill { padding: 2px 8px; border-radius: 999px; background: var(--surface); font-size: 12px; }
+
+.report { padding: 16px 20px; }
+.report-card {
+  background: var(--surface); border-radius: 6px; padding: 12px 16px; margin-bottom: 16px;
+}
+.report-card dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.report-card dt { color: var(--subtext); font-size: 12px; }
+.report-card dd { margin: 0; }
+.report-actions { display: flex; gap: 8px; margin-top: 12px; }
+.report-actions button {
+  background: var(--blue); color: var(--base); border: 0; border-radius: 4px;
+  padding: 6px 12px; cursor: pointer; font-size: 13px;
+}
+.report-actions button:disabled { background: var(--overlay); color: var(--subtext); cursor: default; }
+
+.md { line-height: 1.6; }
+.md h1 { font-size: 20px; }
+.md h2 { font-size: 16px; margin-top: 24px; border-bottom: 1px solid var(--surface); padding-bottom: 4px; }
+.md code { background: var(--surface); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+.md pre { background: var(--surface); padding: 12px; border-radius: 4px; overflow-x: auto; }
+.md table { border-collapse: collapse; width: 100%; font-size: 13px; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid var(--overlay); padding: 4px 8px; text-align: left; }
+.md a { color: var(--blue); }
