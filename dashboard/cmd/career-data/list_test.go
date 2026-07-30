@@ -9,11 +9,11 @@ import (
 
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
-		"Offerpad":        "offerpad",
-		"Acme Corp.":      "acme-corp",
-		"  Globex  Inc ":  "globex-inc",
-		"A&B/C":           "a-b-c",
-		"---":             "",
+		"Offerpad":       "offerpad",
+		"Acme Corp.":     "acme-corp",
+		"  Globex  Inc ": "globex-inc",
+		"A&B/C":          "a-b-c",
+		"---":            "",
 	}
 	for in, want := range cases {
 		if got := slugify(in); got != want {
