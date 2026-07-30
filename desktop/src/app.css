@@ -81,3 +81,28 @@ table.apps tr.group-head td {
   background: var(--overlay); color: var(--text); border: 0;
   border-radius: 4px; padding: 4px 10px; cursor: pointer;
 }
+
+.progress-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px; padding: 16px; overflow: auto;
+}
+.card {
+  background: var(--surface); border-radius: 6px; padding: 16px; min-width: 0;
+}
+.card h2 { margin: 0 0 12px; font-size: 13px; color: var(--subtext); text-transform: uppercase; letter-spacing: 0.05em; }
+/* flex-wrap: wrap — verified at 560px window width during check 3. A single
+   non-wrapping row let 3 unbreakable values ("50%", "33%", "17%") overlap
+   each other once the row got narrower than their combined intrinsic width;
+   an earlier min-width:0-only fix stopped them spilling into the next card
+   but still let them overlap in place. Wrapping the row is what actually
+   keeps every value readable: each tile holds its 80px floor and drops to a
+   new line instead of compressing below it. */
+.rates { display: flex; flex-wrap: wrap; gap: 16px; }
+.rate { flex: 1 1 80px; min-width: 80px; text-align: center; }
+/* Stat-tile value: proportional figures, not tabular-nums. tabular-nums
+   equalizes every digit to the width of a "0", which is for columns of
+   numbers that must align vertically (table rows, axis ticks) — a
+   standalone 28px value like this one just looks loose. font-weight is
+   semibold per the stat-tile contract (dataviz skill, marks-and-anatomy.md). */
+.rate-value { font-size: 28px; font-weight: 600; }
+.rate-label { color: var(--subtext); font-size: 12px; }

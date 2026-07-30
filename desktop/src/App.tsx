@@ -3,6 +3,7 @@ import { doctor, isError, listApplications, type DoctorResult, type ListResult }
 import { loadRoot, pickRoot } from './config';
 import EmptyState from './screens/EmptyState';
 import Pipeline from './screens/Pipeline';
+import Progress from './screens/Progress';
 
 export default function App() {
   const [root, setRoot] = useState<string | null>(null);
@@ -77,7 +78,7 @@ export default function App() {
       </nav>
       {screen === 'pipeline'
         ? <Pipeline root={root!} data={data} onReload={reload} />
-        : <div className="pane" style={{ padding: 16 }}>Progress lands in Task 12</div>}
+        : <Progress data={data.progress} />}
     </div>
   );
 }
