@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
@@ -122,5 +127,45 @@ func TestRunListComputesMetrics(t *testing.T) {
 func TestResolvePDFNoMatchReturnsEmpty(t *testing.T) {
 	if got := resolvePDF("testdata/career-ops", "Umbrella"); got != "" {
 		t.Errorf("resolvePDF for a company with no PDF = %q, want empty", got)
+	}
+}
+
+// TestRunListStripsBoldFromStatus pins the invariant whose absence let a
+// legacy "**Applied**" row become permanently uncorrectable through the app:
+// list's emitted status must equal what statusSpan (the optimistic lock's
+// view) sees on the very same on-disk row. If the two ever disagree again,
+// the UI echoes list's value back as expectStatus and every write on such a
+// row is rejected as stale.
+func TestRunListStripsBoldFromStatus(t *testing.T) {
+	row := "| 1 | 2026-07-01 | Offerpad | Staff Engineer | 4.6/5 | **Applied** | ❌ | [001](reports/001.md) | legacy bold status |"
+	root, _ := writeTracker(t, "\n", row)
+
+	res, err := runList(root)
+	if err != nil {
+		t.Fatalf("runList: %v", err)
+	}
+	if len(res.Applications) != 1 {
+		t.Fatalf("len(Applications) = %d, want 1", len(res.Applications))
+	}
+
+	// Re-read independently rather than trusting writeTracker's own return
+	// value, so this checks what the system under test actually sees on disk.
+	raw, err := os.ReadFile(filepath.Join(root, "data", "applications.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rowLine := strings.Split(string(raw), "\n")[4] // title, blank, header, separator, row
+	start, end, ok := statusSpan(rowLine)
+	if !ok {
+		t.Fatalf("statusSpan found no status cell in %q", rowLine)
+	}
+	want := rowLine[start:end]
+
+	got := res.Applications[0].Status
+	if got != want {
+		t.Errorf("list Status = %q, statusSpan (the lock's view) = %q on the same row — they must agree, or every write on a bold row is rejected as stale", got, want)
+	}
+	if strings.Contains(got, "*") {
+		t.Errorf("Status = %q still carries bold markers", got)
 	}
 }

@@ -122,7 +122,7 @@ func runList(root string) (ListResult, error) {
 			Date:         a.Date,
 			Company:      a.Company,
 			Role:         a.Role,
-			Status:       a.Status,
+			Status:       stripBoldString(a.Status),
 			NormStatus:   data.NormalizeStatus(a.Status),
 			StatusPrio:   data.StatusPriority(a.Status),
 			Score:        a.Score,

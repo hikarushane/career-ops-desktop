@@ -99,6 +99,18 @@ func stripBold(raw string, s, e int) (int, int) {
 	return s, e
 }
 
+// stripBoldString is stripBold applied to a whole standalone value rather
+// than a span within a raw line. list.go uses it so a legacy "**Applied**"
+// status is emitted the same way statusSpan sees it on disk — display,
+// expectStatus, and the optimistic lock all agree on one notion of the row's
+// current status. Without it, the lock (which excludes bold, see statusSpan
+// above) and the list emission (which didn't) could disagree, and every
+// write on such a row would be rejected as stale.
+func stripBoldString(v string) string {
+	s, e := stripBold(v, 0, len(v))
+	return v[s:e]
+}
+
 // isDataRow reports whether raw is a tracker data row rather than a header,
 // separator, or short line.
 func isDataRow(raw string) ([][2]int, bool) {
