@@ -628,6 +628,57 @@ func TestRunListParsesFixture(t *testing.T) {
 	}
 }
 
+// A legacy row may wrap its status in markdown bold. list must emit the
+// stripped value, because the frontend echoes it back as expectStatus and
+// writer.go's lock compares against statusSpan, which strips. If these two
+// disagree the row is rejected as stale on every attempt and can never be
+// corrected through the app.
+func TestRunListStripsBoldFromStatus(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := strings.Join([]string{
+		"# Applications Tracker",
+		"",
+		"| # | Date | Company | Role | Score | Status | PDF | Report | Notes |",
+		"|---|------|---------|------|-------|--------|-----|--------|-------|",
+		"| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | **Applied** | ❌ | [002](reports/002.md) | n |",
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(dir, "applications.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := runList(root)
+	if err != nil {
+		t.Fatalf("runList: %v", err)
+	}
+	if len(res.Applications) != 1 {
+		t.Fatalf("len(Applications) = %d, want 1", len(res.Applications))
+	}
+
+	got := res.Applications[0]
+	if got.Status != "Applied" {
+		t.Errorf("Status = %q, want %q — the frontend sends this as expectStatus", got.Status, "Applied")
+	}
+	if got.NormStatus != "applied" {
+		t.Errorf("NormStatus = %q, want %q", got.NormStatus, "applied")
+	}
+
+	// The value list emits must equal what the lock compares against.
+	row := "| 1 | 2026-07-01 | Acme | Dev | 4.0/5 | **Applied** | ❌ | [002](reports/002.md) | n |"
+	s, e, ok := statusSpan(row)
+	if !ok {
+		t.Fatal("statusSpan ok = false")
+	}
+	if row[s:e] != got.Status {
+		t.Errorf("statusSpan sees %q but list emits %q; the optimistic lock would reject every write",
+			row[s:e], got.Status)
+	}
+}
+
 func TestRunListEmitsDerivedStatusFields(t *testing.T) {
 	res, err := runList("testdata/career-ops")
 	if err != nil {
@@ -829,7 +880,14 @@ func runList(root string) (ListResult, error) {
 			Date:         a.Date,
 			Company:      a.Company,
 			Role:         a.Role,
-			Status:       a.Status,
+			// Bold stripped so this matches what statusSpan sees. The frontend
+			// echoes this value back as expectStatus, and the optimistic lock
+			// compares it against statusSpan's output — if they disagree, a
+			// legacy "**Applied**" row is rejected as stale forever and can
+			// never be corrected through the app. AGENTS.md forbids bold in
+			// the status field anyway, so displaying the stripped value is
+			// also the more honest rendering.
+			Status:       stripBoldString(a.Status),
 			NormStatus:   data.NormalizeStatus(a.Status),
 			StatusPrio:   data.StatusPriority(a.Status),
 			Score:        a.Score,
@@ -1504,6 +1562,19 @@ func stripBold(raw string, s, e int) (int, int) {
 		e -= 2
 	}
 	return s, e
+}
+
+// stripBoldString is stripBold over a whole value.
+//
+// list.go uses it on the status it emits, so the frontend displays and sends
+// back the same value the optimistic lock compares against. Without it the two
+// sides disagree on any legacy bold row: list emits "**Applied**", the UI
+// echoes it as expectStatus, and writer.go's lock compares against statusSpan,
+// which strips the markers — so the write is rejected as stale forever and the
+// row can never be corrected through the app.
+func stripBoldString(v string) string {
+	s, e := stripBold(v, 0, len(v))
+	return v[s:e]
 }
 
 // isDataRow reports whether raw is a tracker data row rather than a header,
