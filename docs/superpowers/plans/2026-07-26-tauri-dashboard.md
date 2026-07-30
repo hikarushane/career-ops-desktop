@@ -4236,11 +4236,17 @@ cd desktop && npm install recharts
 - [ ] **Step 4: Write `RateCard.tsx`**
 
 ```tsx
-/** A ratio rendered as a percentage. */
+/**
+ * A rate rendered as a percentage.
+ *
+ * ComputeProgressMetrics already multiplies by 100 (career.go:667-669), so the
+ * value arrives as 50, not 0.5. An earlier revision of this plan multiplied
+ * again here and would have rendered "5000%".
+ */
 export default function RateCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rate">
-      <div className="rate-value">{(value * 100).toFixed(0)}%</div>
+      <div className="rate-value">{value.toFixed(0)}%</div>
       <div className="rate-label">{label}</div>
     </div>
   );
@@ -4259,7 +4265,7 @@ export function CountCard({ label, value }: { label: string; value: number }) {
 
 Import both in `Progress.tsx`: `import RateCard, { CountCard } from '../components/RateCard';`
 
-Confirm the scale before trusting `RateCard`: `ComputeProgressMetrics` may return rates as fractions or as percentages. Run
+The scale is 0-100, confirmed at `career.go:667-669` and empirically — the sidecar emits `ResponseRate: 50`, not `0.5`. Verify it yourself anyway rather than trusting this line; that check is what caught the plan's original double-multiply. Run
 
 ```bash
 cd dashboard && go run ./cmd/career-data list --path ../desktop/fixtures/career-ops | grep -o '"ResponseRate":[0-9.]*'
