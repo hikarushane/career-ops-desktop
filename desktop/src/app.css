@@ -70,3 +70,14 @@ table.apps tr.group-head td {
 .md table { border-collapse: collapse; width: 100%; font-size: 13px; display: block; overflow-x: auto; }
 .md th, .md td { border: 1px solid var(--overlay); padding: 4px 8px; text-align: left; }
 .md a { color: var(--blue); }
+
+.banner {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 10px 16px; border-left: 3px solid var(--red); background: var(--surface);
+}
+.banner.stale { border-left-color: var(--peach); }
+.banner p { margin: 0; flex: 1; }
+.banner button {
+  background: var(--overlay); color: var(--text); border: 0;
+  border-radius: 4px; padding: 4px 10px; cursor: pointer;
+}

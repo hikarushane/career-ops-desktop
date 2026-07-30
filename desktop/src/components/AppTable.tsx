@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import type { Application } from '../api';
 import { scoreBand, type SortKey } from '../lib/filters';
+import StatusSelect from './StatusSelect';
 
 /** Display labels for normalized statuses, matching statusLabel (pipeline.go:1129). */
 const LABELS: Record<string, string> = {
@@ -36,9 +37,13 @@ type Props = {
   sort: SortKey;
   onSelect: (reportNumber: string) => void;
   onSort: (s: SortKey) => void;
+  onStatusChange?: (app: Application, next: string) => void;
+  pendingRow?: string | null;
 };
 
-export default function AppTable({ rows, grouped, selected, sort, onSelect, onSort }: Props) {
+export default function AppTable({
+  rows, grouped, selected, sort, onSelect, onSort, onStatusChange, pendingRow,
+}: Props) {
   let lastGroup = '';
 
   return (
@@ -81,12 +86,18 @@ export default function AppTable({ rows, grouped, selected, sort, onSelect, onSo
                 <td>{a.role}</td>
                 <td className={`score ${scoreBand(a.score)}`}>{a.score.toFixed(1)}</td>
                 <td>
-                  <span
-                    className="status-pill"
-                    style={{ color: `var(--status-${a.normStatus}, var(--text))` }}
-                  >
-                    {a.status}
-                  </span>
+                  {onStatusChange ? (
+                    <StatusSelect
+                      value={a.status}
+                      normStatus={a.normStatus}
+                      disabled={pendingRow === a.reportNumber || !a.reportNumber}
+                      onChange={(next) => onStatusChange(a, next)}
+                    />
+                  ) : (
+                    <span className="status-pill" style={{ color: `var(--status-${a.normStatus}, var(--text))` }}>
+                      {a.status}
+                    </span>
+                  )}
                 </td>
                 <td>{a.hasPdf ? '✅' : ''}</td>
               </tr>

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import type { ListResult } from '../api';
+import { useCallback, useMemo, useState } from 'react';
+import { isError, setStatus, type Application, type ListResult } from '../api';
 import {
   applyFilterAndSort, countForFilter, TABS,
   type FilterKey, type SortKey, type ViewMode,
@@ -18,6 +18,8 @@ export default function Pipeline({ root, data, onReload }: Props) {
   const [view, setView] = useState<ViewMode>('grouped');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
+  const [pendingRow, setPendingRow] = useState<string | null>(null);
+  const [writeError, setWriteError] = useState<{ stale: boolean; message: string } | null>(null);
 
   const rows = useMemo(
     () => applyFilterAndSort(data.applications, filter, sort, view, query),
@@ -30,6 +32,28 @@ export default function Pipeline({ root, data, onReload }: Props) {
     return out;
   }, [data.applications, query]);
 
+  const changeStatus = useCallback(
+    async (app: Application, next: string) => {
+      setWriteError(null);
+      setPendingRow(app.reportNumber);
+      try {
+        // expectStatus is the value this UI last read. The sidecar refuses the
+        // write if the file says something else.
+        const r = await setStatus(root, app.reportNumber, app.status, next);
+        if (isError(r)) {
+          setWriteError({ stale: r.error === 'stale', message: r.message });
+          return;
+        }
+        await onReload();
+      } catch (e) {
+        setWriteError({ stale: false, message: String(e) });
+      } finally {
+        setPendingRow(null);
+      }
+    },
+    [root, onReload],
+  );
+
   return (
     <div className="pane">
       <MetricsBar metrics={data.metrics} />
@@ -38,6 +62,13 @@ export default function Pipeline({ root, data, onReload }: Props) {
         onFilter={setFilter} onSort={setSort} onView={setView}
         onQuery={setQuery} onReload={onReload}
       />
+      {writeError && (
+        <div className={`banner${writeError.stale ? ' stale' : ''}`}>
+          <p>{writeError.message}</p>
+          <button onClick={() => { setWriteError(null); onReload(); }}>Reload</button>
+          <button onClick={() => setWriteError(null)}>Dismiss</button>
+        </div>
+      )}
       <div className="split">
         <div>
           <AppTable
@@ -47,6 +78,8 @@ export default function Pipeline({ root, data, onReload }: Props) {
             sort={sort}
             onSelect={setSelected}
             onSort={setSort}
+            onStatusChange={changeStatus}
+            pendingRow={pendingRow}
           />
         </div>
         <ReportPane
