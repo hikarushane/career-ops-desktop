@@ -134,10 +134,12 @@ func runList(root string) (ListResult, error) {
 			JobURL:       a.JobURL,
 		}
 		if a.ReportPath != "" {
-			// extractSummary, not data.LoadReportSummary — see summary.go for why.
-			if content, err := os.ReadFile(filepath.Join(root, a.ReportPath)); err == nil {
-				item.Archetype, item.TlDr, item.Remote, item.CompEstimate =
-					extractSummary(string(content))
+			safe, err := safeJoin(root, a.ReportPath)
+			if err == nil {
+				if content, err := os.ReadFile(safe); err == nil {
+					item.Archetype, item.TlDr, item.Remote, item.CompEstimate =
+						extractSummary(string(content))
+				}
 			}
 		}
 		if a.HasPDF {

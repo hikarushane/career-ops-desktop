@@ -151,6 +151,22 @@ func TestSetStatusMatchesReportNumberInTheReportCellOnly(t *testing.T) {
 	}
 }
 
+func TestSetStatusRejectsDuplicateReportNumber(t *testing.T) {
+	dup := "| 3 | 2026-07-03 | Clone | SRE | 3.8/5 | Applied | ❌ | [002](reports/002-clone.md) | dup |"
+	root, tracker := writeTracker(t, "\n", acmeRow, dup)
+	before, _ := os.ReadFile(tracker)
+
+	_, err := setStatus(root, "002", "Applied", "Interview")
+	if !errors.Is(err, errAmbiguousRow) {
+		t.Fatalf("error = %v, want errAmbiguousRow", err)
+	}
+
+	after, _ := os.ReadFile(tracker)
+	if string(after) != string(before) {
+		t.Errorf("the file was modified despite ambiguous report number")
+	}
+}
+
 func TestSetStatusWritesBackup(t *testing.T) {
 	root, tracker := writeTracker(t, "\n", acmeRow)
 	before, _ := os.ReadFile(tracker)

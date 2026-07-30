@@ -141,6 +141,8 @@ func run(args []string) int {
 			return fail("invalid-status", err.Error())
 		case errors.Is(err, errRowNotFound):
 			return fail("not-found", err.Error())
+		case errors.Is(err, errAmbiguousRow):
+			return fail("ambiguous-row", err.Error())
 		case errors.Is(err, errNoTracker):
 			return fail("not-found", "applications.md not found under "+*path)
 		case err != nil:

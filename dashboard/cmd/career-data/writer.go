@@ -12,6 +12,7 @@ import (
 var (
 	errRowNotFound   = errors.New("row not found")
 	errInvalidStatus = errors.New("invalid status")
+	errAmbiguousRow  = errors.New("ambiguous report number")
 )
 
 // canonicalStatuses is the allowed set, from templates/states.yml. Anything
@@ -85,8 +86,12 @@ func setStatus(root, reportNumber, expect, next string) (SetStatusResult, error)
 	target := -1
 	for i, raw := range lines {
 		if rowHasReportNumber(raw, reportNumber) {
+			if target >= 0 {
+				return SetStatusResult{}, fmt.Errorf(
+					"%w: report %s matches lines %d and %d",
+					errAmbiguousRow, reportNumber, target+1, i+1)
+			}
 			target = i
-			break
 		}
 	}
 	if target < 0 {
