@@ -11,12 +11,10 @@ export default function ReportPane({ root, app }: Props) {
   const [error, setError] = useState<string | null>(null);
   // The tracker parser (dashboard/internal/data/career.go) sets ReportPath
   // straight from the Report column's markdown link, with no check that the
-  // file exists on disk. So a row whose report was never generated still
+  // file exists on disk. So a row whose linked report has gone missing still
   // carries a non-empty reportPath, and read_report fails with a generic
-  // `io-error` (main.go:104-105) whose message is a raw local filesystem
-  // path. Folding that error code into the same "no report" rendering avoids
-  // leaking that path into the UI and avoids a dead-end error box for what
-  // is, from the user's point of view, just a row with nothing to show yet.
+  // `io-error` (main.go:104-105). That is a tracker integrity problem, not
+  // an ordinary "no report" row — see the two distinct messages below.
   const [missing, setMissing] = useState(false);
 
   useEffect(() => {
@@ -46,8 +44,6 @@ export default function ReportPane({ root, app }: Props) {
   if (!app) {
     return <div className="report" style={{ color: 'var(--subtext)' }}>Select a row to read its report.</div>;
   }
-
-  const noReport = !app.reportPath || missing;
 
   return (
     <div className="report">
@@ -79,8 +75,26 @@ export default function ReportPane({ root, app }: Props) {
       </div>
 
       {error && <pre style={{ color: 'var(--red)', whiteSpace: 'pre-wrap' }}>{error}</pre>}
-      {!error && !report && !noReport && <div style={{ color: 'var(--subtext)' }}>Loading report…</div>}
-      {noReport && <div style={{ color: 'var(--subtext)' }}>This row has no linked report.</div>}
+      {!error && !report && app.reportPath && !missing && (
+        <div style={{ color: 'var(--subtext)' }}>Loading report…</div>
+      )}
+
+      {/*
+        Two distinct conditions, deliberately not merged. A row with no link
+        is normal. A row whose linked file is gone is a tracker integrity
+        problem the user should hear about by name — saying "no linked
+        report" there would hide a missing file behind an ordinary-looking
+        message. verify-pipeline.mjs is the tool that finds the rest.
+      */}
+      {!app.reportPath && (
+        <div style={{ color: 'var(--subtext)' }}>This row has no linked report.</div>
+      )}
+      {app.reportPath && missing && (
+        <div style={{ color: 'var(--peach)' }}>
+          The tracker links <code>{app.reportPath}</code>, but that file is missing.
+          Run <code>node verify-pipeline.mjs</code> to check for other broken links.
+        </div>
+      )}
       {report && (
         <div className="md">
           <Markdown remarkPlugins={[remarkGfm]}>{report.markdown}</Markdown>
