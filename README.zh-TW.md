@@ -72,6 +72,7 @@ career-ops 具有代理能力：Claude Code 透過 Playwright 瀏覽求職頁面
 | **平台掃描器** | 預設超過 45 家企業（Anthropic、OpenAI、ElevenLabs、Retool、n8n...）+ 跨 Ashby、Greenhouse、Lever、Wellfound 的自訂查詢 |
 | **批次處理** | 使用 `claude -p` 工作器並行評估 |
 | **儀表板 TUI** | 在終端機 UI 中瀏覽、篩選及排序你的求職管道 |
+| **桌面儀表板** | 原生 Tauri 應用程式：與 TUI 相同的求職管道資料、篩選排序、報告檢視器與進度圖表，並支援有防護機制的狀態內嵌寫回 |
 | **人機協作** | AI 負責評估與建議，你負責決策與行動。系統絕不自動送出應徵 — 最終決定永遠在你手上 |
 | **管道完整性** | 自動合併、去重、狀態正規化、健康檢查 |
 
@@ -179,6 +180,18 @@ go build -o career-dashboard .
 ```
 
 功能：6 個篩選分頁、4 種排序模式、分組/平鋪檢視、延遲載入預覽、內嵌狀態修改。
+
+## 桌面應用程式
+
+也提供原生 Tauri 桌面儀表板，適合偏好圖形介面而非終端機的使用者：
+
+    cd desktop
+    npm install
+    npm run tauri:dev
+
+它透過內建的 Go sidecar 重用 TUI 的資料層，因此兩者的篩選、排序與狀態規則不會產生落差。
+設定需求（Rust、Node）、架構，以及追蹤表寫入的防護機制，請參閱
+[`desktop/README.md`](desktop/README.md)。
 
 ## 專案結構
 

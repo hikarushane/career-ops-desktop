@@ -75,6 +75,7 @@ Built by someone who used it to evaluate 740+ job offers, generate 100+ tailored
 | **Portal Scanner** | 45+ companies pre-configured (Anthropic, OpenAI, ElevenLabs, Retool, n8n...) + custom queries across Ashby, Greenhouse, Lever, Wellfound |
 | **Batch Processing** | Parallel evaluation with `claude -p` workers |
 | **Dashboard TUI** | Terminal UI to browse, filter, and sort your pipeline |
+| **Desktop Dashboard** | Native Tauri app: same pipeline data, filters and sorts, report viewer, and progress charts, with guarded inline status writeback |
 | **Human-in-the-Loop** | AI evaluates and recommends, you decide and act. The system never submits an application -- you always have the final call |
 | **Pipeline Integrity** | Automated merge, dedup, status normalization, health checks |
 
@@ -228,6 +229,19 @@ go build -o career-dashboard .
 ```
 
 Features: 6 filter tabs, 4 sort modes, grouped/flat view, lazy-loaded previews, inline status changes.
+
+## Desktop app
+
+A native Tauri dashboard is also available, for anyone who prefers a GUI over the terminal:
+
+    cd desktop
+    npm install
+    npm run tauri:dev
+
+It reuses the TUI's Go data layer through a bundled sidecar, so pipeline filtering,
+sorting, and status rules never drift between the two. See
+[`desktop/README.md`](desktop/README.md) for requirements (Rust, Node), architecture, and
+how tracker writes are guarded.
 
 ## Project Structure
 
