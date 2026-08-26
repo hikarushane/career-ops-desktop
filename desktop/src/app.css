@@ -1,108 +1,356 @@
-.shell { display: grid; grid-template-columns: 180px 1fr; height: 100vh; }
+/* career-ops desktop — component styles.
+   Tokens: theme.css. Visual system: DESIGN.md, translated in
+   desktop/STITCH-PROMPT.md. Section order roughly follows that document. */
 
-.nav { background: var(--surface); padding: 16px 8px; display: flex; flex-direction: column; gap: 4px; }
+/* ---------- Shell ---------- */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-rows: var(--header-height) 1fr;
+  grid-template-areas: "header header" "nav main";
+  height: 100vh;
+  background: var(--color-canvas);
+}
+
+/* Empty/Error/first-load states render with no shell at all — see
+   App.tsx and STITCH-PROMPT.md §0. */
+.state-screen { padding: 48px; }
+.state-title { font: 700 24px var(--font-sans); margin-top: 0; }
+.state-loading { color: var(--color-text-secondary); }
+.state-error {
+  font-family: var(--font-mono);
+  color: var(--color-accent-red);
+  background: var(--color-surface-subtle);
+  border-radius: 12px;
+  padding: 16px 20px;
+  white-space: pre-wrap;
+}
+
+/* ---------- Header (DESIGN.md §4.2, repurposed §4.1) ---------- */
+
+.app-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  background: var(--color-canvas);
+  border-bottom: var(--border-divider);
+  min-width: 0;
+}
+
+.app-header-title {
+  font: 700 40px/1.15 var(--font-sans);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.app-header-right { display: flex; align-items: center; gap: 20px; min-width: 0; }
+.app-header-utilities { display: flex; align-items: center; gap: 8px; }
+
+.icon-button {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: none; border: 0; border-radius: var(--radius-control);
+  color: var(--color-icon-default);
+  cursor: pointer;
+}
+.icon-button:hover { background: var(--color-surface-subtle); }
+.icon-button:active { transform: translateY(1px); }
+
+.app-header-divider { width: 1px; height: 64px; background: var(--color-line-strong); opacity: 0.15; }
+
+.app-header-workspace { display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 280px; }
+.workspace-glyph {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--color-surface-subtle); color: var(--color-icon-default);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.workspace-text { min-width: 0; }
+.workspace-name { font: 700 18px var(--font-sans); }
+.workspace-path {
+  font: 400 14px var(--font-sans); color: var(--color-text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---------- Sidebar (DESIGN.md §4.3) ---------- */
+
+.nav {
+  grid-area: nav;
+  background: var(--color-canvas);
+  border-right: var(--border-divider);
+  padding: 20px 12px;
+  display: flex; flex-direction: column; gap: 4px;
+}
 .nav button {
-  background: none; border: 0; color: var(--subtext); text-align: left;
-  padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; gap: 10px;
+  height: 50px; padding: 0 16px;
+  background: none; border: 0; border-radius: var(--radius-nav);
+  color: var(--color-text-primary);
+  font: 700 14px var(--font-sans); letter-spacing: 0.14px;
+  text-align: left; cursor: pointer;
 }
-.nav button[aria-current='true'] { background: var(--overlay); color: var(--text); }
+.nav button:hover { background: var(--color-surface-subtle); }
+.nav button[aria-current='true'] {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary-dark);
+}
 
-.pane { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+/* ---------- Main content area ---------- */
 
-.metrics { display: flex; gap: 24px; padding: 12px 16px; border-bottom: 1px solid var(--surface); }
-.metric-label { color: var(--subtext); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-.metric-value { font-size: 20px; font-variant-numeric: tabular-nums; }
+.pane { grid-area: main; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 
-.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--surface); }
+/* ---------- Metrics panel (DESIGN.md §5.1) ---------- */
+
+.metrics {
+  display: flex; gap: 24px;
+  margin: 20px 32px 0;
+  padding: 18px 24px;
+  background: var(--color-surface-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-panel);
+}
+.metrics > div { flex: 1 1 0; padding-right: 24px; border-right: var(--border-divider); }
+.metrics > div:last-child { border-right: 0; padding-right: 0; }
+.metric-label, .rate-label { font: 500 20px var(--font-sans); letter-spacing: 0.2px; color: var(--color-text-secondary); }
+.metric-value, .rate-value { font: 700 25px var(--font-sans); font-variant-numeric: tabular-nums; }
+
+/* ---------- Toolbar / filter pills (DESIGN.md §5.9) ---------- */
+
+.toolbar {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 16px 32px;
+}
 .tab {
-  background: none; border: 1px solid transparent; color: var(--subtext);
-  padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 12px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-surface-muted);
+  color: var(--color-text-primary);
+  font: 600 13px var(--font-sans); letter-spacing: 0.13px;
+  padding: 5px 12px; border-radius: 999px; cursor: pointer;
 }
-.tab[aria-pressed='true'] { background: var(--overlay); color: var(--text); }
+.tab[aria-pressed='true'] {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-on-primary-dark);
+}
 .toolbar input, .toolbar select {
-  background: var(--surface); color: var(--text); border: 1px solid var(--overlay);
-  border-radius: 4px; padding: 4px 8px; font-size: 13px;
+  background: var(--color-canvas); color: var(--color-text-primary);
+  border: var(--border-divider); border-radius: var(--radius-control);
+  padding: 6px 12px; font: 400 13px var(--font-sans);
 }
+.toolbar input:focus, .toolbar select:focus {
+  outline: 2px solid var(--color-primary); outline-offset: 1px;
+}
+.toolbar input { margin-left: auto; min-width: 220px; }
 
-.split { display: grid; grid-template-columns: 1fr 1fr; flex: 1; min-height: 0; }
-.split > * { overflow: auto; min-width: 0; }
+/* ---------- Data table — Flat view (Derived, §6.4) ---------- */
 
-table.apps { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.apps { width: 100%; border-collapse: collapse; font: 400 14px var(--font-sans); }
 table.apps th {
-  position: sticky; top: 0; background: var(--base); text-align: left;
-  padding: 6px 8px; border-bottom: 1px solid var(--overlay);
-  color: var(--subtext); font-weight: 500; cursor: pointer; white-space: nowrap;
+  position: sticky; top: 0; background: var(--color-surface-subtle); text-align: left;
+  padding: 10px 12px; border-bottom: var(--border-divider);
+  color: var(--color-text-secondary); font: 700 14px var(--font-sans);
+  cursor: pointer; white-space: nowrap;
 }
-table.apps td { padding: 6px 8px; border-bottom: 1px solid var(--surface); }
-table.apps tr[aria-selected='true'] { background: var(--surface); }
-table.apps tr.group-head td {
-  background: var(--surface); color: var(--subtext); font-size: 11px;
-  text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 0;
+table.apps td { padding: 10px 12px; border-bottom: 1px solid var(--color-surface-subtle); }
+table.apps tr[aria-selected='true'] {
+  background: var(--color-surface-subtle);
+  box-shadow: inset 2px 0 0 var(--color-primary);
+}
+table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
+
+.score { font-variant-numeric: tabular-nums; text-align: right; font-family: var(--font-mono); }
+.score.score-high { color: var(--score-high); font-weight: 700; }
+.score.score-mid { color: var(--score-mid); }
+.score.score-neutral { color: var(--score-neutral); }
+.score.score-low { color: var(--score-low); }
+
+/* ---------- Status chip (DESIGN.md §5.9) ---------- */
+
+.status-chip {
+  display: inline-flex; align-items: center;
+  height: 25px; padding: 0 12px;
+  border-radius: var(--radius-control);
+  font: 600 13px var(--font-sans); letter-spacing: 0.13px;
+  white-space: nowrap;
 }
 
-.score { font-variant-numeric: tabular-nums; text-align: right; }
-.score.high { color: var(--score-high); font-weight: 600; }
-.score.mid { color: var(--score-mid); }
-.score.neutral { color: var(--score-neutral); }
-.score.low { color: var(--score-low); }
+/* ---------- Kanban board — Grouped view (§6.3) ---------- */
 
-.status-pill { padding: 2px 8px; border-radius: 999px; background: var(--surface); font-size: 12px; }
+.kanban-board {
+  flex: 1; min-height: 0;
+  display: flex; gap: var(--kanban-column-gap);
+  padding: 16px 32px 24px;
+  overflow-x: auto;
+}
+.kanban-column {
+  flex: 0 0 var(--kanban-column-width);
+  display: flex; flex-direction: column;
+  min-height: 0;
+}
+.kanban-column-header {
+  display: flex; align-items: center; gap: 8px;
+  height: 58px; padding: 0 4px;
+  border-bottom: var(--border-divider);
+  flex-shrink: 0;
+}
+.kanban-column-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.status-dot-interview, .status-dot-offer { background: var(--color-primary); }
+.status-dot-applied, .status-dot-responded { background: var(--color-accent-teal); }
+.status-dot-evaluated { background: var(--color-accent-magenta); }
+.status-dot-skip { background: var(--color-accent-amber); }
+.status-dot-rejected, .status-dot-discarded { background: var(--color-accent-red); }
+.kanban-column-title { font: 700 14px var(--font-sans); flex: 1; }
+.kanban-column-count { font: 500 12px var(--font-mono); color: var(--color-text-secondary); }
+.kanban-column-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 4px;
+}
+.kanban-column-empty { color: var(--color-text-secondary); font-size: 12px; padding: 8px 4px; }
 
-.report { padding: 16px 20px; }
+.kanban-card {
+  background: var(--color-canvas);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 18px 20px;
+  cursor: pointer;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.kanban-card:hover { box-shadow: var(--shadow-action); }
+.kanban-card[aria-selected='true'] { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.kanban-card-date { font: 500 14px var(--font-sans); color: var(--color-text-secondary); text-align: center; }
+.kanban-card-title { font: 700 18px var(--font-sans); text-align: center; }
+.kanban-card-subtitle { font: 500 12px var(--font-sans); color: var(--color-text-secondary); text-align: center; }
+
+.kanban-card-score { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.kanban-score-track {
+  flex: 1; height: 13px; border-radius: var(--radius-track);
+  background: var(--color-surface-muted); overflow: hidden;
+}
+.kanban-score-fill { height: 100%; border-radius: var(--radius-track); }
+.kanban-score-fill.score-high { background: var(--score-high); }
+.kanban-score-fill.score-mid { background: var(--score-mid); }
+.kanban-score-fill.score-neutral { background: var(--score-neutral); }
+.kanban-score-fill.score-low { background: var(--score-low); }
+.kanban-score-value { font: 600 11px var(--font-mono); flex-shrink: 0; }
+.kanban-score-value.score-high { color: var(--score-high); }
+.kanban-score-value.score-mid { color: var(--score-mid); }
+.kanban-score-value.score-neutral { color: var(--score-neutral); }
+.kanban-score-value.score-low { color: var(--score-low); }
+
+.kanban-card-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 8px; padding-top: 12px; border-top: var(--border-divider);
+}
+.kanban-card-pdf { color: var(--color-primary); display: flex; align-items: center; min-width: 14px; }
+
+/* ---------- Drawer — report overlay for the Kanban board (§6.3) ---------- */
+
+.drawer-backdrop {
+  position: fixed; inset: var(--header-height) 0 0 0;
+  background: rgb(0 0 0 / 20%);
+  z-index: 10;
+}
+.drawer {
+  position: fixed; top: var(--header-height); right: 0; bottom: 0;
+  width: var(--drawer-width); max-width: 100vw;
+  background: var(--color-canvas);
+  box-shadow: var(--shadow-action);
+  z-index: 11;
+  overflow-y: auto;
+  animation: drawer-in 220ms ease-out;
+}
+@keyframes drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.drawer-close {
+  position: sticky; top: 12px; float: right; margin-right: 12px;
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: var(--color-surface-subtle); border: 0; border-radius: 50%;
+  color: var(--color-icon-default); cursor: pointer;
+  z-index: 1;
+}
+.drawer-content { padding-top: 8px; clear: both; }
+
+/* ---------- Report pane (DESIGN.md §5.3, Derived markdown typography) ---------- */
+
+.report { padding: 20px 24px; }
 .report-card {
-  background: var(--surface); border-radius: 6px; padding: 12px 16px; margin-bottom: 16px;
+  background: var(--color-surface-subtle);
+  border-radius: var(--radius-card);
+  padding: 20px; margin-bottom: 20px;
 }
-.report-card dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
-.report-card dt { color: var(--subtext); font-size: 12px; }
-.report-card dd { margin: 0; }
-.report-actions { display: flex; gap: 8px; margin-top: 12px; }
-.report-actions button {
-  background: var(--blue); color: var(--base); border: 0; border-radius: 4px;
-  padding: 6px 12px; cursor: pointer; font-size: 13px;
-}
-.report-actions button:disabled { background: var(--overlay); color: var(--subtext); cursor: default; }
+.report-header { margin-bottom: 16px; }
+.report-company { font: 700 18px var(--font-sans); }
+.report-role { font: 500 14px var(--font-sans); color: var(--color-text-secondary); }
+.report-card dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
+.report-card dt { font: 400 12px var(--font-sans); color: var(--color-text-secondary); }
+.report-card dd { margin: 0; font: 400 14px var(--font-sans); }
+.report-actions { display: flex; gap: 10px; margin-top: 16px; }
 
-.md { line-height: 1.6; }
-.md h1 { font-size: 20px; }
-.md h2 { font-size: 16px; margin-top: 24px; border-bottom: 1px solid var(--surface); padding-bottom: 4px; }
-.md code { background: var(--surface); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
-.md pre { background: var(--surface); padding: 12px; border-radius: 4px; overflow-x: auto; }
-.md table { border-collapse: collapse; width: 100%; font-size: 13px; display: block; overflow-x: auto; }
-.md th, .md td { border: 1px solid var(--overlay); padding: 4px 8px; text-align: left; }
-.md a { color: var(--blue); }
+.btn-primary, .btn-secondary {
+  border: 0; border-radius: var(--radius-control);
+  padding: 5px 16px;
+  font: 700 14px var(--font-sans);
+  cursor: pointer;
+}
+.btn-primary { background: var(--color-primary); color: var(--color-text-on-primary-dark); }
+.btn-secondary { background: var(--color-accent-teal); color: var(--color-text-on-teal-dark); }
+.btn-primary:active, .btn-secondary:active { transform: translateY(1px); }
+.btn-primary:disabled, .btn-secondary:disabled {
+  background: var(--color-surface-muted); color: var(--color-text-secondary); cursor: default; transform: none;
+}
+
+.code-block {
+  font-family: var(--font-mono);
+  background: var(--color-surface-subtle);
+  border-radius: 8px; padding: 12px 16px;
+  white-space: pre-wrap;
+}
+
+.md { font: 400 14px/1.5 var(--font-sans); }
+.md h1 { font: 700 18px var(--font-sans); }
+.md h2 { font: 600 16px var(--font-sans); margin-top: 24px; border-bottom: var(--border-divider); padding-bottom: 4px; }
+.md p, .md li { max-width: 65ch; }
+.md code { font-family: var(--font-mono); background: var(--color-surface-subtle); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+.md pre { font-family: var(--font-mono); background: var(--color-surface-subtle); padding: 12px; border-radius: 8px; overflow-x: auto; }
+.md table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: 13px; display: block; overflow-x: auto; }
+.md th, .md td { border: var(--border-divider); padding: 4px 8px; text-align: left; }
+.md a { color: var(--color-primary); }
+
+/* ---------- Write-error banner ---------- */
 
 .banner {
   display: flex; gap: 12px; align-items: flex-start;
-  padding: 10px 16px; border-left: 3px solid var(--red); background: var(--surface);
+  padding: 12px 32px;
+  border-left: 3px solid var(--color-accent-red);
+  background: var(--color-surface-subtle);
 }
-.banner.stale { border-left-color: var(--peach); }
-.banner p { margin: 0; flex: 1; }
+.banner.stale { border-left-color: var(--color-accent-amber); }
+.banner p { margin: 0; flex: 1; font-size: 14px; }
 .banner button {
-  background: var(--overlay); color: var(--text); border: 0;
-  border-radius: 4px; padding: 4px 10px; cursor: pointer;
+  background: var(--color-canvas); color: var(--color-text-primary);
+  border: var(--border-divider); border-radius: var(--radius-control);
+  padding: 4px 12px; cursor: pointer; font: 600 13px var(--font-sans);
 }
+
+/* ---------- Progress screen (DESIGN.md has no chart precedent — Derived) ---------- */
 
 .progress-grid {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px; padding: 16px; overflow: auto;
+  gap: 20px; padding: 20px 32px; overflow: auto;
 }
 .card {
-  background: var(--surface); border-radius: 6px; padding: 16px; min-width: 0;
+  background: var(--color-canvas); border-radius: var(--radius-card);
+  box-shadow: var(--shadow-panel); padding: 20px; min-width: 0;
 }
-.card h2 { margin: 0 0 12px; font-size: 13px; color: var(--subtext); text-transform: uppercase; letter-spacing: 0.05em; }
-/* flex-wrap: wrap — verified at 560px window width during check 3. A single
-   non-wrapping row let 3 unbreakable values ("50%", "33%", "17%") overlap
-   each other once the row got narrower than their combined intrinsic width;
-   an earlier min-width:0-only fix stopped them spilling into the next card
-   but still let them overlap in place. Wrapping the row is what actually
-   keeps every value readable: each tile holds its 80px floor and drops to a
-   new line instead of compressing below it. */
+.card h2 {
+  margin: 0 0 16px; font: 500 20px var(--font-sans);
+  color: var(--color-text-secondary); letter-spacing: 0.2px;
+}
 .rates { display: flex; flex-wrap: wrap; gap: 16px; }
 .rate { flex: 1 1 80px; min-width: 80px; text-align: center; }
-/* Stat-tile value: proportional figures, not tabular-nums. tabular-nums
-   equalizes every digit to the width of a "0", which is for columns of
-   numbers that must align vertically (table rows, axis ticks) — a
-   standalone 28px value like this one just looks loose. font-weight is
-   semibold per the stat-tile contract (dataviz skill, marks-and-anatomy.md). */
-.rate-value { font-size: 28px; font-weight: 600; }
-.rate-label { color: var(--subtext); font-size: 12px; }

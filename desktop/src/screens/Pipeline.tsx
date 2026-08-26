@@ -5,6 +5,8 @@ import {
   type FilterKey, type SortKey, type ViewMode,
 } from '../lib/filters';
 import AppTable from '../components/AppTable';
+import Drawer from '../components/Drawer';
+import KanbanBoard from '../components/KanbanBoard';
 import MetricsBar from '../components/MetricsBar';
 import ReportPane from '../components/ReportPane';
 import Toolbar from '../components/Toolbar';
@@ -60,7 +62,7 @@ export default function Pipeline({ root, data, onReload }: Props) {
       <Toolbar
         filter={filter} sort={sort} view={view} query={query} counts={counts}
         onFilter={setFilter} onSort={setSort} onView={setView}
-        onQuery={setQuery} onReload={onReload}
+        onQuery={setQuery}
       />
       {writeError && (
         <div className={`banner${writeError.stale ? ' stale' : ''}`}>
@@ -69,24 +71,44 @@ export default function Pipeline({ root, data, onReload }: Props) {
           <button onClick={() => setWriteError(null)}>Dismiss</button>
         </div>
       )}
-      <div className="split">
-        <div>
-          <AppTable
-            rows={rows}
-            grouped={view === 'grouped'}
+      {view === 'grouped' ? (
+        <>
+          <KanbanBoard
+            apps={rows}
             selected={selected}
-            sort={sort}
             onSelect={setSelected}
-            onSort={setSort}
             onStatusChange={changeStatus}
             pendingRow={pendingRow}
           />
+          {/* An 8-column board and a permanent report panel can't both fit
+              at once, so the Kanban view opens the report as a drawer on
+              click instead of a split pane — STITCH-PROMPT.md §6.3. */}
+          <Drawer open={selected !== null} onClose={() => setSelected(null)}>
+            <ReportPane
+              root={root}
+              app={rows.find((a) => a.reportNumber === selected) ?? null}
+            />
+          </Drawer>
+        </>
+      ) : (
+        <div className="split">
+          <div>
+            <AppTable
+              rows={rows}
+              selected={selected}
+              sort={sort}
+              onSelect={setSelected}
+              onSort={setSort}
+              onStatusChange={changeStatus}
+              pendingRow={pendingRow}
+            />
+          </div>
+          <ReportPane
+            root={root}
+            app={rows.find((a) => a.reportNumber === selected) ?? null}
+          />
         </div>
-        <ReportPane
-          root={root}
-          app={rows.find((a) => a.reportNumber === selected) ?? null}
-        />
-      </div>
+      )}
     </div>
   );
 }

@@ -42,15 +42,20 @@ export default function ReportPane({ root, app }: Props) {
   }, [root, app?.reportPath]);
 
   if (!app) {
-    return <div className="report" style={{ color: 'var(--subtext)' }}>Select a row to read its report.</div>;
+    return <div className="report" style={{ color: 'var(--color-text-secondary)' }}>Select a card or row to read its report.</div>;
   }
 
   return (
     <div className="report">
       <div className="report-card">
+        {/* Company/Role pulled out of the field list as a header block —
+            DESIGN.md §5.3's client-card name/role treatment, not just
+            another dt/dd row. STITCH-PROMPT.md §6.5. */}
+        <div className="report-header">
+          <div className="report-company">{app.company}</div>
+          <div className="report-role">{app.role}</div>
+        </div>
         <dl>
-          <dt>Company</dt><dd>{app.company}</dd>
-          <dt>Role</dt><dd>{app.role}</dd>
           <dt>Archetype</dt><dd>{app.archetype || '—'}</dd>
           <dt>TL;DR</dt><dd>{app.tldr || '—'}</dd>
           <dt>Remote</dt><dd>{app.remote || '—'}</dd>
@@ -58,25 +63,25 @@ export default function ReportPane({ root, app }: Props) {
         </dl>
 
         <div className="report-actions">
-          <button disabled={!app.jobUrl} onClick={() => openUrl(app.jobUrl)}>
+          <button className="btn-primary" disabled={!app.jobUrl} onClick={() => openUrl(app.jobUrl)}>
             {app.jobUrl ? 'Open job posting' : 'No job URL'}
           </button>
 
           {app.pdfPath ? (
-            <button onClick={() => openPath(`${root}/${app.pdfPath}`)}>Open PDF</button>
+            <button className="btn-secondary" onClick={() => openPath(`${root}/${app.pdfPath}`)}>Open PDF</button>
           ) : (
             // generate-pdf.mjs takes its output path from the caller, so a
             // company with no unique match gets the folder, not a guess.
-            <button onClick={() => openPath(`${root}/output`)}>
+            <button className="btn-secondary" onClick={() => openPath(`${root}/output`)}>
               {app.hasPdf ? 'Open output folder' : 'No PDF'}
             </button>
           )}
         </div>
       </div>
 
-      {error && <pre style={{ color: 'var(--red)', whiteSpace: 'pre-wrap' }}>{error}</pre>}
+      {error && <pre className="code-block" style={{ color: 'var(--color-accent-red)' }}>{error}</pre>}
       {!error && !report && app.reportPath && !missing && (
-        <div style={{ color: 'var(--subtext)' }}>Loading report…</div>
+        <div style={{ color: 'var(--color-text-secondary)' }}>Loading report…</div>
       )}
 
       {/*
@@ -87,12 +92,12 @@ export default function ReportPane({ root, app }: Props) {
         message. verify-pipeline.mjs is the tool that finds the rest.
       */}
       {!app.reportPath && (
-        <div style={{ color: 'var(--subtext)' }}>This row has no linked report.</div>
+        <div style={{ color: 'var(--color-text-secondary)' }}>This row has no linked report.</div>
       )}
       {app.reportPath && missing && (
-        <div style={{ color: 'var(--peach)' }}>
-          The tracker links <code>{app.reportPath}</code>, but that file is missing.
-          Run <code>node verify-pipeline.mjs</code> to check for other broken links.
+        <div style={{ color: 'var(--color-accent-amber)' }}>
+          The tracker links <code style={{ fontFamily: 'var(--font-mono)' }}>{app.reportPath}</code>, but that file is missing.
+          Run <code style={{ fontFamily: 'var(--font-mono)' }}>node verify-pipeline.mjs</code> to check for other broken links.
         </div>
       )}
       {report && (

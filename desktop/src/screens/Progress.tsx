@@ -5,24 +5,25 @@ import {
 import type { Progress as ProgressData } from '../api';
 import RateCard, { CountCard } from '../components/RateCard';
 
-const AXIS = { stroke: 'var(--subtext)', fontSize: 12 };
+const AXIS = { stroke: 'var(--color-text-secondary)', fontSize: 12 };
 // Grid lines are one step off the surface and explicitly solid: Recharts'
 // CartesianGrid has no default strokeDasharray (confirmed against the
 // installed v3.10.1 API docs), so this is not overriding a dashed default —
 // it is making the "solid, never dashed" choice explicit rather than relying
 // on an implicit default that a future Recharts version could change.
-const GRID = 'var(--overlay)';
+const GRID = 'var(--color-surface-muted)';
 // Mark spec: bars stay thin and never stretch to fill their slot. This
 // matters concretely here — the real 30-row tracker collapses to only two
 // weekly-activity bars, which without a cap would stretch nearly the full
 // card width.
 const MAX_BAR_SIZE = 24;
-const TOOLTIP_STYLE = { background: 'var(--base)', border: `1px solid ${GRID}`, color: 'var(--text)' };
+const TOOLTIP_STYLE = { background: 'var(--color-canvas)', border: `1px solid ${GRID}`, color: 'var(--color-text-primary)' };
 // Recharts' default tooltip item colors its value text with the series fill
 // (confirmed by hovering a bar during verification — the value rendered in
-// --blue instead of body text). Every chart on this screen is single-series,
-// so no identity is lost by keeping tooltip text on a text token instead.
-const TOOLTIP_ITEM_STYLE = { color: 'var(--text)' };
+// the series color instead of body text). Every chart on this screen is
+// single-series, so no identity is lost by keeping tooltip text on a text
+// token instead.
+const TOOLTIP_ITEM_STYLE = { color: 'var(--color-text-primary)' };
 // The hovered bar lifts slightly so hover state is visible on the mark
 // itself, not just in the tooltip.
 const ACTIVE_BAR = { fillOpacity: 0.8 };
@@ -47,16 +48,17 @@ export default function Progress({ data }: { data: ProgressData }) {
 
   // The funnel bars deliberately stay one flat hue rather than an ordinal
   // lightness ramp. dataviz's color-formula.md calls out "funnel stage" as
-  // the textbook ordinal case (one hue, monotone lightness steps) — that was
-  // tried here first: 5 opacity-blended steps of --blue over --surface, run
-  // through validate_palette.js --ordinal. It failed both gates in light
-  // mode (adjacent steps ~0.04-0.05 apart in OKLCH L against the ≥0.06
-  // floor, and the lightest step only 1.66:1 against the card surface,
-  // below the 2:1 floor). Narrowing the range to keep contrast intact left
-  // no room for steps big enough to read as distinct. Bar length already
-  // encodes the funnel's order and magnitude unambiguously, so a flat hue is
-  // the validator-cleared choice, not a shortcut.
-  const funnelColor = 'var(--blue)';
+  // the textbook ordinal case (one hue, monotone lightness steps) — an
+  // opacity-ramped version of this was tried and validator-rejected against
+  // the prior dark palette (steps too close in OKLCH L, lightest step under
+  // the contrast floor against its card surface). That numeric result was
+  // specific to the old hex values and hasn't been re-run against
+  // DESIGN.md's light palette, but the structural reason still holds
+  // either way: bar length already encodes the funnel's order and
+  // magnitude unambiguously, so a flat hue loses no information. Now using
+  // --color-primary (green), DESIGN.md's one sanctioned accent for
+  // interactive/primary marks.
+  const funnelColor = 'var(--color-primary)';
 
   return (
     <div className="pane">
@@ -117,7 +119,7 @@ export default function Progress({ data }: { data: ProgressData }) {
               <XAxis dataKey="name" {...AXIS} />
               <YAxis {...AXIS} allowDecimals={false} />
               <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
-              <Bar dataKey="count" name="Count" fill="var(--mauve)" radius={[4, 4, 0, 0]} maxBarSize={MAX_BAR_SIZE} activeBar={ACTIVE_BAR} />
+              <Bar dataKey="count" name="Count" fill="var(--color-accent-teal)" radius={[4, 4, 0, 0]} maxBarSize={MAX_BAR_SIZE} activeBar={ACTIVE_BAR} />
             </BarChart>
           </ResponsiveContainer>
         </section>

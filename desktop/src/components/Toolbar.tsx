@@ -10,7 +10,6 @@ type Props = {
   onSort: (s: SortKey) => void;
   onView: (v: ViewMode) => void;
   onQuery: (q: string) => void;
-  onReload: () => void;
 };
 
 export default function Toolbar(p: Props) {
@@ -46,8 +45,6 @@ export default function Toolbar(p: Props) {
         <option value="grouped">Grouped</option>
         <option value="flat">Flat</option>
       </select>
-
-      <button className="tab" onClick={p.onReload}>Reload</button>
     </div>
   );
 }

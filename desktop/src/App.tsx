@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { doctor, isError, listApplications, type DoctorResult, type ListResult } from './api';
 import { loadRoot, pickRoot } from './config';
+import Header from './components/Header';
+import { PipelineIcon, ProgressIcon } from './components/icons';
 import EmptyState from './screens/EmptyState';
 import Pipeline from './screens/Pipeline';
 import Progress from './screens/Progress';
@@ -55,11 +57,17 @@ export default function App() {
 
   useEffect(() => { if (probe?.ready) reload(); }, [probe, reload]);
 
+  // Empty, Error, and this loading flash all render before the shell
+  // mounts — no Header, no Sidebar. DESIGN.md's "shell stays consistent
+  // across every screen" rule (§4.1) assumes a signed-in app; these three
+  // are career-ops's pre-shell states (no folder chosen yet, sidecar
+  // unreachable, or the first fetch hasn't landed), closer to the
+  // source's own undefined "logged out" case than to a real screen.
   if (error) {
     return (
-      <main style={{ padding: 48 }}>
-        <h1>Cannot reach the sidecar</h1>
-        <pre style={{ whiteSpace: 'pre-wrap', color: 'var(--red)' }}>{error}</pre>
+      <main className="state-screen">
+        <h1 className="state-title">Cannot reach the sidecar</h1>
+        <pre className="state-error">{error}</pre>
       </main>
     );
   }
@@ -68,13 +76,25 @@ export default function App() {
     return <EmptyState root={root} missing={probe?.missing ?? []} onPick={onPick} />;
   }
 
-  if (!data) return <main style={{ padding: 48 }}>Loading…</main>;
+  if (!data) return <main className="state-screen"><p className="state-loading">Loading…</p></main>;
 
   return (
     <div className="shell">
+      <Header
+        title={screen === 'pipeline' ? 'Pipeline' : 'Progress'}
+        root={root}
+        onReload={reload}
+        onChangeFolder={onPick}
+      />
       <nav className="nav">
-        <button aria-current={screen === 'pipeline'} onClick={() => setScreen('pipeline')}>Pipeline</button>
-        <button aria-current={screen === 'progress'} onClick={() => setScreen('progress')}>Progress</button>
+        <button aria-current={screen === 'pipeline'} onClick={() => setScreen('pipeline')}>
+          <PipelineIcon />
+          <span>Pipeline</span>
+        </button>
+        <button aria-current={screen === 'progress'} onClick={() => setScreen('progress')}>
+          <ProgressIcon />
+          <span>Progress</span>
+        </button>
       </nav>
       {screen === 'pipeline'
         ? <Pipeline root={root!} data={data} onReload={reload} />

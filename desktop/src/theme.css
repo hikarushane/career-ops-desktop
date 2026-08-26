@@ -1,65 +1,108 @@
+/* Design tokens — from DESIGN.md (Figma "Project Dashboard Management"
+   community file), translated for career-ops in desktop/STITCH-PROMPT.md.
+   Do not scatter raw hex values through components; add tokens here. */
+
 :root {
-  /* Catppuccin Latte */
-  --base: #eff1f5;
-  --surface: #dce0e8;
-  --overlay: #9ca0b0;
-  --text: #4c4f69;
-  --subtext: #5c5f77;
-  --blue: #1e66f5;
-  --mauve: #8839ef;
-  --green: #40a02b;
-  --yellow: #df8e1d;
-  --sky: #04a5e5;
-  --peach: #fe640b;
-  --red: #d20f39;
-  --pink: #ea76cb;
+  --font-sans: "Poppins", system-ui, sans-serif;
+  /* Derived — DESIGN.md has no code/mono surface. Used for error dumps,
+     inline code, report score tables, and report-number chips. */
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Primitives — DESIGN.md §3.1, exact hex values, do not change. */
+  --color-canvas: #ffffff;
+  --color-surface-subtle: #f5f5f5;
+  --color-surface-muted: #e4e4e4;
+  --color-text-primary: #000000;
+  /* Derived — DESIGN.md defines only color.text.primary (pure black) but
+     repeatedly asks for "lower contrast" secondary/metadata text (e.g.
+     §5.3 Client card) without ever assigning it a token. 60% black on the
+     white canvas measures 5.74:1 against white — passes AA (4.5:1) while
+     staying inside the same black-text family DESIGN.md commits to,
+     rather than introducing an unrelated gray hue. */
+  --color-text-secondary: rgb(0 0 0 / 60%);
+  --color-icon-default: #222222;
+  --color-line-strong: #33363f;
+  --color-primary: #0ab239;
+  --color-accent-teal: #148b84;
+  --color-accent-amber: #d68c1e;
+  --color-accent-red: #b20000;
+  --color-accent-magenta: #ac2c80;
+
+  /* Text-on-fill pairs. Green/teal are DESIGN.md §3.1 Observed values
+     (color.text.onPrimaryDark / onTealDark) — measured from the source
+     file, not chosen here. Amber/red/magenta have no Observed pairing
+     (the source only ever fills Add/Remove Project buttons with
+     green/teal), so these are Derived and WCAG-verified by hand against
+     each fill color (see desktop/STITCH-PROMPT.md §6.2 for the numbers):
+     white on green/teal/amber falls to ~2.8–4.2:1 and fails normal-text
+     AA (4.5:1); black on red/magenta falls to ~2.9–3.4:1 and also fails.
+     Each pairing below is the one that actually passes. */
+  --color-text-on-primary-dark: #1b3222; /* on --color-primary (green) */
+  --color-text-on-teal-dark: #0e3230; /* on --color-accent-teal */
+  --color-text-on-amber-dark: #000000; /* on --color-accent-amber */
+  --color-text-on-red: #ffffff; /* on --color-accent-red */
+  --color-text-on-magenta: #ffffff; /* on --color-accent-magenta */
+
+  --radius-card: 20px;
+  --radius-control: 20px;
+  --radius-nav: 30px;
+  --radius-track: 10px;
+
+  --shadow-card: 0 4px 5px rgb(0 0 0 / 30%);
+  --shadow-panel: 0 0 5px 5px rgb(0 0 0 / 10%);
+  --shadow-action: 0 4px 10px rgb(0 0 0 / 25%);
+  --border-divider: 1px solid rgb(0 0 0 / 20%);
+
+  --header-height: 82px;
+  --sidebar-width: 171px;
+  --content-max-width: 1194px;
+
+  /* Derived — DESIGN.md has no Kanban-board or drawer precedent for this
+     app's status groups; see STITCH-PROMPT.md §6.3. */
+  --kanban-column-width: 285px;
+  --kanban-column-gap: 13px;
+  --drawer-width: 480px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Catppuccin Mocha */
-    --base: #1e1e2e;
-    --surface: #313244;
-    --overlay: #45475a;
-    --text: #cdd6f4;
-    --subtext: #a6adc8;
-    --blue: #89b4fa;
-    --mauve: #cba6f7;
-    --green: #a6e3a1;
-    --yellow: #f9e2af;
-    --sky: #89dceb;
-    --peach: #fab387;
-    --red: #f38ba8;
-    --pink: #f5c2e7;
-  }
+/* Status colors — career-ops's 8 canonical statuses mapped onto DESIGN.md's
+   5 status-meaning slots. Rationale: STITCH-PROMPT.md §2.1. Never rely on
+   color alone in a component; pair with the status label text. */
+:root {
+  --status-interview: var(--color-primary);
+  --status-offer: var(--color-primary);
+  --status-applied: var(--color-accent-teal);
+  --status-responded: var(--color-accent-teal);
+  --status-evaluated: var(--color-accent-magenta);
+  --status-skip: var(--color-accent-amber);
+  --status-rejected: var(--color-accent-red);
+  --status-discarded: var(--color-accent-red);
+
+  /* Text color to use ON TOP of each --status-* fill above. */
+  --status-interview-on: var(--color-text-on-primary-dark);
+  --status-offer-on: var(--color-text-on-primary-dark);
+  --status-applied-on: var(--color-text-on-teal-dark);
+  --status-responded-on: var(--color-text-on-teal-dark);
+  --status-evaluated-on: var(--color-text-on-magenta);
+  --status-skip-on: var(--color-text-on-amber-dark);
+  --status-rejected-on: var(--color-text-on-red);
+  --status-discarded-on: var(--color-text-on-red);
 }
 
-/* Status colors, from pipeline.go:1094-1105 */
+/* Score bands — thresholds from filters.ts:scoreBand (unchanged), colors
+   from STITCH-PROMPT.md §2.2. */
 :root {
-  --status-interview: var(--green);
-  --status-offer: var(--green);
-  --status-applied: var(--sky);
-  --status-responded: var(--blue);
-  --status-evaluated: var(--text);
-  --status-skip: var(--red);
-  --status-rejected: var(--subtext);
-  --status-discarded: var(--subtext);
-}
-
-/* Score bands, from pipeline.go:1081-1091 */
-:root {
-  --score-high: var(--green);
-  --score-mid: var(--yellow);
-  --score-neutral: var(--text);
-  --score-low: var(--red);
+  --score-high: var(--color-primary);
+  --score-mid: var(--color-accent-amber);
+  --score-neutral: var(--color-text-primary);
+  --score-low: var(--color-accent-red);
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--base);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
   font-size: 14px;
 }

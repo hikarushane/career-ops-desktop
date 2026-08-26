@@ -93,6 +93,19 @@ export function applyFilterAndSort(
   return out;
 }
 
+/**
+ * Buckets an already filtered+sorted list into the 8 status columns for
+ * the Kanban board (Pipeline grouped view). Always returns all 8 buckets,
+ * empty ones included, so the board's column layout doesn't shift as
+ * filters change — see desktop/STITCH-PROMPT.md §6.3.
+ */
+export function groupByStatus(apps: Application[]): { status: string; apps: Application[] }[] {
+  return STATUS_GROUP_ORDER.map((status) => ({
+    status,
+    apps: apps.filter((a) => a.normStatus === status),
+  }));
+}
+
 export function countForFilter(
   apps: Application[],
   filter: FilterKey,
@@ -107,4 +120,20 @@ export function scoreBand(score: number): 'high' | 'mid' | 'neutral' | 'low' {
   if (score >= 3.8) return 'mid';
   if (score >= 3.0) return 'neutral';
   return 'low';
+}
+
+/** Display labels for normalized statuses, matching statusLabel (pipeline.go:1129). */
+const STATUS_LABELS: Record<string, string> = {
+  interview: 'Interview',
+  offer: 'Offer',
+  responded: 'Responded',
+  applied: 'Applied',
+  evaluated: 'Evaluated',
+  skip: 'SKIP',
+  rejected: 'Rejected',
+  discarded: 'Discarded',
+};
+
+export function statusLabel(norm: string): string {
+  return STATUS_LABELS[norm] ?? norm;
 }
