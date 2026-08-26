@@ -1,5 +1,11 @@
 # Mode: interview/plan — Interview Prep Planner
 
+## Language context
+
+Resolve the job's `jobLanguage` from its JD with `job-language.mjs` and write the prep
+plan in that language. Do not use `language.analysis` or `language.modes_dir` as a
+substitute for the JD-derived interview language.
+
 Given a job description and interview date/time, build a structured, time-blocked preparation plan tailored to the candidate's specific gaps.
 
 ---

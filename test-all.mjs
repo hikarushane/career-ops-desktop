@@ -377,12 +377,12 @@ const scripts = [
 
 const scriptTmp = mkdtempSync(join(ROOT, '.tmp-script-test-'));
 try {
-  // Never copied, at any depth: dependency trees and git metadata. Nothing run
-  // from the throwaway copy reads them (module resolution walks up into the
-  // real ROOT/node_modules, which is how the root-level exclusion already
-  // worked), and a nested web/node_modules is ~400 MB on a machine that has
-  // installed the web app's deps — copying it dominated this section (#2387).
-  const EXCLUDE_AT_ANY_DEPTH = new Set(['node_modules', '.git']);
+  // Never copied, at any depth: dependency trees, Git metadata, and generated
+  // build outputs. Nothing run from the throwaway copy reads them (module
+  // resolution walks up into the real ROOT/node_modules), while a Rust target/
+  // cache can exceed multiple GiB and made this otherwise read-only harness
+  // consume the whole disk after a desktop build.
+  const EXCLUDE_AT_ANY_DEPTH = new Set(['node_modules', '.git', 'target', 'dist', 'coverage']);
 
   const copyDirSync = (src, dest, exclude = []) => {
     const name = src.split(/[\\/]/).pop();
@@ -403,8 +403,8 @@ try {
   };
 
   const excludeDirs = [
-    // node_modules and .git are not listed here — EXCLUDE_AT_ANY_DEPTH above
-    // drops them wherever they occur, root included.
+    // Generated trees are not listed here — EXCLUDE_AT_ANY_DEPTH above drops
+    // them wherever they occur, root included.
     'data',
     'reports',
     '.career-ops-web',
@@ -1840,9 +1840,7 @@ const leakPatterns = [
 const scanExtensions = ['md', 'yml', 'html', 'mjs', 'sh', 'go', 'json'];
 const allowedFiles = [
   // English README + localized translations (all legitimately credit Santiago)
-  'README.md', 'README.ar.md', 'README.da.md', 'README.de.md', 'README.es.md', 'README.fr.md', 'README.hi.md',
-  'README.ja.md', 'README.ko-KR.md', 'README.pl.md', 'README.pt-BR.md', 'README.ru.md', 'README.ta.md', 'README.cn.md',
-  'README.ua.md', 'README.zh-TW.md', 'README.tr.md',
+  'README.md', 'docs/readme-translations/',
   // Standard project files
   'LICENSE', 'CITATION.cff', 'CONTRIBUTING.md', 'CHANGELOG.md', 'TRADEMARK.md',
   'package.json', '.github/FUNDING.yml', 'CLAUDE.md', 'AGENTS.md', 'go.mod', 'test-all.mjs',
@@ -2209,9 +2207,9 @@ try {
   fail(`update-system timeout helper test crashed: ${e.message}`);
 }
 
-// ── 7d. OUTPUT LANGUAGE CONTRACT ─────────────────────────────────
+// ── 7d. ANALYSIS / ARTIFACT LANGUAGE CONTRACT ────────────────────
 
-console.log('\n7d. Output language contract');
+console.log('\n7d. Analysis / artifact language contract');
 
 const profileExample = readTextLF('config/profile.example.yml');
 const outputLanguageAgentsDoc = readTextLF('AGENTS.md');
@@ -2219,10 +2217,10 @@ const outputLanguageClaudeDoc = readTextLF('CLAUDE.md');
 const careerOpsSkill = readTextLF('.agents/skills/career-ops/SKILL.md');
 const batchPrompt = readTextLF('batch/batch-prompt.md');
 
-if (/language:\s*\n(?:\s*#.*\n)*\s*output:\s*["']?en["']?/.test(profileExample)) {
-  pass('profile.example.yml documents language.output default');
+if (/language:\s*\n(?:\s*#.*\n)*\s*analysis:\s*["']?en["']?/.test(profileExample)) {
+  pass('profile.example.yml documents language.analysis default');
 } else {
-  fail('profile.example.yml is missing language.output default');
+  fail('profile.example.yml is missing language.analysis default');
 }
 
 // Regression guard (#1771): doc assertions must survive CRLF checkouts
@@ -2235,12 +2233,12 @@ try {
   try {
     writeFileSync(
       join(crlfGuardTmp, 'crlf-fixture.md'),
-      'language:\r\n  # Output language for human-facing prose\r\n  output: en\r\n\r\nWrite HTML to `output/cv-x.html`\r\n\r\n```bash\r\nnode generate-pdf.mjs \\\r\n  output/cv-x.html \\\r\n  output/cv-x.pdf\r\n```\r\n'
+      'language:\r\n  # Analysis language for report prose\r\n  analysis: en\r\n\r\nWrite HTML to `output/cv-x.html`\r\n\r\n```bash\r\nnode generate-pdf.mjs \\\r\n  output/cv-x.html \\\r\n  output/cv-x.pdf\r\n```\r\n'
     );
     const crlfGuardContent = readTextLF(`${basename(crlfGuardTmp)}/crlf-fixture.md`);
     if (
       !crlfGuardContent.includes('\r') &&
-      /language:\s*\n(?:\s*#.*\n)*\s*output:\s*["']?en["']?/.test(crlfGuardContent) &&
+      /language:\s*\n(?:\s*#.*\n)*\s*analysis:\s*["']?en["']?/.test(crlfGuardContent) &&
       crlfGuardContent.match(/node generate-pdf\.mjs \\\n\s+([^\s\\]+) \\/)?.[1] === 'output/cv-x.html'
     ) {
       pass('doc assertions tolerate CRLF checkouts via readTextLF normalization');
@@ -2255,13 +2253,13 @@ try {
 }
 
 if (
-  /language\.output/.test(outputLanguageAgentsDoc) &&
-  /human-facing output/i.test(outputLanguageAgentsDoc) &&
+  /language\.analysis/.test(outputLanguageAgentsDoc) &&
+  /Artifact language/i.test(outputLanguageAgentsDoc) &&
   /modes_dir/.test(outputLanguageAgentsDoc)
 ) {
-  pass('AGENTS.md documents output language separately from market modes');
+  pass('AGENTS.md documents analysis and artifact languages separately from market modes');
 } else {
-  fail('AGENTS.md does not document the language.output vs modes_dir contract');
+  fail('AGENTS.md does not document the analysis/artifact vs modes_dir contract');
 }
 
 const marketModeDocs = [
@@ -2274,35 +2272,35 @@ const outputRequestSwitchesMarketMode = (text) => text.split('\n').some((line) =
   /(?:switch(?:es|ing)?|use|read from)[^\n]*(?:language\.modes_dir|modes\/(?:de|fr|ar|ja|tr))/i.test(line)
 );
 
-const validOutputLanguageGuidance = 'If the user asks for French output, set language.output to fr.';
+const validOutputLanguageGuidance = 'If the user asks for French analysis, set language.analysis to fr.';
 const invalidOutputLanguageGuidance = 'If the user asks for French output, switch to language.modes_dir: modes/fr.';
 if (
   !outputRequestSwitchesMarketMode(validOutputLanguageGuidance) &&
   outputRequestSwitchesMarketMode(invalidOutputLanguageGuidance)
 ) {
-  pass('output-language mentions do not imply a market-mode switch');
+  pass('analysis-language mentions do not imply a market-mode switch');
 } else {
-  fail('output-language mentions are incorrectly treated as market-mode switches');
+  fail('analysis-language mentions are incorrectly treated as market-mode switches');
 }
 
 for (const [docName, docText] of marketModeDocs) {
   if (outputRequestSwitchesMarketMode(docText)) {
-    fail(`${docName} treats output-language requests as market-mode selection`);
+    fail(`${docName} treats analysis-language requests as market-mode selection`);
   } else {
-    pass(`${docName} keeps output language separate from market-mode selection`);
+    pass(`${docName} keeps analysis language separate from market-mode selection`);
   }
 }
 
-if (/language\.output/.test(careerOpsSkill) && /human-facing output/i.test(careerOpsSkill)) {
-  pass('career-ops skill injects the output language rule');
+if (/language\.analysis/.test(careerOpsSkill) && /jobLanguage/.test(careerOpsSkill)) {
+  pass('career-ops skill injects the analysis/artifact language rule');
 } else {
-  fail('career-ops skill does not inject the output language rule');
+  fail('career-ops skill does not inject the analysis/artifact language rule');
 }
 
-if (/Language Rule/i.test(batchPrompt) && /language\.output/.test(batchPrompt) && /write all human-facing output/i.test(batchPrompt)) {
-  pass('batch prompt honors language.output for worker prose');
+if (/Language Context/i.test(batchPrompt) && /language\.analysis/.test(batchPrompt) && /jobLanguage/.test(batchPrompt)) {
+  pass('batch prompt separates analysis and per-job artifact languages');
 } else {
-  fail('batch prompt does not honor language.output for worker prose');
+  fail('batch prompt does not separate analysis and per-job artifact languages');
 }
 
 const batchEvaluationInputs = batchPrompt.match(/### Step 2 \u2014 Evaluate A-G([\s\S]*?)#### Step 0 \u2014 Archetype Detection/)?.[1] ?? '';
@@ -3532,11 +3530,11 @@ if (
     rcSection.includes('always a lawyer question') &&
     rcSection.includes('not legal advice') &&
     rcSection.includes('not** online') &&
-    rcSection.includes('Render in {language.output}')
+    rcSection.includes('Render in {language.analysis}')
   ) {
     pass('offer-prep statutory-context subsection pins table lookup, tag-note + lawyer-question integration, covenant-type discipline, never-assert-application rule, not-legal-advice, no-research reaffirmation, i18n rendering (#2028)');
   } else {
-    fail('offer-prep statutory-context subsection missing/incomplete — needs table reference, statutory-context note + lawyer-question integration, covenant-type never-conflate discipline, never-assert-application hard rule, not-legal-advice note, local-lookup-is-not-research clarification, {language.output} rendering (#2028)');
+    fail('offer-prep statutory-context subsection missing/incomplete — needs table reference, statutory-context note + lawyer-question integration, covenant-type never-conflate discipline, never-assert-application hard rule, not-legal-advice note, local-lookup-is-not-research clarification, {language.analysis} rendering (#2028)');
   }
 
   // 3. Phrasing discipline holds in the report-facing text: the blockquote
@@ -3611,7 +3609,7 @@ if (
     /gone and is not coming back in any shape/.test(semSection) &&
     /Never assert a floor value, a regulation flag, a doctrine holding,\s+voidness, or violation\s+\(HARD RULE\)/.test(semSection) &&
     semSection.includes('always a lawyer question') &&
-    semSection.includes('Render in {language.output}') &&
+    semSection.includes('Render in {language.analysis}') &&
     /no floor-figure statements,\s+no regulation-flag statements/.test(semSection) &&
     /never computes, estimates, or\s+ranges a notice or severance amount/.test(semSection) &&
     // must NOT reference the deleted table's path, or gate any behavior on
@@ -3631,16 +3629,16 @@ if (
     !/2 weeks|3 weeks|8 weeks|26 weeks/.test(semSection) &&
     !/Waksdale|ONCA 391|wilful.misconduct standard|Bardal/i.test(semSection)
   ) {
-    pass('offer-prep sub-statutory-terms subsection documents the table deletion per #2280, routes unconditionally to lawyer questions with no table lookup or category/doctrine gating, never-assert hard rule, {language.output} rendering, no-calculations non-goal — and carries no reintroduced statutory figures or doctrine narrative (#2039, #2280)');
+    pass('offer-prep sub-statutory-terms subsection documents the table deletion per #2280, routes unconditionally to lawyer questions with no table lookup or category/doctrine gating, never-assert hard rule, {language.analysis} rendering, no-calculations non-goal — and carries no reintroduced statutory figures or doctrine narrative (#2039, #2280)');
   } else {
-    fail('offer-prep sub-statutory-terms subsection missing/incomplete, or still asserts a specific floor value / regulation flag / doctrine holding, or still gates on a table lookup — needs the #2280 table-deletion rationale, unconditional lawyer-question routing, the floor-value/flag/doctrine never-assert hard rule, {language.output} rendering, no-calculations non-goal, and must not restate the removed ESA figures or Waksdale narrative (#2039, #2280)');
+    fail('offer-prep sub-statutory-terms subsection missing/incomplete, or still asserts a specific floor value / regulation flag / doctrine holding, or still gates on a table lookup — needs the #2280 table-deletion rationale, unconditional lawyer-question routing, the floor-value/flag/doctrine never-assert hard rule, {language.analysis} rendering, no-calculations non-goal, and must not restate the removed ESA figures or Waksdale narrative (#2039, #2280)');
   }
 
   // 3. Lawyer-question workflow: both the floor question and the
   //    doctrine-directed question are present, fire unconditionally (no
   //    table-flag gating), explicitly ask the lawyer for the current
   //    figure/effect rather than the mode asserting one, and are routed
-  //    through {language.output} rendering at the presentation boundary.
+  //    through {language.analysis} rendering at the presentation boundary.
   const semLawyerBlock = semSection.slice(
     Math.max(0, semSection.indexOf('Questions for your lawyer')),
     semSection.indexOf('candidate-empowering angle') > 0
@@ -3652,11 +3650,11 @@ if (
     /does this clause meet it/i.test(semLawyerBlock) &&
     /could void the whole clause/i.test(semLawyerBlock) &&
     !/void_doctrine: true/.test(semLawyerBlock) &&
-    (semLawyerBlock.match(/Render in \{language\.output\}/g) || []).length >= 2
+    (semLawyerBlock.match(/Render in \{language\.analysis\}/g) || []).length >= 2
   ) {
-    pass('sub-statutory-terms lawyer-question workflow generates both the statutory-floor question and the doctrine-directed question unconditionally (no table-flag gating), each asking the lawyer for the current figure/effect (never asserting one) and each rendered via [Render in {language.output}] at the presentation boundary (#2039, #2280)');
+    pass('sub-statutory-terms lawyer-question workflow generates both the statutory-floor question and the doctrine-directed question unconditionally (no table-flag gating), each asking the lawyer for the current figure/effect (never asserting one) and each rendered via [Render in {language.analysis}] at the presentation boundary (#2039, #2280)');
   } else {
-    fail('sub-statutory-terms lawyer-question workflow incomplete — needs a statutory-floor question asking the lawyer for the current minimum, a doctrine-directed question about whether a defect could void the whole clause, both firing unconditionally with no void_doctrine table-flag gating, and both rendered via [Render in {language.output}] (#2039, #2280)');
+    fail('sub-statutory-terms lawyer-question workflow incomplete — needs a statutory-floor question asking the lawyer for the current minimum, a doctrine-directed question about whether a defect could void the whole clause, both firing unconditionally with no void_doctrine table-flag gating, and both rendered via [Render in {language.analysis}] (#2039, #2280)');
   }
 
   // 4. Phrasing discipline holds in the report-facing text: no rendered
@@ -14741,7 +14739,7 @@ try {
   // Non-Latin story banks (#2847). tokenize() stripped [^a-z0-9\s], so a story
   // written in Russian or Hindi produced [] and scored 0 against a question in
   // the SAME language — the matcher was inert, not degraded, for anyone whose
-  // language.output is not English.
+  // language.analysis is not English.
   {
     const mk = (title, theme, action, result, tags = []) => ({ title, theme, action, result, tags });
     const ru = mk('\u041C\u0438\u0433\u0440\u0430\u0446\u0438\u044F \u043F\u043B\u0430\u0442\u0435\u0436\u0435\u0439', '\u043F\u043B\u0430\u0442\u0435\u0436\u0438', '\u0412\u043E\u0437\u0433\u043B\u0430\u0432\u0438\u043B \u043C\u0438\u0433\u0440\u0430\u0446\u0438\u044E \u043F\u043B\u0430\u0442\u0451\u0436\u043D\u043E\u0439 \u043F\u043B\u0430\u0442\u0444\u043E\u0440\u043C\u044B', '\u0421\u043D\u0438\u0437\u0438\u043B \u043E\u0442\u043A\u0430\u0437\u044B', ['\u043F\u043B\u0430\u0442\u0435\u0436\u0438']);
@@ -16617,13 +16615,13 @@ console.log('\n67. Protected-grounds question detection (#2030)');
     pgSection.includes('names that context instead of flagging cleanly') &&
     pgSection.includes('no sentiment or intent inference') &&
     pgSection.includes('not legal advice') &&
-    pgSection.includes('Render in {language.output}') &&
+    pgSection.includes('Render in {jobLanguage}') &&
     redflagMode.includes('| Protected-grounds questions (Step 2c) |') &&
     redflagMode.includes('5 signal types × 2')
   ) {
     pass('interview-redflag Step 2c pins jurisdiction derivation from config/profile.yml, skip-when-no-row, reuse of existing evidence tiers + scoring (+1/+2) + verdict tiers + #1856 blacklist bridge, legitimate_contexts honesty, no-intent-inference, not-legal-advice, i18n rendering, and the aggregated signal-table row (#2030)');
   } else {
-    fail('interview-redflag Step 2c missing/incomplete — needs table + profile.yml jurisdiction derivation, skip-when-no-row rule, existing-machinery reuse (no new verdict system; +1/+2 aggregation; blacklist-suggestion bridge), legitimate_contexts honesty, no sentiment/intent inference, not-legal-advice note, {language.output} rendering, signals-table row, updated 5-signal max (#2030)');
+    fail('interview-redflag Step 2c missing/incomplete — needs table + profile.yml jurisdiction derivation, skip-when-no-row rule, existing-machinery reuse (no new verdict system; +1/+2 aggregation; blacklist-suggestion bridge), legitimate_contexts honesty, no sentiment/intent inference, not-legal-advice note, {language.analysis} rendering, signals-table row, updated 5-signal max (#2030)');
   }
 
   // 3. Phrasing discipline holds in the report-facing text: the rendered
@@ -16733,11 +16731,11 @@ console.log('\n68. Immigration-status requirement overreach (#2033)');
     sigSection.includes('unlawful unless required by law, regulation, executive order, or government contract for this position') &&
     sigSection.includes('⚠️ **Immigration-status requirement signal:**') &&
     sigSection.includes('not legal advice') &&
-    sigSection.includes('Render in {language.output}')
+    sigSection.includes('Render in {language.analysis}')
   ) {
     pass('oferta Block G immigration-status signal pins jurisdiction derivation, skip-when-no-row, exceptions honesty (named hook instead of clean flag), the ITAR/EAR US-person note, statute-fact phrasing, and the not-legal-advice close (#2033)');
   } else {
-    fail('oferta Block G immigration-status signal missing/incomplete — needs table + profile.yml jurisdiction derivation, skip-when-no-row, exceptions honesty, ITAR/EAR note, statute-fact phrasing, {language.output} rendering, not-legal-advice note (#2033)');
+    fail('oferta Block G immigration-status signal missing/incomplete — needs table + profile.yml jurisdiction derivation, skip-when-no-row, exceptions honesty, ITAR/EAR note, statute-fact phrasing, {language.analysis} rendering, not-legal-advice note (#2033)');
   }
 
   const stepStart = applyNow.indexOf('## Step 5d — Immigration-status screening check');
@@ -16976,10 +16974,10 @@ try {
     fail('followup mode missing the never-write blacklist guarantee for latency flags');
   }
 
-  if (followupModeDoc.includes('[Render in {language.output}')) {
-    pass('followup latency reminders use the {language.output} localization pattern');
+  if (followupModeDoc.includes('[Render in {language.analysis}')) {
+    pass('followup latency reminders use the {language.analysis} localization pattern');
   } else {
-    fail('followup latency reminders missing the {language.output} localization pattern');
+    fail('followup latency reminders missing the {language.analysis} localization pattern');
   }
 
   if (!/STATUTORY_THRESHOLDS|resolveJurisdiction|--jurisdiction/.test(rejectionLatencySrc)) {

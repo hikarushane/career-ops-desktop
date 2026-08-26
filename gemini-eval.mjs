@@ -39,7 +39,7 @@ const tracker = new TokenAccumulator();
 tracker.recordZeroToken('scan');
 tracker.recordZeroToken('pdf payload');
 import { execFileSync } from 'child_process';
-import { outputLanguageInstruction, parseOutputLanguage } from './profile-language.mjs';
+import { analysisLanguageInstruction, parseAnalysisLanguage } from './profile-language.mjs';
 import {
   formatReportNumber, releaseReportNumbers, reserveReportNumbers,
 } from './reserve-report-num.mjs';
@@ -237,7 +237,7 @@ const ofertaLogic    = readFile(PATHS.oferta,      'modes/oferta.md');
 const cvContent      = readFile(PATHS.cv,          'cv.md');
 const profileContent = readFile(PATHS.profile,     'modes/_profile.md');
 const profileYml     = readFile(PATHS.profileYml,  'config/profile.yml');
-const languageInstruction = outputLanguageInstruction(parseOutputLanguage(profileYml));
+const languageInstruction = analysisLanguageInstruction(parseAnalysisLanguage(profileYml));
 
 // ---------------------------------------------------------------------------
 // Build the system prompt with token budget management

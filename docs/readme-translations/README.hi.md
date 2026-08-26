@@ -1,13 +1,13 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/wordmark-dark.svg"><img src="../../docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
+[English](../../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
 
 </div>
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops Multi-Agent Job Search System" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="career-ops Multi-Agent Job Search System" width="800"></a>
 </p>
 
 <p align="center">
@@ -21,21 +21,21 @@
 </p>
 
 <p align="center">
-  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
+  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="../../docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
 </p>
 
 <p align="center"><sub>FEATURED IN</sub></p>
 
 <p align="center">
-  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
+  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/wired-dark.svg"><img src="../../docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/business-insider-dark.svg"><img src="../../docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="career-ops Demo" width="800">
+  <img src="../../docs/demo.gif" alt="career-ops Demo" width="800">
 </p>
 
 <p align="center"><strong>740+ job listings evaluated · 100+ personalized CVs · 1 dream role landed</strong></p>
@@ -62,7 +62,7 @@
 </p>
 
 <p align="center">
-  <sub>किसी भी agent-skill-standard CLI पर भी चलता है। देखें <a href="docs/SUPPORTED_CLIS.md">Supported CLIs</a>।</sub><br>
+  <sub>किसी भी agent-skill-standard CLI पर भी चलता है। देखें <a href="../../docs/SUPPORTED_CLIS.md">Supported CLIs</a>।</sub><br>
   <img src="https://img.shields.io/badge/Claude_Code-000?style=flat&logo=anthropic&logoColor=white" alt="Claude Code">
   <img src="https://img.shields.io/badge/OpenCode-111827?style=flat&logo=terminal&logoColor=white" alt="OpenCode">
   <img src="https://img.shields.io/badge/Antigravity_CLI-4285F4?style=flat&logo=google&logoColor=white" alt="Antigravity CLI">
@@ -77,7 +77,7 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ## यह क्या है
@@ -176,7 +176,7 @@ claude   # या codex / opencode / gemini / qwen / agy / grok
 
 > **System को आपका AI coding CLI खुद customize करने के लिए design किया गया है।** Modes, archetypes, scoring weights, negotiation scripts -- बस उसे change करने को कहें। वह वही files पढ़ता है जो वह use करता है, इसलिए उसे exactly पता है क्या edit करना है।
 
-Full setup guide के लिए [docs/SETUP.md](docs/SETUP.md) देखें, budget पर career-ops चलाने के लिए [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md), और common setup questions के answers के लिए [docs/FAQ.md](docs/FAQ.md)।
+Full setup guide के लिए [docs/SETUP.md](../../docs/SETUP.md) देखें, budget पर career-ops चलाने के लिए [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md), और common setup questions के answers के लिए [docs/FAQ.md](../../docs/FAQ.md)।
 
 ## Antigravity CLI Integration
 
@@ -203,7 +203,7 @@ Skill open standard में `.agents/skills/career-ops/SKILL.md` में def
 
 ## Codex Integration
 
-career-ops Codex को same shared router के through support करता है, लेकिन invocation model CLIs से अलग है जो slash commands auto-register करते हैं। Full guide के लिए [docs/CODEX.md](docs/CODEX.md) देखें।
+career-ops Codex को same shared router के through support करता है, लेकिन invocation model CLIs से अलग है जो slash commands auto-register करते हैं। Full guide के लिए [docs/CODEX.md](../../docs/CODEX.md) देखें।
 
 ### Interactive Codex
 
@@ -330,7 +330,7 @@ Scanner **45+ companies** के साथ scan करने और major job bo
 **Automation:** n8n, Zapier, Make.com
 **European:** Factorial, Attio, Tinybird, Clarity AI, Travelperk
 
-**Job boards searched:** 21 provider modules ATS APIs, board-wide feeds, XML/RSS feeds, markdown feeds, और local parsers cover करते हैं। Full table के लिए [Supported job boards](docs/SUPPORTED_JOB_BOARDS.md) देखें।
+**Job boards searched:** 21 provider modules ATS APIs, board-wide feeds, XML/RSS feeds, markdown feeds, और local parsers cover करते हैं। Full table के लिए [Supported job boards](../../docs/SUPPORTED_JOB_BOARDS.md) देखें।
 
 Default `node scan.mjs` (a.k.a. `npm run scan`) प्रत्येक ATS feed जो return करता है उसे trust करता है। कुछ companies role close होने के बाद भी अपने public API में stale postings छोड़ देती हैं, इसलिए वे expired entries `pipeline.md` में leak हो सकती हैं। Expired postings को pipeline में hit होने से पहले drop करने के लिए API pass के बाद Playwright launch करने के लिए `--verify` pass करें:
 
@@ -413,7 +413,7 @@ career-ops/
 career-ops एक ओपन-सोर्स, CLI-agnostic जॉब सर्च कमांड सेंटर है। यह किसी भी AI कोडिंग CLI को ऐसे पाइपलाइन में बदल देता है जो आपके CV के अनुसार नौकरी के ऑफ़र्स का मूल्यांकन करता है, ATS-अनुकूल PDF तैयार करता है, सही व्यक्ति का संपर्क ढूँढता है, और पूरी प्रक्रिया को एक ही जगह ट्रैक करता है — जबकि अंतिम निर्णय हमेशा आपका होता है। यह CareerOps Manifesto का पहला reference implementation है। अधिक जानकारी के लिए देखें: [career-ops.org](https://career-ops.org).
 
 **क्या मैं career-ops को मुफ्त में या किसी सस्ते / लोकल मॉडल के साथ चला सकता हूँ?**  
-हाँ। career-ops CLI-agnostic है और OpenRouter के मुफ्त मॉडल, Ollama, या किसी भी OpenAI-compatible endpoint के माध्यम से मुफ्त तथा लोकल मॉडलों पर चल सकता है। इसलिए आप किसी पेड सब्सक्रिप्शन पर निर्भर नहीं हैं। पूरी सेटअप प्रक्रिया के लिए [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md) देखें।
+हाँ। career-ops CLI-agnostic है और OpenRouter के मुफ्त मॉडल, Ollama, या किसी भी OpenAI-compatible endpoint के माध्यम से मुफ्त तथा लोकल मॉडलों पर चल सकता है। इसलिए आप किसी पेड सब्सक्रिप्शन पर निर्भर नहीं हैं। पूरी सेटअप प्रक्रिया के लिए [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md) देखें।
 
 ## Author के बारे में
 
@@ -434,7 +434,7 @@ Wikidata: [Santiago Fernández de Valderrama Aparicio](https://www.wikidata.org/
 3. **आप third-party ToS का पालन करते हैं।** आपको इस tool को उन career portals के Terms of Service के अनुसार use करना है जिनसे आप interact करते हैं (Greenhouse, Lever, Workday, LinkedIn, आदि)। Employers को spam करने या ATS systems को overwhelm करने के लिए इस tool का use न करें।
 4. **कोई guarantee नहीं।** Evaluations recommendations हैं, truth नहीं। AI models skills या experience hallucinate कर सकते हैं। Authors employment outcomes, rejected applications, account restrictions, या किसी अन्य consequences के लिए liable नहीं हैं।
 
-Full details के लिए [LEGAL_DISCLAIMER.md](LEGAL_DISCLAIMER.md) देखें। यह software [MIT License](LICENSE) के under "as is" provide किया जाता है, बिना किसी warranty के।
+Full details के लिए [LEGAL_DISCLAIMER.md](../../LEGAL_DISCLAIMER.md) देखें। यह software [MIT License](../../LICENSE) के under "as is" provide किया जाता है, बिना किसी warranty के।
 
 ## Contributors
 
@@ -446,7 +446,7 @@ career-ops use करके hired हुए? [अपनी story share करे
 
 ## License & Trademark
 
-Code [MIT](LICENSE) के under licensed है। "career-ops" नाम और brand [Trademark Policy](TRADEMARK.md) के under governed हैं, community use के लिए permissive, commercial product naming और endorsement के लिए reserved।
+Code [MIT](../../LICENSE) के under licensed है। "career-ops" नाम और brand [Trademark Policy](../../TRADEMARK.md) के under governed हैं, community use के लिए permissive, commercial product naming और endorsement के लिए reserved।
 
 ## Connect करें
 

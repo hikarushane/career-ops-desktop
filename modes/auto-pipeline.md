@@ -19,6 +19,26 @@ If the input is a **URL** (not pasted JD text), follow this strategy to extract 
 
 **If the input is JD text** (not a URL): use directly, without needing to fetch.
 
+## Step 0.25 — Resolve language context
+
+After extracting the JD body, call the canonical `resolveJobLanguage(jobContext)` in
+`job-language.mjs`. Its priority is an explicit per-job override, then the JD body,
+then reliable extracted posting content, then a clearly reported fallback. Never infer
+the language from a company country, URL, location, or title.
+
+Build a task-scoped context for this job:
+
+```text
+analysisLanguage = language.analysis (legacy language.output is read-only compatibility)
+jobLanguage = resolveJobLanguage(extracted JD)
+marketMode = language.modes_dir (when configured)
+```
+
+Use `analysisLanguage` for the A–G report and dashboard-facing prose. Use `jobLanguage`
+for the PDF/CV, cover letter, and interview materials. Keep the languages independent.
+When confidence is low, surface `Detected document language: {language}` and let the
+candidate change it for this job; that override never changes global analysis language.
+
 ## Step 0.5 — Liveness gate
 
 Before running any evaluation, confirm the posting is still live. The Step 0 Playwright snapshot already holds the evidence — judge it now, before spending tokens on the A-G evaluation, the report, or a PDF. A 404/expired page silently served as a static fallback ("position filled", empty shell) otherwise scores a full evaluation against phantom content.
@@ -91,7 +111,7 @@ If the final score is >= 4.5, generate a draft of responses for the application 
 - **Good fit?** → "I sit at the intersection of [A] and [B], which is exactly where this role lives."
 - **How did you hear?** → Honest: "Found through [portal/scan], evaluated against my criteria, and it scored highest."
 
-**Language**: Always in the language of the JD (EN default). Apply `/tech-translate`.
+**Language**: Use this job's resolved `jobLanguage`. Apply `/tech-translate` when needed.
 
 ## Step 5 — Update Tracker
 

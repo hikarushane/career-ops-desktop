@@ -267,33 +267,34 @@ Default modes are in `modes/` (English). Market-specific mode sets (each include
 | Turkish (Turkey) | `modes/tr/` | `is-ilani` / `basvuru` | SGK, kıdem tazminatı, brüt/net maaş, BES |
 | Hindi (India) | `modes/hi/` | `naukri` / `aavedan` | CTC vs. in-hand, PF/EPF, Notice period/buyout, ESOPs |
 
-### Output Language vs Market Modes
+### Analysis Language, Artifact Language, and Market Modes
 
 `config/profile.yml` may set:
 
 ```yaml
 language:
-  output: en
+  analysis: en
   modes_dir: modes/de
 ```
 
-Two separate axes:
+Three separate axes:
 
-- `language.output` controls **human-facing output**: reports, tracker notes, PDFs, cover letters, outreach, interview prep, form answers, any user-visible prose. Default: `en` when absent.
+- `language.analysis` controls **CareerOps analysis/explanation**: evaluation reports, dashboard analysis, and analysis-facing tracker notes. Default: `en` when absent. Existing `language.output` is a deprecated read-only compatibility alias for this value; never write both keys.
+- **Artifact language** is resolved independently for every job from its JD body by `job-language.mjs`. It controls tailored CVs, cover letters, and interview planning/practice/debrief materials. An explicit per-job override wins only for that job.
 - `language.modes_dir` controls **market vocabulary and local evaluation rules** (e.g. `modes/de` supplies DACH concepts like 13. Monatsgehalt).
 
-**Composition rule:** `language.output` is authoritative for prose; `modes_dir` only supplies market context. English output with DACH vocabulary, French output with Japan-market vocabulary — any combination is valid.
+**Composition rule:** `analysis`, JD-derived artifact language, and `modes_dir` are independent. Traditional-Chinese analysis with DACH market concepts and an English-JD CV is valid; so is German analysis with an English CV.
 
-**Agent rule:** After loading the mode instructions and user profile, inject this directive into every mode and subagent prompt:
+**Agent rule:** After loading the mode instructions and user profile, build a task-aware language context:
 
-> Write all human-facing output in `{language.output}` regardless of the language of these instructions or the job description. Keep market-specific terms from `language.modes_dir` when they are relevant, but explain them in the output language when needed.
+> Resolve `analysisLanguage` from `language.analysis` (or legacy `language.output`) and `jobLanguage` from this job's JD body using `resolveJobLanguage(jobContext)`. Write report/dashboard analysis in `analysisLanguage`; write CVs, cover letters, and interview materials in `jobLanguage`. Keep market-specific terms from `language.modes_dir` when relevant, but do not let it choose either prose language.
 
 **When to use a market mode set** (same rule for every market in the table above): the user is targeting job postings in that language or market, lives in that market, or explicitly asks for it. Any of these selects it:
 1. User says "use {market} modes" → read from that dir instead of `modes/`
 2. User sets `language.modes_dir: modes/de` (or their market's dir) in `config/profile.yml` → always use that dir
 3. You detect a JD written in that language → *suggest* switching
 
-**When NOT to switch market modes:** If the user applies to English-language roles, even at companies from those markets, use the default English market modes — *unless* the user has explicitly requested another market mode in this conversation, or `language.modes_dir` is set in `config/profile.yml` (the explicit user preference always wins over JD-language detection). This does not override `language.output`; prose still follows `language.output`.
+**When NOT to switch market modes:** If the user applies to English-language roles, even at companies from those markets, use the default English market modes — *unless* the user has explicitly requested another market mode in this conversation, or `language.modes_dir` is set in `config/profile.yml` (the explicit user preference always wins over JD-language detection). This does not override the independent analysis or artifact language.
 
 ### Skill Modes
 

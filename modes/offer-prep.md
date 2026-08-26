@@ -226,7 +226,7 @@ boundary applies (topic → lawyer list, no law stated).
    matched covenant) gain a **statutory-context note** — a fact about the
    statute, never a verdict about this clause. Template:
 
-   > **Statutory context:** [Render in {language.output}: state what the
+   > **Statutory context:** [Render in {language.analysis}: state what the
    > statute says, with citation, effective date, and its exceptions, from
    > the table row only — e.g. for a fictional Acme Corp offer in Ontario:
    > "Ontario's ESA s.67.2 has prohibited non-compete agreements in
@@ -301,11 +301,11 @@ shapes:**
 2. The **Questions for your lawyer** list gains a question built only from
    the clause's own stated term and the Step 1 jurisdiction — both facts
    this mode already has without any legal table — rendered in
-   `{language.output}` (semantic template; only the clause's own term and
+   `{language.analysis}` (semantic template; only the clause's own term and
    the jurisdiction name are facts to preserve, nothing else is verbatim
    text to copy):
 
-   > [Render in {language.output}: "This clause states 10 days of paid
+   > [Render in {language.analysis}: "This clause states 10 days of paid
    > vacation. Is that at or above the statutory minimum for vacation in
    > Ontario, and does this clause meet it — or does the floor apply
    > regardless of what the clause says?"] (fictional Acme Corp offer in
@@ -317,7 +317,7 @@ doctrine-directed question, asked unconditionally in every jurisdiction —
 never gated on a table flag, since no such flag exists anymore — and never
 naming a case or asserting an effect:
 
-> [Render in {language.output}: "Does this jurisdiction have a doctrine
+> [Render in {language.analysis}: "Does this jurisdiction have a doctrine
 > under which a defect elsewhere in this termination provision — even in a
 > part that's never invoked — could void the whole clause? If so, does
 > anything here trigger it, and what would that mean for my notice or
@@ -332,7 +332,7 @@ for every termination clause, also ask the lawyer directly whether a
 voiding doctrine — if one exists in this jurisdiction — could work in the
 candidate's favor here:
 
-> [Render in {language.output}: "If this termination provision has a
+> [Render in {language.analysis}: "If this termination provision has a
 > defect that voids it, could that end up better for me than what the
 > clause says — for example by falling back to broader protection? Is that
 > worth exploring, or does it cut the other way in my situation?"]

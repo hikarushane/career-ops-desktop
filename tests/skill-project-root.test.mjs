@@ -15,6 +15,19 @@ const entrypoints = [
   '.qwen',
 ].map(dir => join(dir, 'skills', 'career-ops', 'SKILL.md'));
 
+const CANONICAL_SKILL = join(ROOT, '.agents', 'skills', 'career-ops', 'SKILL.md');
+const CANONICAL_POINTER = '../../../.agents/skills/career-ops/SKILL.md';
+
+// Git materializes a tracked symlink as its pointer text when core.symlinks is
+// disabled (common on Windows and some mounted workspaces). The shipped
+// bootstrap resolves exactly this form to the canonical skill, so this check
+// must verify the effective content rather than treating that supported checkout
+// representation as a missing routing rule.
+function effectiveSkillText(skillPath) {
+  const text = readFileSync(skillPath, 'utf8');
+  return text.trim() === CANONICAL_POINTER ? readFileSync(CANONICAL_SKILL, 'utf8') : text;
+}
+
 function findProjectRoot(skillPath) {
   let current = dirname(skillPath);
   while (true) {
@@ -30,7 +43,7 @@ function findProjectRoot(skillPath) {
 const failures = [];
 for (const relativePath of entrypoints) {
   const skillPath = join(ROOT, relativePath);
-  const text = readFileSync(skillPath, 'utf8');
+  const text = effectiveSkillText(skillPath);
   const resolvedRoot = findProjectRoot(skillPath);
 
   if (resolve(resolvedRoot || '') !== resolve(ROOT)) {

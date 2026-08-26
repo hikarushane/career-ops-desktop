@@ -91,13 +91,14 @@ location:
   # onsite_availability: "1 week/month in any city"
 
 language:
-  # Human-facing output language for reports, tracker notes, PDFs, cover
-  # letters, outreach, and form answers. Use an ISO language code such as
-  # `en` or `zh-CN`; `zh-CN` also enables Chinese PDF typography rules.
-  # This is separate from language.modes_dir: modes_dir selects market
-  # vocabulary/rules, while output selects the prose language.
-  output: en
-  # modes_dir: modes/de  # optional: use DACH market vocabulary while still writing in English
+  # Language used to read CareerOps evaluation reports and dashboard analysis.
+  # Use an ISO language code such as `en` or `zh-TW`.
+  analysis: en
+  # `output` is a deprecated read-only alias for existing profiles. Once this
+  # setting is saved, it is migrated to `analysis` without changing any CV.
+  # output: en
+  # Optional market vocabulary/rules. It never decides artifact prose.
+  # modes_dir: modes/de
 
 # Optional follow-up cadence preferences for `node followup-cadence.mjs`.
 # CLI flags still win for one-off runs (for example `--applied-days 10`).

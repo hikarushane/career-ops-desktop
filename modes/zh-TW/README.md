@@ -37,13 +37,13 @@
 
 ```yaml
 language:
-  output: zh-TW           # 對外文本的語言（報告、求職信、表單回答）
+  analysis: zh-TW         # 報告與儀表板說明的語言
   modes_dir: modes/zh-TW  # 市場詞彙與評估規則
 ```
 
-這兩個是**互相獨立**的軸（見 `AGENTS.md` 的 "Output Language vs Market Modes"）：
-`modes_dir` 只提供台灣的市場脈絡，`output` 才決定產出文字的語言。若只設 `modes_dir` 而不設 `output`，
-助理會載入台灣規則、但仍以預設語言（`en`）產出文字。
+這兩個是**互相獨立**的軸（見 `AGENTS.md` 的 "Analysis Language, Artifact Language, and Market Modes"）：
+`modes_dir` 只提供台灣的市場脈絡；`analysis` 決定報告與儀表板的語言，而 CV、求職信與面試材料會依各職缺 JD 的語言產生。若只設 `modes_dir` 而不設 `analysis`，
+助理會載入台灣規則、並以預設語言（`en`）寫分析。
 
 第一次會談時提醒助理遵循這兩個欄位即可。
 

@@ -1,9 +1,9 @@
 # career-ops
 
-[English](README.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [தமிழ்](README.ta.md)
+[English](../../README.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [தமிழ்](README.ta.md)
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops Multi-Agent Job Search System" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="career-ops Multi-Agent Job Search System" width="800"></a>
 </p>
 
 <p align="center">
@@ -17,21 +17,21 @@
 </p>
 
 <p align="center">
-  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
+  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="../../docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
 </p>
 
 <p align="center"><sub>FEATURED IN</sub></p>
 
 <p align="center">
-  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
+  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/wired-dark.svg"><img src="../../docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/business-insider-dark.svg"><img src="../../docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="career-ops Demo" width="800">
+  <img src="../../docs/demo.gif" alt="career-ops Demo" width="800">
 </p>
 
 <p align="center"><strong>740+ job listings evaluated · 100+ personalized CVs · 1 dream role landed</strong></p>
@@ -58,7 +58,7 @@
 </p>
 
 <p align="center">
-  <sub>எந்த Agent Skill Standard CLI-யிலும் இது இயங்கும். மேலும் விவரங்களுக்கு <a href="docs/SUPPORTED_CLIS.md">Supported CLIs</a> ஆவணத்தைப் பார்க்கவும்.</sub><br>
+  <sub>எந்த Agent Skill Standard CLI-யிலும் இது இயங்கும். மேலும் விவரங்களுக்கு <a href="../../docs/SUPPORTED_CLIS.md">Supported CLIs</a> ஆவணத்தைப் பார்க்கவும்.</sub><br>
   <img src="https://img.shields.io/badge/Claude_Code-000?style=flat&logo=anthropic&logoColor=white" alt="Claude Code">
   <img src="https://img.shields.io/badge/OpenCode-111827?style=flat&logo=terminal&logoColor=white" alt="OpenCode">
   <img src="https://img.shields.io/badge/Antigravity_CLI-4285F4?style=flat&logo=google&logoColor=white" alt="Antigravity CLI">
@@ -73,7 +73,7 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ## career-ops அறிமுகம்
@@ -484,7 +484,7 @@ career-ops-ஐ பயன்படுத்தி வேலை கிடைத்
 
 இந்த நிரலின் Code, **MIT License**-ன் கீழ் வழங்கப்படுகிறது.
 
-**career-ops** என்ற பெயரும் அதன் Brand-மும் [Trademark Policy](TRADEMARK.md)-க்கு உட்பட்டவை. சமூகப் பயன்பாட்டிற்கு அனுமதி வழங்கப்பட்டாலும், வணிகப் பொருட்களின் பெயரிடல் மற்றும் அதிகாரப்பூர்வ ஒப்புதலுக்கான உரிமைகள் பாதுகாக்கப்பட்டுள்ளன.
+**career-ops** என்ற பெயரும் அதன் Brand-மும் [Trademark Policy](../../TRADEMARK.md)-க்கு உட்பட்டவை. சமூகப் பயன்பாட்டிற்கு அனுமதி வழங்கப்பட்டாலும், வணிகப் பொருட்களின் பெயரிடல் மற்றும் அதிகாரப்பூர்வ ஒப்புதலுக்கான உரிமைகள் பாதுகாக்கப்பட்டுள்ளன.
 
 
 ## Let's Connect

@@ -5,6 +5,14 @@ Optional pass:
 
 ## Full pipeline
 
+## Language context
+
+Resolve this job's `jobLanguage` with `resolveJobLanguage(jobContext)` in
+`job-language.mjs` before drafting. An explicit per-job override wins; otherwise use
+the JD body, never company geography or the mode-file language. Write every CV/PDF
+artifact in `jobLanguage`. `language.analysis` is only for CareerOps analysis and must
+not translate this artifact.
+
 ## Application-scoped artifacts
 
 When a CV is reused or lightly tailored for an existing application, initialize a bundle with `npm run application:init -- --report {report-number} --company "{company}" --role "{role}" --version 1`. Keep the current JD at `jd/current.md`, the comparison JD at `jd/previous.md`, the source CV at `cv/source/original.html`, the tailored CV at `cv/tailored/v001/cv.html`, the PDF at `cv/tailored/v001/cv.pdf`, the change notes at `cv/tailored/v001/changes.md`, and the reuse decision at `decision/reuse.json` under the printed bundle root. Resolve the application/report first with `node find.mjs {report-or-tracker-number}` so the bundle uses the report number, not an ambiguous tracker row.
@@ -24,8 +32,8 @@ Run `npm run jd:similarity -- {bundle-root}/jd/current.md {bundle-root}/jd/previ
    - `no-skill-candidates` — a requirements section was scanned, but no skill candidates came out of it. This does not mean the skills are absent from the vocabulary; the extractor only picks up capitalized tokens, so a lowercase bullet yields nothing
    - `empty-jd` — the JD file has no content, so there was nothing to read. Check the file was written correctly before continuing
 
-   > ⚠️ **Skill-gap check inconclusive:** [Render in {language.output}: state that the automated skill-gap check returned no classified skills for this JD and so cannot be read as "no gaps"; name which of the three shapes occurred from the reason code (requirements section never found, or found but no candidates extracted, or the JD file was empty); for an empty file, say the JD may not have been saved correctly and should be checked; otherwise say that you will read the JD directly to identify required skills before drafting. Keep the CLI's own English diagnostic out of the user-facing message.]
-5. Use `language.output` for the CV language. The JD language and `language.modes_dir` supply market vocabulary and evaluation context, but never override the configured output language.
+   > ⚠️ **Skill-gap check inconclusive:** [Render in {jobLanguage}: state that the automated skill-gap check returned no classified skills for this JD and so cannot be read as "no gaps"; name which of the three shapes occurred from the reason code (requirements section never found, or found but no candidates extracted, or the JD file was empty); for an empty file, say the JD may not have been saved correctly and should be checked; otherwise say that you will read the JD directly to identify required skills before drafting. Keep the CLI's own English diagnostic out of the user-facing message.]
+5. Use `jobLanguage` for the CV language. `language.modes_dir` supplies market vocabulary and evaluation context, but never overrides the JD-derived artifact language.
 6. Detect company location → paper format:
    - US/Canada → `letter`
    - Rest of the world → `a4`

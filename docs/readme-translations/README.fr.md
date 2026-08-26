@@ -1,13 +1,13 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/wordmark-dark.svg"><img src="../../docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
+[English](../../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
 
 </div>
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="Système de recherche d'emploi multi-agent career-ops" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="Système de recherche d'emploi multi-agent career-ops" width="800"></a>
 </p>
 
 <p align="center">
@@ -21,21 +21,21 @@
 </p>
 
 <p align="center">
-  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank"><img src="docs/press/producthunt.svg" alt="career-ops sur Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
+  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank"><img src="../../docs/press/producthunt.svg" alt="career-ops sur Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
 </p>
 
 <p align="center"><sub>PRÉSENTÉ DANS</sub></p>
 
 <p align="center">
-  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
+  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/wired-dark.svg"><img src="../../docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/business-insider-dark.svg"><img src="../../docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="Démo de career-ops" width="800">
+  <img src="../../docs/demo.gif" alt="Démo de career-ops" width="800">
 </p>
 
 <p align="center"><strong>Plus de 740 offres d'emploi évaluées · Plus de 100 CV personnalisés · 1 poste de rêve décroché</strong></p>
@@ -66,7 +66,7 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ## Qu'est-ce que c'est
@@ -135,7 +135,7 @@ claude   # ouvrez votre CLI d'IA — il vous guidera au premier lancement
 
 > **Le système est conçu pour être personnalisé par Claude lui-même.** Modes, archétypes, pondérations des scores, scripts de négociation — demandez simplement à Claude de les modifier. Il lit les mêmes fichiers qu'il utilise, il sait donc exactement quoi modifier.
 
-Voir [docs/SETUP.md](docs/SETUP.md) (en anglais) pour le guide de configuration complet.
+Voir [docs/SETUP.md](../../docs/SETUP.md) (en anglais) pour le guide de configuration complet.
 
 ## Intégration de l'interface en ligne de commande Gemini
 
@@ -332,7 +332,7 @@ Wikidata: [Santiago Fernández de Valderrama Aparicio](https://www.wikidata.org/
 3. **Vous respectez les conditions d'utilisation des tiers.** Vous devez utiliser cet outil conformément aux conditions d'utilisation des portails de recrutement avec lesquels vous interagissez (Greenhouse, Lever, Workday, LinkedIn, etc.). N'utilisez pas cet outil pour spammer les employeurs ou saturer les systèmes ATS.
 4. **Aucune garantie.** Les évaluations sont des recommandations et non des vérités absolues. Les modèles d'IA peuvent halluciner des compétences ou de l'expérience. Les auteurs ne sont pas responsables de l'issue de vos recherches, des candidatures rejetées, des restrictions de compte ou de toute autre conséquence.
 
-Voir [LEGAL_DISCLAIMER.md](LEGAL_DISCLAIMER.md) (en anglais) pour tous les détails. Ce logiciel est fourni sous [Licence MIT](LICENSE) "en l'état", sans aucune garantie d'aucune sorte.
+Voir [LEGAL_DISCLAIMER.md](../../LEGAL_DISCLAIMER.md) (en anglais) pour tous les détails. Ce logiciel est fourni sous [Licence MIT](../../LICENSE) "en l'état", sans aucune garantie d'aucune sorte.
 
 ## Contributeurs
 
@@ -344,7 +344,7 @@ Vous avez été embauché grâce à career-ops ? [Partagez votre histoire ! (en 
 
 ## Licence et marques déposées
 
-Le code est distribué sous [Licence MIT](LICENSE). Le nom et la marque "career-ops" sont régis par la [Politique de marques déposées](TRADEMARK.md), qui autorise l'usage par la communauté mais le réserve pour les produits commerciaux et les promotions.
+Le code est distribué sous [Licence MIT](../../LICENSE). Le nom et la marque "career-ops" sont régis par la [Politique de marques déposées](../../TRADEMARK.md), qui autorise l'usage par la communauté mais le réserve pour les produits commerciaux et les promotions.
 
 ## Connectons-nous
 

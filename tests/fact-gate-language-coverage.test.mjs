@@ -8,9 +8,9 @@
 // multipliers are language-neutral and still checked everywhere — a COUNT is
 // checked only in English.
 //
-// That is not an edge case for this project. AGENTS.md's `language.output`
-// governs "reports, tracker notes, PDFs, cover letters ... any user-visible
-// prose", and the repo ships market modes for de/fr/ar/ja/tr/hi. And counts are
+// That is not an edge case for this project. AGENTS.md's `language.analysis`
+// governs reports and dashboard explanations, while JD-language artifacts are
+// generated separately; the repo ships market modes for de/fr/ar/ja/tr/hi. And counts are
 // the class the file's own METRIC_NOUNS comment singles out:
 //
 //   "Managed 45 staff against a source saying 20 passed the gate silently,

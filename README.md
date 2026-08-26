@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [தமிழ்](README.ta.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [Türkçe](README.tr.md)
+[English](README.md) | [Español](docs/readme-translations/README.es.md) | [Deutsch](docs/readme-translations/README.de.md) | [Français](docs/readme-translations/README.fr.md) | [Português (Brasil)](docs/readme-translations/README.pt-BR.md) | [한국어](docs/readme-translations/README.ko-KR.md) | [日本語](docs/readme-translations/README.ja.md) | [简体中文](docs/readme-translations/README.cn.md) | [繁體中文](docs/readme-translations/README.zh-TW.md) | [Українська](docs/readme-translations/README.ua.md) | [Русский](docs/readme-translations/README.ru.md) | [Polski](docs/readme-translations/README.pl.md) | [Dansk](docs/readme-translations/README.da.md) | [தமிழ்](docs/readme-translations/README.ta.md) | [العربية](docs/readme-translations/README.ar.md) | [हिन्दी](docs/readme-translations/README.hi.md) | [Türkçe](docs/readme-translations/README.tr.md)
 
 </div>
 

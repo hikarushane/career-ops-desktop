@@ -1,13 +1,13 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/wordmark-dark.svg"><img src="../../docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [Türkçe](README.tr.md)
+[English](../../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [Türkçe](README.tr.md)
 
 </div>
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops Multi-Agent Job Search System" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="career-ops Multi-Agent Job Search System" width="800"></a>
 </p>
 
 <p align="center">
@@ -21,21 +21,21 @@
 </p>
 
 <p align="center">
-  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
+  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="../../docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
 </p>
 
 <p align="center"><sub>BASINDA</sub></p>
 
 <p align="center">
-  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
+  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/wired-dark.svg"><img src="../../docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/business-insider-dark.svg"><img src="../../docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="career-ops Demo" width="800">
+  <img src="../../docs/demo.gif" alt="career-ops Demo" width="800">
 </p>
 
 <p align="center"><strong>740+ ilan değerlendirildi · 100+ kişiselleştirilmiş CV · 1 hayalindeki iş bulundu</strong></p>
@@ -62,7 +62,7 @@
 </p>
 
 <p align="center">
-  <sub>Agent-skill standardını destekleyen her CLI'de de çalışır. Bkz. <a href="docs/SUPPORTED_CLIS.md">Desteklenen CLI'ler</a>.</sub><br>
+  <sub>Agent-skill standardını destekleyen her CLI'de de çalışır. Bkz. <a href="../../docs/SUPPORTED_CLIS.md">Desteklenen CLI'ler</a>.</sub><br>
   <img src="https://img.shields.io/badge/Claude_Code-000?style=flat&logo=anthropic&logoColor=white" alt="Claude Code">
   <img src="https://img.shields.io/badge/OpenCode-111827?style=flat&logo=terminal&logoColor=white" alt="OpenCode">
   <img src="https://img.shields.io/badge/Antigravity_CLI-4285F4?style=flat&logo=google&logoColor=white" alt="Antigravity CLI">
@@ -77,7 +77,7 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ## Bu Nedir
@@ -119,7 +119,7 @@ career-ops, [CareerOps Manifestosu](https://career-ops.org/manifesto?utm_source=
 | **Dashboard TUI**         | Hattınızı gezmek, filtrelemek ve sıralamak için terminal arayüzü                                                                          |
 | **İnsan Onaylı Döngü**    | Yapay zekâ değerlendirir ve önerir, siz karar verir ve harekete geçersiniz. Sistem asla bir başvuru göndermez -- son söz her zaman sizindir <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. --> |
 | **Hat Bütünlüğü**         | Otomatik birleştirme, tekrar tespiti, durum normalizasyonu, sağlık kontrolleri                                                            |
-| **CV'nin Ötesinde**       | Şirket araştırması ([`deep`](modes/deep.md)) yapay zekâ stratejisini, son hamleleri, mühendislik kültürünü ve profilinizin alması gereken açıyı ortaya çıkarır. Kişi bulma ([`contacto`](modes/contacto.md)) ulaşılmaya değer işe alım uzmanını, recruiter'ı veya ekip üyesini belirler ve her kişi türüne uyarlanmış ≤300 karakterlik bir LinkedIn mesajı taslağı hazırlar. Resmi başvuru e-postası taslakları ([`email`](modes/email.md)) değerlendirilmiş bir raporu veya yapıştırılan iş ilanını -- hiçbir şey göndermeden, iletmeden veya tıklamadan -- bir konu satırına, gövdeye ve ek kontrol listesine dönüştürür. Başvurular sizi kuyruğa sokar; araştırma size bir sohbet kazandırır. |
+| **CV'nin Ötesinde**       | Şirket araştırması ([`deep`](../../modes/deep.md)) yapay zekâ stratejisini, son hamleleri, mühendislik kültürünü ve profilinizin alması gereken açıyı ortaya çıkarır. Kişi bulma ([`contacto`](../../modes/contacto.md)) ulaşılmaya değer işe alım uzmanını, recruiter'ı veya ekip üyesini belirler ve her kişi türüne uyarlanmış ≤300 karakterlik bir LinkedIn mesajı taslağı hazırlar. Resmi başvuru e-postası taslakları ([`email`](../../modes/email.md)) değerlendirilmiş bir raporu veya yapıştırılan iş ilanını -- hiçbir şey göndermeden, iletmeden veya tıklamadan -- bir konu satırına, gövdeye ve ek kontrol listesine dönüştürür. Başvurular sizi kuyruğa sokar; araştırma size bir sohbet kazandırır. |
 
 ## Hızlı Başlangıç
 
@@ -183,7 +183,7 @@ claude   # veya codex / opencode / qwen / agy / grok
 
 > **Sistem, yapay zekâ kodlama CLI'nizin kendisi tarafından özelleştirilmek üzere tasarlanmıştır.** Modlar, arketipler, puanlama ağırlıkları, pazarlık senaryoları -- onlardan bunları değiştirmesini istemeniz yeterli. Kullandığı dosyaların aynılarını okur, bu yüzden tam olarak neyi düzenleyeceğini bilir.
 
-Tam kurulum kılavuzu için [docs/SETUP.md](docs/SETUP.md)'ye, özel veya yerel modeller kullanarak career-ops'u ucuza çalıştırma talimatları için [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md)'ye, ATS otomatik doldurma akışının ayrıntıları için [docs/APPLY_AUTOFILL.md](docs/APPLY_AUTOFILL.md)'ye ve sık sorulan kurulum sorularının yanıtları için [docs/FAQ.md](docs/FAQ.md)'ye bakın.
+Tam kurulum kılavuzu için [docs/SETUP.md](../../docs/SETUP.md)'ye, özel veya yerel modeller kullanarak career-ops'u ucuza çalıştırma talimatları için [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md)'ye, ATS otomatik doldurma akışının ayrıntıları için [docs/APPLY_AUTOFILL.md](../../docs/APPLY_AUTOFILL.md)'ye ve sık sorulan kurulum sorularının yanıtları için [docs/FAQ.md](../../docs/FAQ.md)'ye bakın.
 
 ## Antigravity CLI Entegrasyonu
 
@@ -210,7 +210,7 @@ Skill, `.agents/skills/career-ops/SKILL.md` içinde açık standart kullanılara
 
 ## Codex Entegrasyonu
 
-career-ops, Codex'i aynı paylaşılan yönlendirici üzerinden destekler, ancak çağırma modeli slash komutlarını otomatik kaydeden CLI'lerden farklıdır. Tam kılavuz için bkz. [docs/CODEX.md](docs/CODEX.md).
+career-ops, Codex'i aynı paylaşılan yönlendirici üzerinden destekler, ancak çağırma modeli slash komutlarını otomatik kaydeden CLI'lerden farklıdır. Tam kılavuz için bkz. [docs/CODEX.md](../../docs/CODEX.md).
 
 ### Etkileşimli Codex
 
@@ -340,7 +340,7 @@ Tarayıcı, taramaya hazır **45+ şirket** ve başlıca iş ilanı panoları ge
 **Otomasyon:** n8n, Zapier, Make.com
 **Avrupa:** Factorial, Attio, Tinybird, Clarity AI, Travelperk
 
-**Taranan iş panoları:** ATS API'lerini, pano geneli beslemeleri, XML/RSS beslemelerini, markdown beslemelerini ve yerel ayrıştırıcıları kapsayan 21 sağlayıcı modülü. Tam tablo için bkz. [Desteklenen iş panoları](docs/SUPPORTED_JOB_BOARDS.md).
+**Taranan iş panoları:** ATS API'lerini, pano geneli beslemeleri, XML/RSS beslemelerini, markdown beslemelerini ve yerel ayrıştırıcıları kapsayan 21 sağlayıcı modülü. Tam tablo için bkz. [Desteklenen iş panoları](../../docs/SUPPORTED_JOB_BOARDS.md).
 
 Varsayılan olarak `node scan.mjs` (`npm run scan` olarak da bilinir), her ATS beslemesinin döndürdüğüne güvenir. Bazı şirketler, rol kapandıktan sonra bile herkese açık API'lerinde eski ilanları bırakır, bu yüzden bu süresi dolmuş kayıtlar `pipeline.md`'ye sızabilir. API geçişinden sonra Playwright'ı başlatıp süresi dolmuş ilanları hatta girmeden önce düşürmek için `--verify` bayrağını geçin:
 
@@ -361,7 +361,7 @@ npm run build:dashboard   # opsiyonel: bağımsız ikili dosyayı derle
 
 Özellikler: 6 filtre sekmesi, 4 sıralama modu, gruplanmış/düz görünüm, geç yüklenen önizlemeler, satır içi durum değişiklikleri.
 
-Ayrıca **deneysel bir web arayüzü** de var (alfa, opt-in — siz başlatmadıkça hiçbir şey çalışmaz): bkz. [`web/README.md`](web/README.md).
+Ayrıca **deneysel bir web arayüzü** de var (alfa, opt-in — siz başlatmadıkça hiçbir şey çalışmaz): bkz. [`web/README.md`](../../web/README.md).
 
 ## Proje Yapısı
 
@@ -426,13 +426,13 @@ career-ops/
 career-ops, açık kaynaklı, CLI'den bağımsız bir iş arama komuta merkezidir. Herhangi bir yapay zekâ kodlama CLI'sini, iş ilanlarını CV'nizle karşılaştırarak değerlendiren, ATS uyumlu PDF'ler üreten, doğru kişiyi bulan ve her şeyi tek bir yerde izleyen -- son kararı sizde bırakan -- bir hatta dönüştürür. CareerOps Manifestosu'nun ilk referans uygulamasıdır. Daha fazlası için [career-ops.org](https://career-ops.org).
 
 **career-ops'u ücretsiz veya daha ucuz/yerel bir modelle çalıştırabilir miyim?**
-Evet. career-ops CLI'den bağımsızdır ve ücretsiz ile yerel modellerde çalışır -- OpenRouter ücretsiz modelleri, Ollama veya herhangi bir OpenAI uyumlu uç nokta üzerinden -- bu yüzden ücretli bir aboneliğe bağlı değilsiniz. Tam kurulum için bkz. [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md).
+Evet. career-ops CLI'den bağımsızdır ve ücretsiz ile yerel modellerde çalışır -- OpenRouter ücretsiz modelleri, Ollama veya herhangi bir OpenAI uyumlu uç nokta üzerinden -- bu yüzden ücretli bir aboneliğe bağlı değilsiniz. Tam kurulum için bkz. [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md).
 
 **career-ops hangi yapay zekâ CLI'leriyle çalışır?**
 career-ops, açık Agent Skill Standard aracılığıyla herhangi bir büyük yapay zekâ kodlama CLI'sinde çalışır -- Claude Code, Codex, Gemini / Antigravity, OpenCode, Grok, Qwen ve daha fazlası -- bu yüzden hiçbir zaman tek bir sağlayıcıya kilitlenmez. Zaten sahip olduğunuz CLI'yi kullanın.
 
 **career-ops'u Windows'a nasıl kurarım?**
-career-ops Windows'ta çalışır. Kurulum sırasında skill'ler bir sembolik bağlantı hatasıyla yüklenemezse, çözüm [docs/FAQ.md](docs/FAQ.md) içinde. Tam adımlar için bkz. [docs/SETUP.md](docs/SETUP.md).
+career-ops Windows'ta çalışır. Kurulum sırasında skill'ler bir sembolik bağlantı hatasıyla yüklenemezse, çözüm [docs/FAQ.md](../../docs/FAQ.md) içinde. Tam adımlar için bkz. [docs/SETUP.md](../../docs/SETUP.md).
 
 **career-ops işlere benim yerime otomatik başvuruyor mu?**
 Hayır. career-ops bir filtredir, gelişigüzel her yere başvuran bir araç değil. Yapay zekâ değerlendirir, sıralar ve taslak hazırlar; siz gözden geçirir ve karar verirsiniz. Hiçbir şeyi göndermez, iletmez veya tıklamaz -- son söz her zaman sizindir. Bu insan-onaylı-döngü tasarımı işin tam da özüdür.
@@ -459,7 +459,7 @@ Wikidata: [Santiago Fernández de Valderrama Aparicio](https://www.wikidata.org/
 3. **Üçüncü taraf hizmet koşullarına uyarsınız.** Bu aracı, etkileşimde bulunduğunuz kariyer portallarının (Greenhouse, Lever, Workday, LinkedIn vb.) Kullanım Koşullarına uygun şekilde kullanmalısınız. Bu aracı işverenlere spam göndermek veya ATS sistemlerini aşırı yüklemek için kullanmayın.
 4. **Garanti yoktur.** Değerlendirmeler öneridir, gerçek değildir. Yapay zekâ modelleri beceri veya deneyim hakkında yanılsama üretebilir. Yazarlar; istihdam sonuçlarından, reddedilen başvurulardan, hesap kısıtlamalarından veya başka herhangi bir sonuçtan sorumlu değildir.
 
-Tüm ayrıntılar için bkz. [LEGAL_DISCLAIMER.md](LEGAL_DISCLAIMER.md). Bu yazılım, herhangi bir garanti olmaksızın "olduğu gibi" [MIT Lisansı](LICENSE) altında sağlanmaktadır.
+Tüm ayrıntılar için bkz. [LEGAL_DISCLAIMER.md](../../LEGAL_DISCLAIMER.md). Bu yazılım, herhangi bir garanti olmaksızın "olduğu gibi" [MIT Lisansı](../../LICENSE) altında sağlanmaktadır.
 
 ## Katkıda Bulunanlar
 
@@ -471,9 +471,9 @@ career-ops kullanarak işe mi girdiniz? [Hikayenizi paylaşın!](https://github.
 
 ## Lisans ve Ticari Marka
 
-Kod [MIT](LICENSE) altında lisanslanmıştır. "career-ops" adı ve
+Kod [MIT](../../LICENSE) altında lisanslanmıştır. "career-ops" adı ve
 markası, topluluk kullanımı için serbestçe uygulanan ancak ticari ürün
-adlandırma ve onayı için saklı tutulan [Ticari Marka Politikası](TRADEMARK.md)
+adlandırma ve onayı için saklı tutulan [Ticari Marka Politikası](../../TRADEMARK.md)
 tarafından yönetilir.
 
 ## Bize Ulaşın

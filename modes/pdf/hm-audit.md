@@ -43,7 +43,7 @@ Resolve the role to a report. Locate the tailored CV artifact per Input 4. Run `
 
 If the tailored CV is missing, stop here:
 
-> [Render in {language.output}: say that no tailored CV was found for {company}; that they should run `/career-ops pdf` first; and that auditing the untailored `cv.md` instead would produce verdicts on a CV they are not sending. Keep the command literal.]
+> [Render in {jobLanguage}: say that no tailored CV was found for {company}; that they should run `/career-ops pdf` first; and that auditing the untailored `cv.md` instead would produce verdicts on a CV they are not sending. Keep the command literal.]
 
 If a report exists with usable role context but no JD text is reachable, continue against the report's requirement summary and state the degradation in the output. If the report has no usable role context, stop and ask for the JD text or the posting URL. Partial-but-honest beats perfect-or-nothing.
 
@@ -140,7 +140,7 @@ Placement follows the convention of the cover letter draft appended by `modes/of
 - **Fabrication.** Bound by the Source-of-Truth Boundary in `AGENTS.md`. Cut and reframe freely; never invent.
 - **Privacy.** Public professional information only. Store name, title, and source links — never contact details, never personal social accounts.
 - **Attribution.** Always *"a reviewer with this background would likely read it this way"* — never *"{name} thinks X."* Even at Tier A this is inference from public information about a real private individual.
-- **Output language.** Write all human-facing output in `language.output`, per the standing directive in `AGENTS.md`.
+- **Language.** Write the audit explanation in `language.analysis`; tailored CV content remains in the resolved `jobLanguage`, per the standing directive in `AGENTS.md`.
 
 ## Scope / Non-Goals
 

@@ -70,7 +70,9 @@ and never touched by `update-system.mjs` (see
 
 - One file = one mode; the h1 is `# Mode: <name> — <purpose>`.
 - Underscore prefix = shared context or template, not a routable mode.
-- Language selection: explicit user request or `language.modes_dir` in
+- Market-mode selection: explicit user request or `language.modes_dir` in
   `config/profile.yml` wins over JD-language detection (see `AGENTS.md`).
+  Separately, `language.analysis` controls evaluation prose while each job's
+  JD resolves its CV, cover-letter, and interview-material language.
 - Mode files are system-layer: edits belong upstream. User personalization
   goes in `_profile.md` / `_custom.md`, never in the mode files themselves.

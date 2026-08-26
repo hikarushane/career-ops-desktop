@@ -1,13 +1,13 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/wordmark-dark.svg"><img src="../../docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
+[English](../../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
 
 </div>
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops Multi-Agent-System für die Jobsuche" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="career-ops Multi-Agent-System für die Jobsuche" width="800"></a>
 </p>
 
 <p align="center">
@@ -21,21 +21,21 @@
 </p>
 
 <p align="center">
-  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="docs/press/producthunt.svg" alt="career-ops auf Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
+  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="../../docs/press/producthunt.svg" alt="career-ops auf Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
 </p>
 
 <p align="center"><sub>BEKANNT AUS</sub></p>
 
 <p align="center">
-  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
+  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/wired-dark.svg"><img src="../../docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/business-insider-dark.svg"><img src="../../docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="career-ops Demo" width="800">
+  <img src="../../docs/demo.gif" alt="career-ops Demo" width="800">
 </p>
 
 <p align="center"><strong>740+ Stellenanzeigen bewertet · 100+ personalisierte Lebensläufe · 1 Traumrolle bekommen</strong></p>
@@ -77,7 +77,7 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ## Was ist das?
@@ -159,7 +159,7 @@ claude   # oder codex / opencode / gemini / qwen / agy / grok
 
 > **Das System ist darauf ausgelegt, von deiner KI-Coding-CLI selbst angepasst zu werden.** Modi, Archetypen, Scoring-Gewichte, Verhandlungsskripte -- frag einfach danach. Die CLI liest dieselben Dateien, die sie nutzt, und weiß daher genau, was zu ändern ist.
 
-Siehe [docs/SETUP.md](docs/SETUP.md) für die vollständige Setup-Anleitung und [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md) für günstige Nutzung mit eigenen oder lokalen Modellen.
+Siehe [docs/SETUP.md](../../docs/SETUP.md) für die vollständige Setup-Anleitung und [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md) für günstige Nutzung mit eigenen oder lokalen Modellen.
 
 ## Nutzung
 
@@ -214,7 +214,7 @@ Der Scanner bringt **45+ Unternehmen** und **19 Suchabfragen** über große Jobb
 **Automation:** n8n, Zapier, Make.com
 **European:** Factorial, Attio, Tinybird, Clarity AI, Travelperk
 
-**Durchsuchte Jobbörsen:** 21 Provider-Module decken ATS-APIs, boardweite Feeds, XML/RSS-Feeds, Markdown-Feeds und lokale Parser ab. Siehe [Supported job boards](docs/SUPPORTED_JOB_BOARDS.md) für die vollständige Tabelle.
+**Durchsuchte Jobbörsen:** 21 Provider-Module decken ATS-APIs, boardweite Feeds, XML/RSS-Feeds, Markdown-Feeds und lokale Parser ab. Siehe [Supported job boards](../../docs/SUPPORTED_JOB_BOARDS.md) für die vollständige Tabelle.
 
 Standardmäßig vertraut `node scan.mjs` (alias `npm run scan`) den Rückgaben der ATS-Feeds. Einige Unternehmen lassen alte Stellenanzeigen öffentlich verfügbar, obwohl Rollen bereits geschlossen sind. Mit `--verify` startet Playwright nach dem API-Lauf und entfernt abgelaufene Stellenanzeigen, bevor sie in `pipeline.md` landen:
 
@@ -283,13 +283,13 @@ career-ops/
 career-ops ist ein quelloffenes, CLI-unabhängiges Kommandozentrum für die Jobsuche. Es macht aus jeder KI-Coding-CLI eine Pipeline, die Stellenangebote gegen deinen Lebenslauf bewertet, ATS-optimierte PDFs erzeugt, die richtige Kontaktperson findet und alles an einem Ort trackt — während du die finale Entscheidung behältst. Es ist die erste Referenzimplementierung des CareerOps Manifesto. Mehr unter [career-ops.org](https://career-ops.org).
 
 **Kann ich career-ops kostenlos oder mit einem günstigeren / lokalen Modell nutzen?**
-Ja. career-ops ist CLI-unabhängig und läuft mit kostenlosen und lokalen Modellen — über kostenlose OpenRouter-Modelle, Ollama oder jeden OpenAI-kompatiblen Endpoint — sodass du nicht an ein kostenpflichtiges Abo gebunden bist. Die vollständige Einrichtung findest du in [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md).
+Ja. career-ops ist CLI-unabhängig und läuft mit kostenlosen und lokalen Modellen — über kostenlose OpenRouter-Modelle, Ollama oder jeden OpenAI-kompatiblen Endpoint — sodass du nicht an ein kostenpflichtiges Abo gebunden bist. Die vollständige Einrichtung findest du in [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md).
 
 **Mit welchen KI-CLIs funktioniert career-ops?**
 career-ops läuft mit jeder gängigen KI-Coding-CLI — Claude Code, Codex, Gemini / Antigravity, OpenCode, Grok, Qwen und mehr — über den offenen Agent Skill Standard, ist also nie an einen einzelnen Anbieter gebunden. Nutze einfach die CLI, die du bereits hast.
 
 **Wie installiere ich career-ops unter Windows?**
-career-ops läuft unter Windows. Falls Skills während der Installation mit einem Symlink-Fehler nicht laden, steht die Lösung in [docs/FAQ.md](docs/FAQ.md). Die vollständigen Schritte findest du in [docs/SETUP.md](docs/SETUP.md).
+career-ops läuft unter Windows. Falls Skills während der Installation mit einem Symlink-Fehler nicht laden, steht die Lösung in [docs/FAQ.md](../../docs/FAQ.md). Die vollständigen Schritte findest du in [docs/SETUP.md](../../docs/SETUP.md).
 
 **Bewirbt sich career-ops automatisch für mich?**
 Nein. career-ops ist ein Filter, kein Spray-and-Pray-Auto-Bewerber. Die KI bewertet, priorisiert und entwirft; du prüfst und entscheidest. Sie reicht nie etwas ein, sendet oder klickt nichts — die finale Entscheidung liegt immer bei dir. Genau dieses Human-in-the-Loop-Design ist der ganze Sinn.
@@ -314,7 +314,7 @@ Wikidata: [Santiago Fernández de Valderrama Aparicio](https://www.wikidata.org/
 3. **Du hältst dich an Drittanbieter-AGB.** Nutze dieses Tool im Einklang mit den Nutzungsbedingungen der Karriereportale, mit denen du interagierst. Verwende es nicht, um Arbeitgeber zu spammen oder ATS-Systeme zu überlasten.
 4. **Keine Garantien.** Bewertungen sind Empfehlungen, keine Wahrheit. KI-Modelle können Kenntnisse oder Erfahrungen halluzinieren. Die Autor:innen haften nicht für Beschäftigungsergebnisse, Ablehnungen, Kontosperren oder andere Folgen.
 
-Siehe [LEGAL_DISCLAIMER.md](LEGAL_DISCLAIMER.md) für Details. Diese Software wird unter der [MIT License](LICENSE) ohne Gewährleistung bereitgestellt.
+Siehe [LEGAL_DISCLAIMER.md](../../LEGAL_DISCLAIMER.md) für Details. Diese Software wird unter der [MIT License](../../LICENSE) ohne Gewährleistung bereitgestellt.
 
 ## Mitwirkende
 
@@ -326,7 +326,7 @@ Mit career-ops eingestellt worden? [Teile deine Geschichte!](https://github.com/
 
 ## Lizenz & Trademark
 
-Der Code steht unter der [MIT](LICENSE)-Lizenz. Der Name und die Marke "career-ops" unterliegen der [Trademark Policy](TRADEMARK.md): offen für Community-Nutzung, reserviert für kommerzielle Produktnamen und Endorsements.
+Der Code steht unter der [MIT](../../LICENSE)-Lizenz. Der Name und die Marke "career-ops" unterliegen der [Trademark Policy](../../TRADEMARK.md): offen für Community-Nutzung, reserviert für kommerzielle Produktnamen und Endorsements.
 
 ## Kontakt
 

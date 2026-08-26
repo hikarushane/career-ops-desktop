@@ -334,7 +334,7 @@ export function computeRejectionLatency(interviewRows, trackerByCompany, opts = 
       courtesyDays,
       reason,
       // Language-neutral machine code — agents rendering reminders in a
-      // non-English `language.output` compose prose from this + the
+      // non-English analysis language compose prose from this + the
       // structured fields instead of relaying the English `reason` string.
       reasonCode: 'courtesy-threshold-exceeded',
       blacklistSuggestion: buildBlacklistSuggestion(entry.company, todayStr, reason),

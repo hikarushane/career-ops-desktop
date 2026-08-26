@@ -1,15 +1,15 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/wordmark-dark.svg"><img src="../../docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
 <p align="center">نظام إدارة وتخطيط البحث عن وظائف باستخدام الذكاء الاصطناعي (وكيل مأتمت)</p>
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
+[English](../../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
 
 </div>
 
 <p align="right" dir="rtl">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops — نظام البحث عن وظائف القائم على عدة وكلاء ذكاء اصطناعي" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="career-ops — نظام البحث عن وظائف القائم على عدة وكلاء ذكاء اصطناعي" width="800"></a>
 </p>
 
 <p align="center" dir="rtl">
@@ -36,13 +36,13 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="عرض توضيحي لـ career-ops" width="800">
+  <img src="../../docs/demo.gif" alt="عرض توضيحي لـ career-ops" width="800">
 </p>
 
 <p align="center" dir="rtl"><strong>أكثر من 740 عرض عمل تم تقييمه · أكثر من 100 سيرة ذاتية مخصصة وموجهة · 1 وظيفة أحلام تم الحصول عليها</strong></p>
@@ -267,13 +267,13 @@ career-ops/
 career-ops هو مركز قيادة مفتوح المصدر للبحث عن الوظائف، وغير مرتبط بواجهة سطر أوامر بعينها. يحوّل أي واجهة سطر أوامر للبرمجة بالذكاء الاصطناعي إلى مسار عمل يقيّم العروض الوظيفية مقابل سيرتك الذاتية، وينشئ ملفات PDF مخصصة ومتوافقة مع أنظمة تتبع المتقدمين (ATS)، ويحدد الشخص المناسب للتواصل معه، ويتتبع كل شيء في مكان واحد — بينما يبقى القرار النهائي لك. وهو أول تطبيق مرجعي لـ CareerOps Manifesto. المزيد على [career-ops.org](https://career-ops.org).
 
 **هل يمكنني تشغيل career-ops مجانًا أو على نموذج أرخص أو محلي؟**
-نعم. career-ops غير مرتبط بواجهة سطر أوامر بعينها ويعمل على النماذج المجانية والمحلية — عبر النماذج المجانية في OpenRouter، أو Ollama، أو أي نقطة نهاية متوافقة مع OpenAI — لذا فأنت لست مقيدًا باشتراك مدفوع. راجع [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md) للإعداد الكامل.
+نعم. career-ops غير مرتبط بواجهة سطر أوامر بعينها ويعمل على النماذج المجانية والمحلية — عبر النماذج المجانية في OpenRouter، أو Ollama، أو أي نقطة نهاية متوافقة مع OpenAI — لذا فأنت لست مقيدًا باشتراك مدفوع. راجع [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md) للإعداد الكامل.
 
 **ما هي واجهات سطر الأوامر للذكاء الاصطناعي التي يعمل معها career-ops؟**
 يعمل career-ops على أي واجهة سطر أوامر رئيسية للبرمجة بالذكاء الاصطناعي — Claude Code و Codex و Gemini / Antigravity و OpenCode و Grok و Qwen وغيرها — من خلال معيار Agent Skill Standard المفتوح، لذا فهو غير مقيد أبدًا بمزوّد واحد. استخدم الواجهة التي لديك بالفعل.
 
 **كيف أثبّت career-ops على ويندوز؟**
-career-ops يعمل على ويندوز. إذا فشل تحميل المهارات (skills) مع ظهور خطأ يتعلق بالروابط الرمزية (symlink) أثناء التثبيت، فالحل موجود في [docs/FAQ.md](docs/FAQ.md). الخطوات الكاملة في [docs/SETUP.md](docs/SETUP.md).
+career-ops يعمل على ويندوز. إذا فشل تحميل المهارات (skills) مع ظهور خطأ يتعلق بالروابط الرمزية (symlink) أثناء التثبيت، فالحل موجود في [docs/FAQ.md](../../docs/FAQ.md). الخطوات الكاملة في [docs/SETUP.md](../../docs/SETUP.md).
 
 **هل يقوم career-ops بالتقديم على الوظائف تلقائيًا بالنيابة عني؟**
 لا. career-ops أداة تصفية، وليست أداة تقديم تلقائي عشوائي. الذكاء الاصطناعي يقيّم ويرتّب ويكتب المسودات؛ وأنت تراجع وتقرر. لا يقوم أبدًا بإرسال أي طلب أو رسالة أو الضغط على أي زر — القرار النهائي لك دائمًا. وهذا التصميم الذي يُبقي الإنسان في الحلقة هو جوهر الفكرة.

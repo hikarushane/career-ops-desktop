@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ProviderEntry } from '../api';
 import { detectProviders, getPreferredId, setPreferredId } from '../lib/providers';
+import AnalysisLanguageField from '../components/AnalysisLanguageField';
 
 type Props = { root: string };
 
@@ -61,6 +62,7 @@ export default function ProfileSettings({ root: _root }: Props) {
             <p className="setup-hint">
               These settings are stored in <code>config/profile.yml</code> and <code>modes/_profile.md</code>.
             </p>
+            <AnalysisLanguageField root={_root} />
           </div>
         )}
 

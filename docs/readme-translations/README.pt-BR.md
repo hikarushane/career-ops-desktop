@@ -1,13 +1,13 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/wordmark-dark.svg"><img src="../../docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
+[English](../../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
 
 </div>
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops Multi-Agent Job Search System" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="career-ops Multi-Agent Job Search System" width="800"></a>
 </p>
 
 <p align="center">
@@ -19,21 +19,21 @@
 <p align="center">
   <a href="https://trendshift.io/repositories/25195" target="_blank"><img src="https://trendshift.io/api/badge/repositories/25195" alt="santifer%2Fcareer-ops | Trendshift" style="width: 245px; height: 54px; vertical-align: middle;" width="245" height="54"/></a>
   &nbsp;&nbsp;
-  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank"><img src="docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
+  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank"><img src="../../docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
 </p>
 
 <p align="center"><sub>DESTAQUE EM</sub></p>
 
 <p align="center">
-  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
+  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/wired-dark.svg"><img src="../../docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/business-insider-dark.svg"><img src="../../docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="career-ops Demo" width="800">
+  <img src="../../docs/demo.gif" alt="career-ops Demo" width="800">
 </p>
 
 <p align="center"><strong>740+ vagas avaliadas · 100+ CVs personalizados · 1 vaga dos sonhos conquistada</strong></p>
@@ -60,7 +60,7 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ## O que é isso
@@ -131,7 +131,7 @@ claude
 
 > **O sistema foi projetado para ser customizado pelo próprio Claude.** Modos, arquétipos, pesos de pontuação, scripts de negociação -- é só pedir para ele alterar. Ele lê os mesmos arquivos que usa, então sabe exatamente o que editar.
 
-Veja [docs/SETUP.md](docs/SETUP.md) para o guia completo de configuração.
+Veja [docs/SETUP.md](../../docs/SETUP.md) para o guia completo de configuração.
 
 ## Uso
 
@@ -258,13 +258,13 @@ career-ops/
 O career-ops é um centro de comando para busca de emprego de código aberto e independente de CLI. Ele transforma qualquer CLI de programação com IA em um pipeline que avalia vagas de emprego com base no seu currículo, gera PDFs otimizados para ATS, encontra o contato ideal e rastreia tudo em um só lugar — enquanto você mantém a decisão final. É a primeira implementação de referência do CareerOps Manifesto. Saiba mais em [career-ops.org](https://career-ops.org).
 
 **Posso rodar o career-ops de graça ou em um modelo local / mais barato?**
-Sim. O career-ops é independente de CLI e roda em modelos gratuitos e locais — via modelos gratuitos do OpenRouter, Ollama ou qualquer endpoint compatível com OpenAI — para que você não fique preso a uma assinatura paga. Veja o arquivo [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md) para a configuração completa.
+Sim. O career-ops é independente de CLI e roda em modelos gratuitos e locais — via modelos gratuitos do OpenRouter, Ollama ou qualquer endpoint compatível com OpenAI — para que você não fique preso a uma assinatura paga. Veja o arquivo [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md) para a configuração completa.
 
 **Com quais CLIs de IA o career-ops funciona?**
 O career-ops roda em qualquer uma das principais CLIs de programação com IA — Claude Code, Codex, Gemini / Antigravity, OpenCode, Grok, Qwen e mais — por meio do padrão aberto Agent Skill Standard, evitando que você fique preso a um único fornecedor. Use a CLI que você já tem.
 
 **Como faço para instalar o career-ops no Windows?**
-O career-ops roda no Windows. Se o carregamento de habilidades falhar com um erro de symlink durante a instalação, a correção está em [docs/FAQ.md](docs/FAQ.md). O passo a passo completo está em [docs/SETUP.md](docs/SETUP.md).
+O career-ops roda no Windows. Se o carregamento de habilidades falhar com um erro de symlink durante a instalação, a correção está em [docs/FAQ.md](../../docs/FAQ.md). O passo a passo completo está em [docs/SETUP.md](../../docs/SETUP.md).
 
 **O career-ops se candidata automaticamente às vagas por mim?**
 Não. O career-ops é um filtro, não um disparador automático de candidaturas em massa. A IA avalia, ranqueia e cria rascunhos; você revisa e decide. Ele nunca envia, encaminha ou clica em nada — a palavra final é sempre sua. Esse design com o humano no controle (human-in-the-loop) é o objetivo central do projeto.
@@ -299,7 +299,7 @@ Wikidata: [Santiago Fernández de Valderrama Aparicio](https://www.wikidata.org/
 3. **Você cumpre os ToS de terceiros.** Você deve usar esta ferramenta em conformidade com os Termos de Serviço dos portais de carreira com os quais interage (Greenhouse, Lever, Workday, LinkedIn etc.). Não use esta ferramenta para spam de empregadores nem para sobrecarregar sistemas ATS.
 4. **Sem garantias.** As avaliações são recomendações, não verdades absolutas. Modelos de IA podem alucinar habilidades ou experiências. Os autores não se responsabilizam por resultados profissionais, candidaturas rejeitadas, restrições de conta ou qualquer outra consequência.
 
-Veja [LEGAL_DISCLAIMER.md](LEGAL_DISCLAIMER.md) para o aviso completo. Este software é fornecido sob a [Licença MIT](LICENSE) "como está", sem garantia de qualquer tipo.
+Veja [LEGAL_DISCLAIMER.md](../../LEGAL_DISCLAIMER.md) para o aviso completo. Este software é fornecido sob a [Licença MIT](../../LICENSE) "como está", sem garantia de qualquer tipo.
 
 ## Licença
 
