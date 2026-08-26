@@ -24,3 +24,12 @@ This file accumulates your best interview stories over time. Each evaluation (Bl
 **Reflection:** What I learned / what I'd do differently
 **Best for questions about:** [list of question types this story answers]
 -->
+
+### [AI Content Operations] Playwright + Gemini + Notion Pipeline
+**Source:** Report #031 — Nexus Venture IT — SEO Specialist
+**S (Situation):** Manual content capture and classification across dynamic web sources created repetitive work and inconsistent knowledge capture.
+**T (Task):** Build a repeatable workflow that could extract content, classify it with AI, and sync structured outputs into a knowledge base.
+**A (Action):** Used Playwright for browser automation, Gemini API for classification and tagging, structured JSON output for consistency, and Notion API for sync.
+**R (Result):** Replaced manual curation with an automated content workflow that supports repeatable reporting and quality review.
+**Reflection:** For SEO or content-operations roles, frame this as automation around content QA and reporting, not as direct SEO campaign ownership.
+**Best for questions about:** AI-supported content workflows, automation, structured reporting, quality control, learning adjacent domains.
