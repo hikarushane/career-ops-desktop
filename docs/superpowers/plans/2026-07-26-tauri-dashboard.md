@@ -2221,7 +2221,7 @@ Run: `npm create tauri-app@latest -- --help`
 Read the output, then scaffold a React + TypeScript app into `desktop/`. With the current CLI that is:
 
 ```bash
-cd /Users/shane_yeh/Projects/career-ops
+cd <career-ops-root>
 npm create tauri-app@latest desktop -- --template react-ts --manager npm --yes
 ```
 
@@ -2961,7 +2961,7 @@ printf '# Placeholder\n\nA career-ops root with nothing set up, for verifying th
 Run `cd desktop && npm run tauri:dev`, then use the folder button to select each of these in turn:
 
 1. `desktop/fixtures/empty-career-ops` → the empty state lists all five missing files with their explanations.
-2. `/Users/shane_yeh/Projects/career-ops` → **not** the empty state. This repo is onboarded, so `doctor` returns `ready: true` and the app falls through to the placeholder that Task 9 replaces with the pipeline.
+2. `<career-ops-root>` → **not** the empty state. This repo is onboarded, so `doctor` returns `ready: true` and the app falls through to the placeholder that Task 9 replaces with the pipeline.
 
 Both branches matter. An empty state that also fires on a healthy repo is worse than none.
 
@@ -4423,7 +4423,7 @@ Expected: `go.mod unchanged`, and every package green, including the pre-existin
 `527b3a8` predates this branch, so it contains `dashboard/` without `cmd/career-data/`:
 
 ```bash
-cd /Users/shane_yeh/Projects/career-ops
+cd <career-ops-root>
 git checkout 527b3a8 -- dashboard/
 ls dashboard/cmd/career-data/          # must still list every file
 git status --porcelain dashboard/      # shows the restored system files
@@ -4450,7 +4450,7 @@ Expected: the fallback message. If `desktop` appears in `SYSTEM_PATHS`, stop: th
 - [ ] **Step 4: Confirm build artefacts are ignored**
 
 ```bash
-cd /Users/shane_yeh/Projects/career-ops
+cd <career-ops-root>
 git status --porcelain desktop/ | grep -E 'node_modules|src-tauri/(target|binaries|gen)|\.env$' && echo "LEAK" || echo "CLEAN"
 ```
 Expected: `CLEAN`. If it prints `LEAK`, add the missing entries to `desktop/.gitignore`.

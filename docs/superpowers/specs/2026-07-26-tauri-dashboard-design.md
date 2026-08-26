@@ -256,7 +256,7 @@ Error codes: `not-found`, `stale`, `invalid-status`, `invalid-path`, `parse-erro
 ```json
 {
   "ok": true,
-  "careerOpsPath": "/Users/…/career-ops",
+  "careerOpsPath": "<career-ops-root>",
   "trackerPath": null,
   "missing": ["cv.md", "config/profile.yml", "portals.yml", "data/applications.md"],
   "ready": false
