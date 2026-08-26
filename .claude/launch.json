@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "desktop-vite",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd desktop && VITE_CAREER_OPS_PATH=./fixtures/career-ops npm run dev"],
+      "port": 1430
+    }
+  ]
+}
