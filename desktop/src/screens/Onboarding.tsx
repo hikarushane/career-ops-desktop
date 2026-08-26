@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import AiSetup from './AiSetup';
 import BackgroundImport from './BackgroundImport';
+import AnalysisLanguageField from '../components/AnalysisLanguageField';
 
 type Props = { root: string; onComplete: () => void };
 
-type Step = 'welcome' | 'import' | 'ai' | 'ready';
+type Step = 'welcome' | 'import' | 'language' | 'ai' | 'ready';
 
 export default function Onboarding({ root, onComplete }: Props) {
   const [step, setStep] = useState<Step>('welcome');
@@ -17,13 +18,21 @@ export default function Onboarding({ root, onComplete }: Props) {
           Your AI-powered job search assistant. Let's set up your profile.
         </p>
         <button className="btn-primary" onClick={() => setStep('import')}>Get Started</button>
-        <button className="btn-ghost" onClick={() => setStep('ai')}>Skip, I'll add documents later</button>
+        <button className="btn-ghost" onClick={() => setStep('language')}>Skip, I'll add documents later</button>
       </div>
     );
   }
 
   if (step === 'import') {
-    return <BackgroundImport root={root} onComplete={() => setStep('ai')} />;
+    return <BackgroundImport root={root} onComplete={() => setStep('language')} />;
+  }
+
+  if (step === 'language') {
+    return (
+      <div className="setup-screen">
+        <AnalysisLanguageField root={root} onSaved={() => setStep('ai')} />
+      </div>
+    );
   }
 
   if (step === 'ai') {

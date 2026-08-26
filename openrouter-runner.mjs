@@ -23,7 +23,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import readline from 'node:readline';
 import * as yaml from 'js-yaml';
-import { outputLanguageInstruction, parseOutputLanguage } from './profile-language.mjs';
+import { analysisLanguageInstruction, parseAnalysisLanguage } from './profile-language.mjs';
 import {
   formatReportNumber, releaseReportNumbers, reserveReportNumbers,
 } from './reserve-report-num.mjs';
@@ -360,7 +360,7 @@ function loadContext() {
 }
 
 export function buildSystemPrompt(modeContent, ctx) {
-  const languageInstruction = outputLanguageInstruction(parseOutputLanguage(ctx.profile));
+  const languageInstruction = analysisLanguageInstruction(parseAnalysisLanguage(ctx.profile));
   return [
     ctx.shared,
     ctx.profileMode,

@@ -16,6 +16,10 @@ pub fn run() {
             sidecar::list_applications,
             sidecar::read_report,
             sidecar::set_status,
+            sidecar::language_settings,
+            sidecar::set_analysis_language,
+            sidecar::help_document,
+            sidecar::resolve_job_language,
             runner::run_task,
             runner::cancel_task,
         ])

@@ -1,5 +1,12 @@
 # Mode: interview/practice — Practice Interviewer
 
+## Language context
+
+Resolve `jobLanguage` from the JD with `job-language.mjs` before opening the session.
+Ask questions, give sample answers and feedback, and use role terminology in that
+language. A low-confidence result must be surfaced for a per-job candidate override;
+it never changes `language.analysis`.
+
 Run a realistic practice interview — one question at a time — and give structured feedback after each answer. Tracks what landed and what needs work.
 
 ---

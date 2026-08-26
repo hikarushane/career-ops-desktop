@@ -1,13 +1,13 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/wordmark-dark.svg"><img src="../../docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
+[English](../../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
 
 </div>
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops 多代理求職系統" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="career-ops 多代理求職系統" width="800"></a>
 </p>
 
 <p align="center">
@@ -19,21 +19,21 @@
 <p align="center">
   <a href="https://trendshift.io/repositories/25195" target="_blank"><img src="https://trendshift.io/api/badge/repositories/25195" alt="santifer%2Fcareer-ops | Trendshift" style="width: 245px; height: 54px; vertical-align: middle;" width="245" height="54"/></a>
   &nbsp;&nbsp;
-  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank"><img src="docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
+  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank"><img src="../../docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
 </p>
 
 <p align="center"><sub>媒體報導</sub></p>
 
 <p align="center">
-  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
+  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/wired-dark.svg"><img src="../../docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/business-insider-dark.svg"><img src="../../docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="career-ops 示範" width="800">
+  <img src="../../docs/demo.gif" alt="career-ops 示範" width="800">
 </p>
 
 <p align="center"><strong>評估超過 740 份職缺 · 生成超過 100 份個人化履歷 · 成功獲得理想職位</strong></p>
@@ -62,7 +62,7 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ## 這是什麼
@@ -138,7 +138,7 @@ claude   # 開啟你的 AI CLI — 首次啟動時會帶你完成設定
 
 > **這個系統設計上就是讓 Claude 來客製化的。** 模式、職位類型、評分權重、談判腳本 — 直接告訴 Claude 要修改什麼，它就會動手。Claude 讀取的是它自己使用的相同檔案，所以它確切知道要編輯哪裡。
 
-完整設定指南請參閱 [docs/SETUP.md](docs/SETUP.md)。
+完整設定指南請參閱 [docs/SETUP.md](../../docs/SETUP.md)。
 
 ## Antigravity CLI 整合
 
@@ -165,7 +165,7 @@ agy
 
 ## Codex 整合
 
-career-ops 透過同一套共用路由支援 Codex，但它的呼叫方式與那些會自動註冊斜線指令的 CLI 不同。完整指南請參閱 [docs/CODEX.md](docs/CODEX.md)。
+career-ops 透過同一套共用路由支援 Codex，但它的呼叫方式與那些會自動註冊斜線指令的 CLI 不同。完整指南請參閱 [docs/CODEX.md](../../docs/CODEX.md)。
 
 ### 互動式 Codex
 
@@ -312,7 +312,7 @@ npm run build:dashboard   # optional: build the standalone binary
     npm run tauri:dev
 
 透過綁定的 sidecar 重用 TUI 的 Go 資料層，因此篩選、排序與狀態規則在兩者之間不會漂移。詳見
-[`desktop/README.md`](desktop/README.md)。
+[`desktop/README.md`](../../desktop/README.md)。
 
 ## 專案結構
 
@@ -370,16 +370,16 @@ career-ops/
 career-ops 是一套開源、不綁定特定 CLI 的求職指揮中心。它把任何 AI 程式碼 CLI 變成一條管道：依你的 CV 評估職缺、產生適配 ATS 的 PDF、找出該聯絡的對象，並把所有進度集中追蹤——最終決定權仍在你手上。它是 CareerOps Manifesto 的第一個參考實作，詳見 [career-ops.org](https://career-ops.org)。
 
 **我可以免費執行 career-ops，或改用較便宜／本地的模型嗎？**
-可以。career-ops 不綁定特定 CLI，也能跑在免費與本地模型上——透過 OpenRouter 的免費模型、Ollama，或任何相容 OpenAI 的端點——所以你不必被付費訂閱綁住。完整設定見 [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md)。
+可以。career-ops 不綁定特定 CLI，也能跑在免費與本地模型上——透過 OpenRouter 的免費模型、Ollama，或任何相容 OpenAI 的端點——所以你不必被付費訂閱綁住。完整設定見 [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md)。
 
 **我已經付費訂閱 Claude Pro/Max，為什麼 career-ops 還在燒 API 額度？**
-因為環境變數中的 `ANTHROPIC_API_KEY` 優先於你已登入的訂閱：CLI 會改用這把金鑰，並按 token 計費。執行 `echo $ANTHROPIC_API_KEY`，若有印出任何內容，就把它從 shell 設定檔移除、重開終端機並執行 `/login`。批次模式是例外，因為 `claude -p` 的 worker 不會使用互動式登入：執行一次 `claude setup-token`，再把結果匯出為 `CLAUDE_CODE_OAUTH_TOKEN`。完整說明見 [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md#2b-already-paying-for-a-subscription-make-sure-you-are-using-it)。
+因為環境變數中的 `ANTHROPIC_API_KEY` 優先於你已登入的訂閱：CLI 會改用這把金鑰，並按 token 計費。執行 `echo $ANTHROPIC_API_KEY`，若有印出任何內容，就把它從 shell 設定檔移除、重開終端機並執行 `/login`。批次模式是例外，因為 `claude -p` 的 worker 不會使用互動式登入：執行一次 `claude setup-token`，再把結果匯出為 `CLAUDE_CODE_OAUTH_TOKEN`。完整說明見 [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md#2b-already-paying-for-a-subscription-make-sure-you-are-using-it)。
 
 **career-ops 支援哪些 AI CLI？**
 career-ops 可以跑在各主流 AI 程式碼 CLI 上——Claude Code、Codex、Gemini / Antigravity、OpenCode、Grok、Qwen 等——它透過開放的 Agent Skill Standard 運作，因此不會被單一廠商綁死。你手上已經有的 CLI 就能直接用。
 
 **要怎麼在 Windows 上安裝 career-ops？**
-career-ops 可以在 Windows 上執行。如果安裝過程中技能因 symlink 錯誤而載入失敗，解法在 [docs/FAQ.md](docs/FAQ.md)。完整步驟見 [docs/SETUP.md](docs/SETUP.md)。
+career-ops 可以在 Windows 上執行。如果安裝過程中技能因 symlink 錯誤而載入失敗，解法在 [docs/FAQ.md](../../docs/FAQ.md)。完整步驟見 [docs/SETUP.md](../../docs/SETUP.md)。
 
 **career-ops 會自動幫我投遞職缺嗎？**
 不會。career-ops 是篩選器，不是亂槍打鳥的自動投遞工具。AI 負責評估、排序與草擬；審閱與決定由你來做。它不會替你送出、寄出或點擊任何東西——最終決定權永遠在你手上。這種保留人工把關的設計，正是整套系統的重點。
@@ -412,7 +412,7 @@ career-ops 可以在 Windows 上執行。如果安裝過程中技能因 symlink 
 3. **你須遵守第三方服務條款。** 你必須依據你所操作的求職平台（Greenhouse、Lever、Workday、LinkedIn 等）的服務條款使用本工具。請勿使用本工具向雇主發送垃圾訊息或對 ATS 系統造成過多負擔。
 4. **不提供任何保證。** 評估結果僅為建議，並非事實。AI 模型可能會產生幻覺，錯誤描述技能或經歷。作者對於任何就業結果、應徵被拒、帳號限制或其他後果概不負責。
 
-詳細內容請參閱 [LEGAL_DISCLAIMER.md](LEGAL_DISCLAIMER.md)。本軟體依 [MIT 授權條款](LICENSE) 以「現狀」提供，不附帶任何形式的保證。
+詳細內容請參閱 [LEGAL_DISCLAIMER.md](../../LEGAL_DISCLAIMER.md)。本軟體依 [MIT 授權條款](../../LICENSE) 以「現狀」提供，不附帶任何形式的保證。
 
 ## 貢獻者
 

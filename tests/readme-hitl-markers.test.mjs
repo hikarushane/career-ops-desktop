@@ -22,7 +22,14 @@ import { pass, fail, ROOT } from './helpers.mjs';
 console.log('\nREADME HITL markers — the guarantee row keeps its anchor');
 
 const MARKER = '<!-- hitl: absolute guarantee.';
-const readmes = readdirSync(ROOT).filter((f) => /^README[\w.-]*\.md$/.test(f)).sort();
+const translationDir = join(ROOT, 'docs', 'readme-translations');
+const readmes = [
+  'README.md',
+  ...readdirSync(translationDir)
+    .filter((f) => /^README[\w.-]*\.md$/.test(f))
+    .sort()
+    .map((f) => join('docs', 'readme-translations', f)),
+];
 
 // The whole family must be present: a marker check over an empty (or
 // mis-globbed) list would pass vacuously, which is exactly the blind-check

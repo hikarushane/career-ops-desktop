@@ -1,13 +1,13 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/wordmark-dark.svg"><img src="../../docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
+[English](../../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
 
 </div>
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops Мультиагентная система поиска работы" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="career-ops Мультиагентная система поиска работы" width="800"></a>
 </p>
 
 <p align="center">
@@ -19,21 +19,21 @@
 <p align="center">
   <a href="https://trendshift.io/repositories/25195" target="_blank"><img src="https://trendshift.io/api/badge/repositories/25195" alt="santifer%2Fcareer-ops | Trendshift" style="width: 245px; height: 54px; vertical-align: middle;" width="245" height="54"/></a>
   &nbsp;&nbsp;
-  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank"><img src="docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
+  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank"><img src="../../docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
 </p>
 
 <p align="center"><sub>УПОМИНАНИЯ В СМИ</sub></p>
 
 <p align="center">
-  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
+  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/wired-dark.svg"><img src="../../docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/business-insider-dark.svg"><img src="../../docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="career-ops Демо" width="800">
+  <img src="../../docs/demo.gif" alt="career-ops Демо" width="800">
 </p>
 
 <p align="center"><strong>740+ вакансий оценено · 100+ персонализированных резюме · 1 позиция мечты получена</strong></p>
@@ -62,7 +62,7 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ## Что это
@@ -260,13 +260,13 @@ career-ops/
 career-ops — это приложение для поиска работы с открытым кодом, запускающийся через CLI. Данное приложение превращает CLI с встроенным AI-агентом в систему, которая будет оценивать, насколько вакансии соответствуют вашему резюме, генерировать файлы в формате PDF, адаптированные под каждый ATS, искать нужного человека для связи, и, конечно же, все будет отслеживаться в одном месте, оставляя окончательное решение за вами. Является первой реализацией CareerOps Manifesto. Подробнее: [career-ops.org](https://career-ops.org).
 
 **Можно ли использовать career-ops бесплатно или на более дешёвой/локальной модели?**
-Да. career-ops не привязан к конкретному CLI и работает с бесплатными и локальными моделями — через OpenRouter, Ollama или любой другой OpenAI-совместимой точкой доступа — поэтому платная подписка необязательна. Ознакомиться с полной настройкой можно в [docs/RUNNING_ON_A_BUDGET.md](docs/RUNNING_ON_A_BUDGET.md)
+Да. career-ops не привязан к конкретному CLI и работает с бесплатными и локальными моделями — через OpenRouter, Ollama или любой другой OpenAI-совместимой точкой доступа — поэтому платная подписка необязательна. Ознакомиться с полной настройкой можно в [docs/RUNNING_ON_A_BUDGET.md](../../docs/RUNNING_ON_A_BUDGET.md)
 
 **С каким AI CLI работает career-ops?**
 career-ops работает с любым крупным AI CLI — Claude Code, Codex, Gemini / Antigravity, OpenCode, Grok, Qwen и другими — через открытый стандарт Agent Skill Standard, поэтому не привязан к одному поставщику. Используйте уже имеющийся CLI.
 
 **Как установить career-ops на Windows?**
-career-ops работает на Windows. Если навыки не загружаются из-за ошибки с символическими ссылками (symlink error) во время установки, ознакомьтесь с решением в [docs/FAQ.md](docs/FAQ.md). Полная инструкция в [docs/SETUP.md](docs/SETUP.md).
+career-ops работает на Windows. Если навыки не загружаются из-за ошибки с символическими ссылками (symlink error) во время установки, ознакомьтесь с решением в [docs/FAQ.md](../../docs/FAQ.md). Полная инструкция в [docs/SETUP.md](../../docs/SETUP.md).
 
 **career-ops отправляет заявки автоматически за меня?**
 Нет. career-ops — это фильтр, а не автоматический рассыльщик. AI оценивает, ранжирует и создаёт черновики. Вы же проверяете их и принимаете решения. Он никогда не отправляет, не посылает и не нажимает ничего за вас — окончательный выбор всегда за вами. Принцип «человек в цикле» является ключевым.
@@ -283,7 +283,7 @@ career-ops работает на Windows. Если навыки не загру�
 3. **Соблюдайте ToS площадок.** Используйте инструмент в соответствии с правилами порталов (hh.ru, Хабр Карьера, LinkedIn и др.). Не спамьте работодателей.
 4. **Нет гарантий.** Оценки — рекомендации, не истина. ИИ может галлюцинировать. Авторы не несут ответственности за результаты трудоустройства.
 
-Подробнее: [LEGAL_DISCLAIMER.md](LEGAL_DISCLAIMER.md). ПО распространяется по [лицензии MIT](LICENSE) «как есть», без каких-либо гарантий.
+Подробнее: [LEGAL_DISCLAIMER.md](../../LEGAL_DISCLAIMER.md). ПО распространяется по [лицензии MIT](../../LICENSE) «как есть», без каких-либо гарантий.
 
 ## Лицензия
 

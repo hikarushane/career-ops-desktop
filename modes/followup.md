@@ -56,10 +56,10 @@ Parse the JSON output. It cross-references `data/active-interviews.md` interview
 Once confirmed, surface one reminder line alongside the Step 2 dashboard:
 
 ```text
-[Render in {language.output}: "⏳ {company} — {daysSinceLastInterview} days since your last interview ({lastInterviewDate}) with no recorded response. This exceeds the {thresholdDays}-day courtesy threshold."]
+[Render in {language.analysis}: "⏳ {company} — {daysSinceLastInterview} days since your last interview ({lastInterviewDate}) with no recorded response. This exceeds the {thresholdDays}-day courtesy threshold."]
 ```
 
-If the user asks what to do about a confirmed flag, show the flag's ready-made `blacklistSuggestion` row and tell them ([Render in {language.output}]) they can copy it into `data/blacklist.md` themselves — this is a suggestion only. When `language.output` is not English, compose the reminder prose — and, if the user keeps their blacklist reasons in another language, the row's Reason cell — from the flag's structured fields (`reasonCode`, `daysSinceLastInterview`, `thresholdDays`, `lastInterviewDate`) instead of relaying the English `reason` string verbatim; the table's column layout and the literal `company` scope value stay fixed (they must match `data/blacklist.md`'s file format). **Never write to `data/blacklist.md`, `data/applications.md`, or `data/active-interviews.md` from this step** (#1742 opt-in guarantee, same suggestion-only bridge as `modes/interview-redflag.md`).
+If the user asks what to do about a confirmed flag, show the flag's ready-made `blacklistSuggestion` row and tell them ([Render in {language.analysis}]) they can copy it into `data/blacklist.md` themselves — this is a suggestion only. When `language.analysis` is not English, compose the reminder prose — and, if the user keeps their blacklist reasons in another language, the row's Reason cell — from the flag's structured fields (`reasonCode`, `daysSinceLastInterview`, `thresholdDays`, `lastInterviewDate`) instead of relaying the English `reason` string verbatim; the table's column layout and the literal `company` scope value stay fixed (they must match `data/blacklist.md`'s file format). **Never write to `data/blacklist.md`, `data/applications.md`, or `data/active-interviews.md` from this step** (#1742 opt-in guarantee, same suggestion-only bridge as `modes/interview-redflag.md`).
 
 ## Step 2 — Display Dashboard
 

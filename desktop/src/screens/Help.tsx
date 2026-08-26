@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { helpDocument, languageSettings, type HelpDocument } from '../api';
 
 type Section = 'scores' | 'scanner' | 'ai-does' | 'ai-doesnt' | 'privacy' | 'troubleshoot' | 'advanced';
 
@@ -12,8 +14,21 @@ const SECTIONS: { key: Section; title: string; body: string }[] = [
   { key: 'advanced', title: 'Advanced', body: 'Power users can edit cv.md, config/profile.yml, modes/_profile.md, and portals.yml directly. The CLI modes (scan, pdf, batch, etc.) are available in any supported coding CLI.' },
 ];
 
-export default function Help() {
+type Props = { root: string };
+
+export default function Help({ root }: Props) {
   const [open, setOpen] = useState<Section | null>(null);
+  const [document, setDocument] = useState<HelpDocument | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    languageSettings(root)
+      .then((settings) => helpDocument(root, settings.analysisLanguage))
+      .then((result) => active && setDocument(result))
+      .catch((reason) => active && setDocumentError(String(reason)));
+    return () => { active = false; };
+  }, [root]);
 
   return (
     <div className="help-screen">
@@ -29,6 +44,19 @@ export default function Help() {
           </div>
         ))}
       </div>
+      <section className="help-readme">
+        <h2>Full guide</h2>
+        {documentError && <p className="language-error">{documentError}</p>}
+        {!document && !documentError && <p className="setup-hint">Loading guide…</p>}
+        {document && (
+          <details>
+            <summary>
+              {document.fallback ? 'English guide (translation unavailable)' : `Guide: ${document.path}`}
+            </summary>
+            <article className="help-readme-content"><ReactMarkdown>{document.markdown}</ReactMarkdown></article>
+          </details>
+        )}
+      </section>
     </div>
   );
 }

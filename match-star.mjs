@@ -99,7 +99,7 @@ function tokenize(text) {
   // deleted every non-Latin character, so a story bank written in Russian,
   // Hindi, Greek or Ukrainian tokenized to [] and scored 0 against a question
   // in the same language — the matcher was inert, not degraded, for anyone whose
-  // `language.output` is not English (#2847).
+  // analysis or artifact language is not English (#2847).
   //
   // \p{M} is included deliberately: without it Devanagari matras become spaces
   // and shatter a word into fragments that match nothing (the mistake caught in

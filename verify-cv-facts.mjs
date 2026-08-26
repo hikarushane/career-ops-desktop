@@ -370,9 +370,9 @@ function countShapedSpans(text) {
  *   DE  "Leitete 45 Mitarbeiter an 3 Standorten."    -> 0 count claims, pass
  *   JA  "3拠点で45名のスタッフを管理。"                   -> 0 count claims, pass
  *
- * AGENTS.md makes non-English output a first-class case (`language.output`
- * governs "reports, tracker notes, PDFs, cover letters ... any user-visible
- * prose"), so this is not an edge.
+ * AGENTS.md makes non-English artifacts a first-class case: analysis uses
+ * `language.analysis`, while CVs can use the language resolved from each JD.
+ * This is therefore not an edge case.
  *
  * Reporting it rather than blocking is the same choice jd-skill-gap.mjs's
  * diagnoseExtraction() and story-provenance-check.mjs's diagnose() make, and

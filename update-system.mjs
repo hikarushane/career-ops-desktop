@@ -20,7 +20,7 @@
  */
 
 import { execFile, execFileSync, execSync } from 'child_process';
-import { copyFileSync, readFileSync, writeFileSync, existsSync, unlinkSync, rmSync, realpathSync } from 'fs';
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, unlinkSync, rmSync, realpathSync } from 'fs';
 import { join, dirname, resolve, posix as pathPosix } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -36,6 +36,43 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
+const README_TRANSLATIONS_DIR = 'docs/readme-translations';
+const LEGACY_ROOT_TRANSLATED_READMES = [
+  'README.ar.md', 'README.cn.md', 'README.da.md', 'README.de.md', 'README.es.md',
+  'README.fr.md', 'README.hi.md', 'README.ja.md', 'README.ko-KR.md', 'README.pl.md',
+  'README.pt-BR.md', 'README.ru.md', 'README.ta.md', 'README.tr.md', 'README.ua.md',
+  'README.zh-TW.md',
+];
+
+/**
+ * Canonicalize translated READMEs after an update or rollback.
+ *
+ * Upstream releases may still carry the legacy root layout. Keeping this
+ * reconciliation in the existing updater means an update cannot revive root
+ * duplicates even while upstream catches up with the tracked rename.
+ *
+ * @param {string} [root=ROOT] installation root, injectable for tests.
+ * @returns {string[]} changed repo-relative paths.
+ */
+export function reconcileReadmeLayout(root = ROOT) {
+  const translationRoot = join(root, README_TRANSLATIONS_DIR);
+  const changed = [];
+  if (!existsSync(root)) return changed;
+
+  for (const filename of readdirSync(root)) {
+    if (!/^README\.[A-Za-z-]+\.md$/.test(filename)) continue;
+    const source = join(root, filename);
+    const destination = join(translationRoot, filename);
+    mkdirSync(translationRoot, { recursive: true });
+    // The fetched legacy root file is the newer system copy. Replace any
+    // previous archive copy rather than leaving a duplicate or stale content.
+    if (existsSync(destination)) unlinkSync(destination);
+    copyFileSync(source, destination);
+    unlinkSync(source);
+    changed.push(filename, `${README_TRANSLATIONS_DIR}/${filename}`);
+  }
+  return [...new Set(changed)];
+}
 
 const CANONICAL_REPO = 'https://github.com/santifer/career-ops.git';
 const RAW_VERSION_URL = 'https://raw.githubusercontent.com/santifer/career-ops/main/VERSION';
@@ -256,6 +293,7 @@ const SYSTEM_PATHS = [
   'followup-seed.mjs',
   'followup-seed-tests.mjs',
   'profile-language.mjs',
+  'job-language.mjs',
   'title-keywords.mjs',
   'gemini-eval.mjs',
   'ollama-eval.mjs',
@@ -314,6 +352,7 @@ const SYSTEM_PATHS = [
   '.grok/skills/',
   '.kimi/skills/',
   'docs/',
+  'docs/readme-translations/',
   'writing-samples/README.md',
   'VERSION',
   'DATA_CONTRACT.md',
@@ -325,22 +364,6 @@ const SYSTEM_PATHS = [
   'ARCHITECTURE.md',
   'DESIGN.md',
   'README.md',
-  'README.ar.md',
-  'README.cn.md',
-  'README.da.md',
-  'README.de.md',
-  'README.es.md',
-  'README.fr.md',
-  'README.hi.md',
-  'README.ja.md',
-  'README.ko-KR.md',
-  'README.pl.md',
-  'README.pt-BR.md',
-  'README.ru.md',
-  'README.ta.md',
-  'README.ua.md',
-  'README.zh-TW.md',
-  'README.tr.md',
   'CHANGELOG.md',
   'CODE_OF_CONDUCT.md',
   'CONTRIBUTORS.md',
@@ -1822,6 +1845,20 @@ async function apply() {
       console.error(`Stale system-file prune step failed: ${err.message}`);
     }
 
+    // 3b.1 Canonical README layout. A target release can still ship translated
+    // READMEs at root; reconciliation immediately moves them into the tracked
+    // destination, so repeated applies are idempotent and root duplicates never
+    // survive the update.
+    try {
+      const reconciledReadmes = reconcileReadmeLayout(ROOT);
+      if (reconciledReadmes.length > 0) {
+        updated.push(...reconciledReadmes);
+        console.log(`Canonicalized ${reconciledReadmes.length / 2} translated README(s) into ${README_TRANSLATIONS_DIR}/`);
+      }
+    } catch (err) {
+      throw new Error(`Could not reconcile translated README layout: ${err.message}`);
+    }
+
     // 3c. Reconcile .gitignore (#2756). Every other system file is checked out
     // above; this one cannot be, because it is the one system file users also
     // write to. A raw checkout would delete their rules silently — the same
@@ -2125,7 +2162,7 @@ function rollback() {
     // that but is a larger change; tracked separately if it ever bites.
     const restored = [];
     const removed = [];
-    for (const path of SYSTEM_PATHS) {
+    for (const path of mergePathLists(SYSTEM_PATHS, LEGACY_ROOT_TRANSLATED_READMES)) {
       try {
         git('checkout', latest, '--', path);
         restored.push(path);
@@ -2155,6 +2192,8 @@ function rollback() {
       }
     }
 
+    const reconciledReadmes = reconcileReadmeLayout(ROOT);
+    if (reconciledReadmes.length > 0) restored.push(...reconciledReadmes);
     if (restored.length > 0) addPaths(restored);
     const rollbackPaths = [...restored, ...removed];
     try {

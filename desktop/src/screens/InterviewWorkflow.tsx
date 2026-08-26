@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AgentActivity from '../components/AgentActivity';
 import { runTask, cancelTask } from '../lib/runner';
-import type { TaskType } from '../api';
+import { languageSettings, type LanguageSettings, type TaskType } from '../api';
 
 type Props = {
   root: string;
@@ -31,6 +31,12 @@ export default function InterviewWorkflow({ root, mode, company, role, onBack }:
   const [stderr, setStderr] = useState<string[]>([]);
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [unlistenFn, setUnlistenFn] = useState<(() => void) | null>(null);
+  const [languages, setLanguages] = useState<LanguageSettings | null>(null);
+  const [jobLanguage, setJobLanguage] = useState('');
+
+  useEffect(() => {
+    languageSettings(root).then(setLanguages).catch(() => setLanguages(null));
+  }, [root]);
 
   const start = useCallback(async () => {
     setStatus('running');
@@ -55,12 +61,18 @@ export default function InterviewWorkflow({ root, mode, company, role, onBack }:
         onFinished: (code, success) => {
           setExitCode(code);
           setStatus(success ? 'done' : 'error');
+          },
         },
-      },
+      languages
+        ? {
+            analysisLanguage: languages.analysisLanguage,
+            ...(jobLanguage ? { jobLanguage, jobLanguageSource: 'manual-override', jobLanguageConfidence: 1 } : {}),
+          }
+        : undefined,
     );
     setTaskId(tid);
     setUnlistenFn(() => unlisten);
-  }, [root, mode, company, role]);
+  }, [root, mode, company, role, languages, jobLanguage]);
 
   const cancel = useCallback(async () => {
     if (taskId) await cancelTask(taskId);
@@ -75,6 +87,18 @@ export default function InterviewWorkflow({ root, mode, company, role, onBack }:
       <button className="btn-ghost" onClick={onBack}>&larr; Back</button>
       <h1>{TITLES[mode] ?? mode}</h1>
       <p>{company} &mdash; {role}</p>
+      {languages && (
+        <label className="workflow-language-picker">
+          <span>Interview language</span>
+          <select value={jobLanguage} onChange={(event) => setJobLanguage(event.target.value)} disabled={status === 'running'}>
+            <option value="">Detect from this job's description</option>
+            {languages.options.map((option) => (
+              <option key={option.code} value={option.code}>{option.name}</option>
+            ))}
+          </select>
+          <small>Practice, planning, and debrief material follow the job language; analysis stays {languages.analysisLanguage}.</small>
+        </label>
+      )}
 
       {status === 'idle' && (
         <button className="btn-primary" onClick={start}>Start</button>

@@ -1,13 +1,13 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/wordmark-dark.svg"><img src="../../docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
+[English](../../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
 
 </div>
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops — Wieloagentowy system poszukiwania pracy" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="career-ops — Wieloagentowy system poszukiwania pracy" width="800"></a>
 </p>
 
 <p align="center">
@@ -23,15 +23,15 @@
 <p align="center"><sub>OBECNY W MEDIACH</sub></p>
 
 <p align="center">
-  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
+  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/wired-dark.svg"><img src="../../docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/business-insider-dark.svg"><img src="../../docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="career-ops Demo" width="800">
+  <img src="../../docs/demo.gif" alt="career-ops Demo" width="800">
 </p>
 
 <p align="center"><strong>740+ ocenionych ofert · 100+ spersonalizowanych CV · 1 wymarzona rola zdobyta</strong></p>
@@ -56,7 +56,7 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ## Co to jest
@@ -126,7 +126,7 @@ claude   # otwórz swój AI CLI — przy pierwszym uruchomieniu przeprowadzi Ci�
 
 > **System jest zaprojektowany tak, żeby Claude go dostosowywał.** Tryby, archetypy, wagi oceniania, skrypty negocjacyjne — po prostu poproś Claude o zmiany. Czyta te same pliki, których używa, więc wie dokładnie, co edytować.
 
-Pełny przewodnik po konfiguracji: [docs/SETUP.md](docs/SETUP.md).
+Pełny przewodnik po konfiguracji: [docs/SETUP.md](../../docs/SETUP.md).
 
 ## Użycie
 
@@ -307,7 +307,7 @@ Moje portfolio i inne projekty open source → [santifer.io](https://santifer.io
 3. **Przestrzegasz regulaminów portali.** Korzystaj z narzędzia zgodnie z warunkami korzystania z serwisów, z którymi wchodzisz w interakcję (Greenhouse, Lever, pracuj.pl, LinkedIn itd.). Nie używaj go do spamowania pracodawców.
 4. **Brak gwarancji.** Oceny to rekomendacje, nie prawda. Modele AI mogą halucynować. Autorzy nie ponoszą odpowiedzialności za wyniki rekrutacji, odrzucone aplikacje, ograniczenia konta ani żadne inne konsekwencje.
 
-Szczegóły: [LEGAL_DISCLAIMER.md](LEGAL_DISCLAIMER.md). Oprogramowanie jest udostępniane na [licencji MIT](LICENSE) „tak jak jest", bez jakichkolwiek gwarancji.
+Szczegóły: [LEGAL_DISCLAIMER.md](../../LEGAL_DISCLAIMER.md). Oprogramowanie jest udostępniane na [licencji MIT](../../LICENSE) „tak jak jest", bez jakichkolwiek gwarancji.
 
 ## Współtwórcy
 
@@ -319,7 +319,7 @@ Znalazłeś pracę dzięki career-ops? [Podziel się swoją historią!](https://
 
 ## Licencja i znak towarowy
 
-Kod jest licencjonowany na [MIT](LICENSE). Nazwa i marka „career-ops" są regulowane przez [Politykę Znaków Towarowych](TRADEMARK.md) — dozwolone dla użytku społecznościowego, zastrzeżone dla komercyjnego nazewnictwa produktów i endorsementu.
+Kod jest licencjonowany na [MIT](../../LICENSE). Nazwa i marka „career-ops" są regulowane przez [Politykę Znaków Towarowych](../../TRADEMARK.md) — dozwolone dla użytku społecznościowego, zastrzeżone dla komercyjnego nazewnictwa produktów i endorsementu.
 
 ## Bądźmy w kontakcie
 

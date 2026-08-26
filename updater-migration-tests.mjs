@@ -87,11 +87,8 @@ const requiredSystemPaths = [
   '.cursor/skills/',
   'tracker-columns-tests.mjs',
   'updater-migration-tests.mjs',
-  'README.ar.md',
-  'README.de.md',
-  'README.hi.md',
-  'README.ja.md',
-  'README.ua.md',
+  'job-language.mjs',
+  'docs/readme-translations/',
   'CHANGELOG.md',
   'CODE_OF_CONDUCT.md',
   'GOVERNANCE.md',
@@ -126,6 +123,10 @@ for (const path of requiredBootstrapPaths) {
 }
 
 const twoPassManifestChecks = [
+  {
+    name: 'updater canonicalizes legacy root translated READMEs after apply and rollback',
+    pattern: /reconcileReadmeLayout\(ROOT\)[\s\S]*?mergePathLists\(SYSTEM_PATHS, LEGACY_ROOT_TRANSLATED_READMES\)/,
+  },
   {
     name: 'apply has a re-exec guard',
     pattern: /CAREER_OPS_UPDATE_REEXEC/,

@@ -157,14 +157,47 @@ export type TaskFinishedEvent = {
   success: boolean;
 };
 
+export type LanguageOption = {
+  code: string;
+  name: string;
+};
+
+export type LanguageSettings = {
+  analysisLanguage: string;
+  options: LanguageOption[];
+};
+
+export type JobLanguageResolution = {
+  language: string;
+  confidence: number;
+  source: string;
+  warning?: string;
+};
+
+export type HelpDocument = {
+  language: string;
+  path: string;
+  fallback: boolean;
+  markdown: string;
+};
+
+export type LanguageContext = {
+  analysisLanguage: string;
+  jobLanguage?: string;
+  jobLanguageConfidence?: number;
+  jobLanguageSource?: string;
+  marketMode?: string;
+};
+
 export function runTask(
   taskType: TaskType,
   providerId: string,
   args: Record<string, string>,
   path: string,
+  languageContext?: LanguageContext,
 ) {
   return invoke<TaskStarted>('run_task', {
-    input: { taskType, providerId, args, path },
+    input: { taskType, providerId, args, path, languageContext },
   });
 }
 
@@ -204,4 +237,20 @@ export function setStatus(
     expectStatus,
     status,
   });
+}
+
+export function languageSettings(root: string) {
+  return invoke<LanguageSettings>('language_settings', { path: root });
+}
+
+export function setAnalysisLanguage(root: string, language: string) {
+  return invoke<LanguageSettings>('set_analysis_language', { path: root, language });
+}
+
+export function helpDocument(root: string, language: string) {
+  return invoke<HelpDocument>('help_document', { path: root, language });
+}
+
+export function resolveJobLanguage(root: string, text: string) {
+  return invoke<JobLanguageResolution>('resolve_job_language', { path: root, text });
 }

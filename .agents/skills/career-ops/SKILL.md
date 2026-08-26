@@ -90,18 +90,19 @@ If `$mode` is not a sub-command AND doesn't look like a JD, show discovery.
 
 ---
 
-## Output Language Directive
+## Task Language Context
 
 Before executing any mode, read `config/profile.yml` if it exists and resolve:
 
-- `language.output` → ISO language code for human-facing output. Default: `en`.
+- `language.analysis` → ISO language code for CareerOps reports and dashboard explanations. Default: `en`; read legacy `language.output` only as a compatibility alias.
+- `jobLanguage` → resolve independently for every job with `resolveJobLanguage(jobContext)` in `job-language.mjs`: explicit per-job override, JD body, extracted posting content, then a visible low-confidence fallback.
 - `language.modes_dir` → optional market-mode directory. This controls market vocabulary and local evaluation rules only.
 
 Inject this directive after loading the mode instructions and before producing any user-visible content:
 
-> Write all human-facing output in `{language.output}` regardless of the language of these instructions or of the job description. This includes reports, tracker notes, PDFs, cover letters, outreach, interview prep, form answers, and summaries. If `language.modes_dir` supplies market-specific vocabulary, keep the market logic but explain terms in `{language.output}` when needed.
+> Write evaluation reports and dashboard explanations in `language.analysis`. Write tailored CVs, cover letters, and interview preparation/practice/debrief materials in this job's resolved `jobLanguage`. If `language.modes_dir` supplies market-specific vocabulary, keep the market logic but do not let it choose either language.
 
-`language.output` is authoritative for prose. `modes_dir` is market context; it must not force the prose language.
+Analysis language, job language, and `modes_dir` are independent; `modes_dir` must not force either prose language.
 
 ---
 

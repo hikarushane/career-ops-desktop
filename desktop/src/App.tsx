@@ -104,12 +104,16 @@ export default function App() {
     );
   }
 
-  if (!root || !probe || !probe.ready) {
+  if (!root || !probe) {
     return <EmptyState root={root} missing={probe?.missing ?? []} onPick={onPick} />;
   }
 
   if (!onboarded) {
     return <Onboarding root={root} onComplete={() => { setOnboarded(true); reload(); }} />;
+  }
+
+  if (!probe.ready) {
+    return <EmptyState root={root} missing={probe.missing} onPick={onPick} />;
   }
 
   if (!data) return <main className="state-screen"><p className="state-loading">Loading…</p></main>;
@@ -142,7 +146,7 @@ export default function App() {
       case 'profile':
         return <ProfileSettings root={root!} />;
       case 'help':
-        return <Help />;
+        return <Help root={root!} />;
     }
   }
 

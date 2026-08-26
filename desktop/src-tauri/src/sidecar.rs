@@ -4,6 +4,7 @@
 //! TypeScript, and this file moves bytes between them.
 
 use serde_json::Value;
+use std::process::Command;
 use tauri_plugin_shell::ShellExt;
 
 /// Runs the sidecar and returns its stdout parsed as JSON.
@@ -29,6 +30,53 @@ async fn run(app: &tauri::AppHandle, args: Vec<String>) -> Result<Value, String>
     serde_json::from_str::<Value>(stdout.trim()).map_err(|e| {
         format!("sidecar did not return JSON ({e}).\nstdout: {stdout}\nstderr: {stderr}")
     })
+}
+
+fn run_language_script(path: &str, args: &[&str]) -> Result<Value, String> {
+    let output = Command::new("node")
+        .arg("profile-language.mjs")
+        .args(args)
+        .current_dir(path)
+        .output()
+        .map_err(|error| format!("could not run profile-language.mjs: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
+    }
+    serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("profile-language.mjs did not return JSON: {error}"))
+}
+
+fn run_job_language_script(path: &str, text: &str) -> Result<Value, String> {
+    let output = Command::new("node")
+        .args(["job-language.mjs", "--resolve", text])
+        .current_dir(path)
+        .output()
+        .map_err(|error| format!("could not run job-language.mjs: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
+    }
+    serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("job-language.mjs did not return JSON: {error}"))
+}
+
+#[tauri::command]
+pub fn language_settings(path: String) -> Result<Value, String> {
+    run_language_script(&path, &["--settings"])
+}
+
+#[tauri::command]
+pub fn set_analysis_language(path: String, language: String) -> Result<Value, String> {
+    run_language_script(&path, &["--set-analysis", &language])
+}
+
+#[tauri::command]
+pub fn help_document(path: String, language: String) -> Result<Value, String> {
+    run_language_script(&path, &["--help-readme", &language])
+}
+
+#[tauri::command]
+pub fn resolve_job_language(path: String, text: String) -> Result<Value, String> {
+    run_job_language_script(&path, &text)
 }
 
 #[tauri::command]

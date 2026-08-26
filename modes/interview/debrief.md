@@ -1,5 +1,11 @@
 # Mode: interview/debrief — Post-Interview Debrief
 
+## Language context
+
+Resolve `jobLanguage` from the relevant JD with `job-language.mjs`. Keep the debrief,
+story-bank additions, question-bank additions, and reusable role-specific answer
+material in that language. Any Dashboard-only explanation can use `language.analysis`.
+
 After a real interview, capture what was asked, assess what landed and what didn't, close gaps before the next round, and update the question bank.
 
 ---

@@ -107,7 +107,7 @@ The most codified red flag an interviewer can produce is a question touching a t
 
 **Phrasing discipline (HARD RULE, series-standard):** state the topic match and the legal context — never a legal verdict. The template for each reported observation:
 
-> [Render in {language.output}: "this question touches {ground}, protected under {legal basis line from the table row}" — followed by the verbatim quote and, if one applies, the named legitimate context. E.g., for a fictional Acme Corp interview in Ontario: "This question touches family status, a ground protected under Ontario's Human Rights Code s.5(1) in employment: 'Do you have kids? Who watches them when you travel?'" Or, for a fictional Japanese exchange: "This question touches 尊敬する人物 (respected persons), an item on MHLW's fair-hiring do-not-ask list (Employment Security Act art. 5-5 + 1999 guideline): '尊敬する人物は誰ですか？' — a routine icebreaker in North America, listed guidance in Japan." Close with a note that whether any specific exchange crossed a legal line depends on context the transcript cannot self-certify, and that this is not legal advice.]
+> [Render in {jobLanguage}: "this question touches {ground}, protected under {legal basis line from the table row}" — followed by the verbatim quote and, if one applies, the named legitimate context. E.g., for a fictional Acme Corp interview in Ontario: "This question touches family status, a ground protected under Ontario's Human Rights Code s.5(1) in employment: 'Do you have kids? Who watches them when you travel?'" Or, for a fictional Japanese exchange: "This question touches 尊敬する人物 (respected persons), an item on MHLW's fair-hiring do-not-ask list (Employment Security Act art. 5-5 + 1999 guideline): '尊敬する人物は誰ですか？' — a routine icebreaker in North America, listed guidance in Japan." Close with a note that whether any specific exchange crossed a legal line depends on context the transcript cannot self-certify, and that this is not legal advice.]
 
 Banned formulations, everywhere in the output: "the interviewer broke the law", "this was illegal", "this question was unlawful", "discrimination occurred". Whether a legal line was crossed depends on intent, BFOR facts, accommodation context, and process stage — none of which a transcript can self-certify. Each row's `legal_basis` also fixes the register: the JP row is administrative guidance backed by statute with active Labour Bureau correction ("on MHLW's do-not-ask list"), not a criminal-law claim.
 
@@ -165,17 +165,17 @@ Write the following structure:
 - "Before accepting: ask [specific questions] to verify the concern."
 - "Reconsider: the pattern across {N} rounds suggests [specific risk]."}
 
-{If Warning level is 🚩 Reconsider (score 4+), append a blacklist suggestion sub-block. Synthesize the one-line reason from the signal table in Step 3/4 — name the specific pattern(s) at 2+ sessions, not a generic label. This is a suggestion only: present the row in `data/blacklist.md`'s table format so the user can copy it in themselves. Never write to `data/blacklist.md`. Render the heading and instructional sentences in `{language.output}` per the project's language-mode rules (see AGENTS.md § "Output Language vs Market Modes") — only the table's column headers (`Company | Since | Scope | Reason`) and the literal `company` scope value stay fixed, since they must match `data/blacklist.md`'s actual file format regardless of output language.
+{If Warning level is 🚩 Reconsider (score 4+), append a blacklist suggestion sub-block. Synthesize the one-line reason from the signal table in Step 3/4 — name the specific pattern(s) at 2+ sessions, not a generic label. This is a suggestion only: present the row in `data/blacklist.md`'s table format so the user can copy it in themselves. Never write to `data/blacklist.md`. Render the heading and instructional sentences in `{jobLanguage}` per the project's task-language rules (see AGENTS.md § "Analysis Language, Artifact Language, and Market Modes") — only the table's column headers (`Company | Since | Scope | Reason`) and the literal `company` scope value stay fixed, since they must match `data/blacklist.md`'s actual file format regardless of output language.
 
-#### Consider adding to blacklist [heading — render in {language.output}]
+#### Consider adding to blacklist [heading — render in {jobLanguage}]
 
-[Render in {language.output}: an instruction telling the user that if they agree with this assessment, they should copy the row below into `data/blacklist.md` (see `templates/blacklist.example.md` for the file's column format).]
+[Render in {jobLanguage}: an instruction telling the user that if they agree with this assessment, they should copy the row below into `data/blacklist.md` (see `templates/blacklist.example.md` for the file's column format).]
 
 | Company | Since | Scope | Reason |
 |---------|-------|-------|--------|
 | {Company} | {today's date, YYYY-MM-DD} | company | {1-line reason drawn from the Step 3/4 signal breakdown, e.g. "2+ rounds: defensive closure + evaluator competency gap"} |
 
-[Render in {language.output}: a note that this is a suggestion only — nothing is written to `data/blacklist.md` automatically.]}
+[Render in {jobLanguage}: a note that this is a suggestion only — nothing is written to `data/blacklist.md` automatically.]}
 
 *Analysis based on interviewer behaviour only. Candidate decides.*
 ```
@@ -212,13 +212,13 @@ Write the following structure:
 
 **Ground/topic:** {ground from templates/protected-grounds.yml}
 **Question (verbatim):** "{quoted interviewer question}"
-**Legal context:** [Render in {language.output}: "this question touches {ground}, protected under {legal basis line from the table row}" — never "the interviewer broke the law" / "this was illegal" / "discrimination occurred".]
-{If a legitimate context plausibly applies: **Possible legitimate context:** [Render in {language.output}: name the specific context from the row's legitimate_contexts — e.g. BFOR, employer-initiated accommodation discussion, post-conditional-offer stage — and state that the observation is not flagged because of it.]}
+**Legal context:** [Render in {jobLanguage}: "this question touches {ground}, protected under {legal basis line from the table row}" — never "the interviewer broke the law" / "this was illegal" / "discrimination occurred".]
+{If a legitimate context plausibly applies: **Possible legitimate context:** [Render in {jobLanguage}: name the specific context from the row's legitimate_contexts — e.g. BFOR, employer-initiated accommodation discussion, post-conditional-offer stage — and state that the observation is not flagged because of it.]}
 **Evidence strength:** {"Single borderline question — low-confidence observation; regulator data says these are usually careless icebreakers, not malice. Reported, not scored." OR "Cleared the corroboration bar — {repeated probing of the same ground / N distinct grounds} in this session; counts toward the red-flag score above."}
 
 {repeat per observation}
 
-[Render in {language.output}: a closing note — whether any specific exchange crossed a legal line depends on intent, occupational-requirement facts, and process stage, none of which a transcript can self-certify. This is a private awareness aid, not legal advice; the table row was last verified on its as_of date and the law may have changed since.]
+[Render in {jobLanguage}: a closing note — whether any specific exchange crossed a legal line depends on intent, occupational-requirement facts, and process stage, none of which a transcript can self-certify. This is a private awareness aid, not legal advice; the table row was last verified on its as_of date and the law may have changed since.]
 ```
 
 ## Step 6 — Present Summary
@@ -244,10 +244,10 @@ Signals:
 → Full analysis written to interview-prep/{company-slug}-redflags.md
 ```
 
-If the warning level is `🚩 Reconsider`, add one line noting the suggestion is in the file — do not repeat the full blacklist row in the console summary. Render this line in `{language.output}` (see AGENTS.md § "Output Language vs Market Modes"); only the file path is a fixed literal:
+If the warning level is `🚩 Reconsider`, add one line noting the suggestion is in the file — do not repeat the full blacklist row in the console summary. Render this line in `{jobLanguage}` (see AGENTS.md § "Analysis Language, Artifact Language, and Market Modes"); only the file path is a fixed literal:
 
 ```text
-→ [render in {language.output}, e.g. "Blacklist entry suggested — see"] interview-prep/{company-slug}-redflags.md
+→ [render in {jobLanguage}, e.g. "Blacklist entry suggested — see"] interview-prep/{company-slug}-redflags.md
 ```
 
 If multiple companies were analysed in one run, show a summary table:

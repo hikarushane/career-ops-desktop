@@ -1,13 +1,13 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/wordmark-dark.svg"><img src="../../docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
 <div align="center">
 
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
+[English](../../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
 
 </div>
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops — Multi-agent jobsøgningssystem" width="800"></a>
+  <a href="https://x.com/santifer"><img src="../../docs/hero-banner.jpg" alt="career-ops — Multi-agent jobsøgningssystem" width="800"></a>
 </p>
 
 <p align="center">
@@ -23,15 +23,15 @@
 <p align="center"><sub>OMTALT I MEDIERNE</sub></p>
 
 <p align="center">
-  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
+  <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/wired-dark.svg"><img src="../../docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+  <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="../../docs/press/business-insider-dark.svg"><img src="../../docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="career-ops Demo" width="800">
+  <img src="../../docs/demo.gif" alt="career-ops Demo" width="800">
 </p>
 
 <p align="center"><strong>740+ vurderede stillinger · 100+ skræddersyede CV'er · 1 drømmerolle landet</strong></p>
@@ -56,7 +56,7 @@
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
+  <a href="../../TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
 </p>
 
 ## Hvad er det
@@ -126,7 +126,7 @@ claude   # åbn dit AI-CLI — første kørsel guider dig gennem onboarding
 
 > **Systemet er designet til, at Claude tilpasser det.** Tilstande, arketyper, vurderingsvægte, forhandlingsscripts — bed blot Claude om ændringer. Den læser de samme filer, den bruger, så den ved præcis, hvad der skal redigeres.
 
-Fuld opsætningsguide: [docs/SETUP.md](docs/SETUP.md).
+Fuld opsætningsguide: [docs/SETUP.md](../../docs/SETUP.md).
 
 ## Brug
 
@@ -282,7 +282,7 @@ Min portefølje og andre open source-projekter → [santifer.io](https://santife
 3. **Du overholder tredjeparters vilkår.** Brug værktøjet i overensstemmelse med servicevilkårene for de tjenester, du interagerer med (Greenhouse, Lever, jobindex.dk, LinkedIn osv.). Brug det ikke til at spamme arbejdsgivere.
 4. **Ingen garanti.** Vurderinger er anbefalinger, ikke sandheder. AI-modeller kan hallucinere. Forfatterne er ikke ansvarlige for rekrutteringsresultater, afviste ansøgninger, kontobegrænsninger eller andre konsekvenser.
 
-Detaljer: [LEGAL_DISCLAIMER.md](LEGAL_DISCLAIMER.md). Softwaren leveres under [MIT-licensen](LICENSE) "som den er", uden nogen form for garanti.
+Detaljer: [LEGAL_DISCLAIMER.md](../../LEGAL_DISCLAIMER.md). Softwaren leveres under [MIT-licensen](../../LICENSE) "som den er", uden nogen form for garanti.
 
 ## Bidragydere
 
@@ -294,7 +294,7 @@ Fandt du job med career-ops? [Del din historie!](https://github.com/santifer/car
 
 ## Licens og varemærke
 
-Koden er licenseret under [MIT](LICENSE). Navnet og brandet "career-ops" er reguleret af [Varemærkepolitikken](TRADEMARK.md) — tilladt til fællesskabsbrug, forbeholdt kommerciel produktnavngivning og endorsement.
+Koden er licenseret under [MIT](../../LICENSE). Navnet og brandet "career-ops" er reguleret af [Varemærkepolitikken](../../TRADEMARK.md) — tilladt til fællesskabsbrug, forbeholdt kommerciel produktnavngivning og endorsement.
 
 ## Lad os forbinde
 

@@ -1,5 +1,12 @@
 # Mode: cover — Cover Letter Generator
 
+## Language context
+
+Resolve `jobLanguage` from the current JD with `resolveJobLanguage(jobContext)` in
+`job-language.mjs` before writing. Use it for the cover letter and any candidate-facing
+cover-letter explanation. `language.analysis` and `language.modes_dir` may inform
+analysis and market vocabulary, but neither may replace the JD-derived letter language.
+
 Generates a tailored cover letter for any candidate from a job description.
 Works in two modes:
 - **Slug mode:** `/career-ops cover {slug}` — loads the existing evaluation report draft as a starting point

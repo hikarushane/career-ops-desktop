@@ -5,6 +5,7 @@ import {
   type TaskType,
   type TaskOutputEvent,
   type TaskFinishedEvent,
+  type LanguageContext,
 } from '../api';
 import { getPreferredProvider } from './providers';
 
@@ -18,11 +19,12 @@ export async function runTask(
   args: Record<string, string>,
   path: string,
   callbacks?: TaskCallbacks,
+  languageContext?: LanguageContext,
 ): Promise<{ taskId: string; unlisten: () => void }> {
   const provider = await getPreferredProvider();
   if (!provider) throw new Error('No AI provider available. Install Claude Code or another supported CLI.');
 
-  const { task_id } = await invokeRunTask(taskType, provider.id, args, path);
+  const { task_id } = await invokeRunTask(taskType, provider.id, args, path, languageContext);
 
   const unlisteners: UnlistenFn[] = [];
 

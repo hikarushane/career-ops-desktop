@@ -86,7 +86,7 @@ Application forms are where status screening most often hides — usually one dr
 
 If a question matches, warn the candidate BEFORE generating or filling an answer for that question:
 
-> ⚠️ **Immigration-status screening warning:** [Render in {language.output}: a factual statement that the form question "{question text}" screens for a specific immigration status rather than work authorization; that under {jurisdiction_name}'s {legal_basis} status requirements are unlawful unless a listed exception applies — cite the entry's `legal_basis` and `exceptions` verbatim as data tokens; if the form or posting names a plausible statutory hook (government contract, security clearance, an s.16 category), name it here. Note that the lawful version of this question ("are you authorized to work in {country}?") is different and would not have triggered this warning, that exemptions cannot be verified from the form, and that this is informational only and not legal advice. Ask the candidate how they want to handle the question.]
+> ⚠️ **Immigration-status screening warning:** [Render in {jobLanguage}: a factual statement that the form question "{question text}" screens for a specific immigration status rather than work authorization; that under {jurisdiction_name}'s {legal_basis} status requirements are unlawful unless a listed exception applies — cite the entry's `legal_basis` and `exceptions` verbatim as data tokens; if the form or posting names a plausible statutory hook (government contract, security clearance, an s.16 category), name it here. Note that the lawful version of this question ("are you authorized to work in {country}?") is different and would not have triggered this warning, that exemptions cannot be verified from the form, and that this is informational only and not legal advice. Ask the candidate how they want to handle the question.]
 
 **Hard rules for this step:**
 
@@ -104,7 +104,7 @@ Application forms are where legally prohibited questions most often live — sal
 
 If a field matches, warn the candidate BEFORE generating or filling an answer for that field:
 
-> ⚠️ **Prohibited-content warning:** [Render in {language.output}: a factual statement that the form field "{field label}" asks for {the matched content}, which {jurisdiction_name}'s {legal_basis} has prohibited employers from seeking since {effective date} — cite the entry's `legal_basis` and `effective` fields verbatim as data tokens; note that the candidate is generally not obligated to answer, that exemptions exist which cannot be verified from the form, and that this is informational only and not legal advice. Ask the candidate how they want to handle the field.]
+> ⚠️ **Prohibited-content warning:** [Render in {jobLanguage}: a factual statement that the form field "{field label}" asks for {the matched content}, which {jurisdiction_name}'s {legal_basis} has prohibited employers from seeking since {effective date} — cite the entry's `legal_basis` and `effective` fields verbatim as data tokens; note that the candidate is generally not obligated to answer, that exemptions exist which cannot be verified from the form, and that this is informational only and not legal advice. Ask the candidate how they want to handle the field.]
 
 **Hard rules for this step:**
 
