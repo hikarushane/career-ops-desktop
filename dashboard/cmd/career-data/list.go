@@ -116,6 +116,8 @@ func runList(root string) (ListResult, error) {
 		Progress:     data.ComputeProgressMetrics(apps),
 	}
 
+	manifest := data.LoadPDFManifest(root)
+
 	for _, a := range apps {
 		item := Application{
 			Number:       a.Number,
@@ -143,7 +145,9 @@ func runList(root string) (ListResult, error) {
 			}
 		}
 		if a.HasPDF {
-			item.PDFPath = resolvePDF(root, a.Company)
+			if paths := data.ResolvePDFs(root, a, manifest); len(paths) > 0 {
+				item.PDFPath = paths[0]
+			}
 		}
 		out.Applications = append(out.Applications, item)
 	}
