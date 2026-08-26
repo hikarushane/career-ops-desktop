@@ -32,6 +32,16 @@ async fn run(app: &tauri::AppHandle, args: Vec<String>) -> Result<Value, String>
 }
 
 #[tauri::command]
+pub async fn contracts(app: tauri::AppHandle) -> Result<Value, String> {
+    run(&app, vec!["contracts".into()]).await
+}
+
+#[tauri::command]
+pub async fn providers(app: tauri::AppHandle) -> Result<Value, String> {
+    run(&app, vec!["providers".into()]).await
+}
+
+#[tauri::command]
 pub async fn doctor(app: tauri::AppHandle, path: String) -> Result<Value, String> {
     run(&app, vec!["doctor".into(), "--path".into(), path]).await
 }

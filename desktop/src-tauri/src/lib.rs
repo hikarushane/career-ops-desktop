@@ -1,3 +1,4 @@
+mod runner;
 mod sidecar;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -7,11 +8,16 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        .manage(runner::RunnerState::new())
         .invoke_handler(tauri::generate_handler![
+            sidecar::contracts,
+            sidecar::providers,
             sidecar::doctor,
             sidecar::list_applications,
             sidecar::read_report,
             sidecar::set_status,
+            runner::run_task,
+            runner::cancel_task,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

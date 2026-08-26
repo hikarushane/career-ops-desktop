@@ -42,6 +42,8 @@ func fail(code, message string) int {
 const usage = `career-data <command> [flags]
 
 Commands:
+  contracts
+  providers
   doctor      --path <dir>
   list        --path <dir>
   report      --path <dir> --file <reportPath>
@@ -61,6 +63,12 @@ func run(args []string) int {
 	cmd, rest := args[0], args[1:]
 
 	switch cmd {
+	case "contracts":
+		return emit(runContracts())
+
+	case "providers":
+		return emit(runProviders())
+
 	case "doctor":
 		fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 		path := fs.String("path", "", "career-ops root directory")
