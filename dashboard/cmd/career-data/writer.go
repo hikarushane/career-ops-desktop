@@ -18,7 +18,8 @@ var (
 // canonicalStatuses is the allowed set, from templates/states.yml. Anything
 // else is refused before the file is opened.
 var canonicalStatuses = []string{
-	"Evaluated", "Applied", "Responded", "Interview", "Offer", "Rejected", "Discarded", "SKIP",
+	"Evaluated", "Applied", "Responded", "Interview", "Offer",
+	"Hired", "Rejected", "Discarded", "SKIP",
 }
 
 // staleError means the row's status on disk is not what the caller expected,
@@ -49,15 +50,15 @@ func isCanonical(s string) bool {
 	return false
 }
 
-// rowHasReportNumber checks cell 7 (the report link) rather than the whole
-// line, so a notes cell mentioning "[002]" cannot match the wrong row.
-func rowHasReportNumber(raw, number string) bool {
+// rowHasReportNumber checks the report column (detected, not hardcoded)
+// rather than the whole line, so a notes cell mentioning "[002]" cannot
+// match the wrong row.
+func rowHasReportNumber(raw, number string, reportIdx int) bool {
 	spans := cellSpans(raw)
-	const reportCellIndex = 7
-	if len(spans) <= reportCellIndex {
+	if len(spans) <= reportIdx {
 		return false
 	}
-	s, e := trimSpan(raw, spans[reportCellIndex])
+	s, e := trimSpan(raw, spans[reportIdx])
 	return strings.HasPrefix(raw[s:e], "["+number+"]")
 }
 
@@ -78,14 +79,12 @@ func setStatus(root, reportNumber, expect, next string) (SetStatusResult, error)
 		return SetStatusResult{}, err
 	}
 
-	// Splitting on "\n" leaves any "\r" attached to the end of each line, so
-	// joining with "\n" reproduces the original bytes. CRLF survives without
-	// any terminator detection.
 	lines := strings.Split(string(original), "\n")
+	cols := detectColumns(lines)
 
 	target := -1
 	for i, raw := range lines {
-		if rowHasReportNumber(raw, reportNumber) {
+		if rowHasReportNumber(raw, reportNumber, cols.report) {
 			if target >= 0 {
 				return SetStatusResult{}, fmt.Errorf(
 					"%w: report %s matches lines %d and %d",
@@ -98,7 +97,7 @@ func setStatus(root, reportNumber, expect, next string) (SetStatusResult, error)
 		return SetStatusResult{}, fmt.Errorf("%w: report %s", errRowNotFound, reportNumber)
 	}
 
-	start, end, ok := statusSpan(lines[target])
+	start, end, ok := statusSpanAt(lines[target], cols.status)
 	if !ok {
 		return SetStatusResult{}, fmt.Errorf("%w: report %s has no status cell", errRowNotFound, reportNumber)
 	}
@@ -113,7 +112,7 @@ func setStatus(root, reportNumber, expect, next string) (SetStatusResult, error)
 		return SetStatusResult{}, err
 	}
 
-	updated, _ := spliceStatus(lines[target], next)
+	updated, _ := spliceStatusAt(lines[target], next, cols.status)
 	lines[target] = updated
 
 	if err := atomicWrite(tracker, []byte(strings.Join(lines, "\n"))); err != nil {

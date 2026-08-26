@@ -5,18 +5,67 @@ import (
 	"unicode"
 )
 
-// statusCellIndex is the 0-based position of the Status column in
-// applications.md rows:
-//
-//	0=# 1=Date 2=Company 3=Role 4=Score 5=Status 6=PDF 7=Report 8=Notes
-//
-// Note that the TSV files under batch/tracker-additions/ put status before
-// score; merge-tracker.mjs swaps them. This constant describes the tracker,
-// not the TSV.
-const statusCellIndex = 5
+// defaultStatusCellIndex is the legacy 0-based position of the Status column.
+// Used only when no header row is detected.
+const defaultStatusCellIndex = 5
+
+// defaultReportCellIndex is the legacy 0-based position of the Report column.
+const defaultReportCellIndex = 7
 
 // minCells matches the parser: rows with fewer cells are not data rows.
 const minCells = 8
+
+// trackerColumns holds detected column indices. A zero-value means "use
+// defaults" — call detectColumns on the tracker content first.
+type trackerColumns struct {
+	status int
+	report int
+	found  bool
+}
+
+// headerAliases maps lowercased header labels to canonical field names,
+// mirroring dashboard/internal/data/career.go:trackerHeaderAliases.
+var headerAliases = map[string]string{
+	"#": "num", "no": "num", "num": "num", "number": "num",
+	"date": "date",
+	"company": "company", "empresa": "company",
+	"via": "via", "source": "via",
+	"role": "role", "puesto": "role", "rol": "role",
+	"score": "score", "puntaje": "score",
+	"status": "status", "estado": "status",
+	"pdf": "pdf",
+	"report": "report", "reporte": "report",
+	"notes": "notes", "notas": "notes",
+}
+
+// detectColumns scans lines for the header row and returns column indices.
+func detectColumns(lines []string) trackerColumns {
+	for _, raw := range lines {
+		trimmed := strings.TrimSpace(raw)
+		if !strings.HasPrefix(trimmed, "| #") && !strings.HasPrefix(trimmed, "|#") {
+			continue
+		}
+		// Split on pipe, trim each cell, map to canonical names.
+		parts := strings.Split(strings.Trim(trimmed, "|"), "|")
+		cols := trackerColumns{status: -1, report: -1}
+		for i, p := range parts {
+			key := strings.ToLower(strings.TrimSpace(p))
+			if name, ok := headerAliases[key]; ok {
+				switch name {
+				case "status":
+					cols.status = i
+				case "report":
+					cols.report = i
+				}
+			}
+		}
+		if cols.status >= 0 && cols.report >= 0 {
+			cols.found = true
+			return cols
+		}
+	}
+	return trackerColumns{status: defaultStatusCellIndex, report: defaultReportCellIndex}
+}
 
 // cellSpans returns the byte span of each raw cell in raw, using the same
 // splitting rules as ParseApplications (career.go:56-72): tab-separated when
@@ -113,9 +162,9 @@ func stripBoldString(v string) string {
 
 // isDataRow reports whether raw is a tracker data row rather than a header,
 // separator, or short line.
-func isDataRow(raw string) ([][2]int, bool) {
+func isDataRow(raw string, statusIdx int) ([][2]int, bool) {
 	spans := cellSpans(raw)
-	if len(spans) < minCells || statusCellIndex >= len(spans) {
+	if len(spans) < minCells || statusIdx >= len(spans) {
 		return nil, false
 	}
 	if h := strings.TrimSpace(raw); strings.HasPrefix(h, "|---") || strings.HasPrefix(h, "| #") {
@@ -125,18 +174,12 @@ func isDataRow(raw string) ([][2]int, bool) {
 }
 
 // statusSpan locates the status cell's *value* — bold markers excluded.
-//
-// Comparison and replacement need different spans, which is why there are two
-// functions. A legacy row may hold "**Applied**". The optimistic lock in
-// writer.go compares this span against the canonical status the caller last
-// saw ("Applied"), so the markers must be outside it or every bold row would
-// read as stale. Replacement has the opposite need — see statusReplaceSpan.
-func statusSpan(raw string) (start, end int, ok bool) {
-	spans, ok := isDataRow(raw)
+func statusSpanAt(raw string, statusIdx int) (start, end int, ok bool) {
+	spans, ok := isDataRow(raw, statusIdx)
 	if !ok {
 		return 0, 0, false
 	}
-	s, e := trimSpan(raw, spans[statusCellIndex])
+	s, e := trimSpan(raw, spans[statusIdx])
 	s, e = stripBold(raw, s, e)
 	if s >= e {
 		return 0, 0, false
@@ -144,30 +187,41 @@ func statusSpan(raw string) (start, end int, ok bool) {
 	return s, e, true
 }
 
-// statusReplaceSpan locates the range spliceStatus overwrites: the status
-// cell's value *including* any bold markers around it.
-//
-// AGENTS.md requires canonical statuses with no markdown bold in the status
-// field, so rewriting "**Applied**" must yield "Offer", not "**Offer**".
-// Splicing over the markers normalizes the row on the way past.
-func statusReplaceSpan(raw string) (start, end int, ok bool) {
-	spans, ok := isDataRow(raw)
+// statusSpan is the legacy entry point using the default column index.
+func statusSpan(raw string) (start, end int, ok bool) {
+	return statusSpanAt(raw, defaultStatusCellIndex)
+}
+
+// statusReplaceSpanAt locates the range spliceStatus overwrites, including
+// any bold markers.
+func statusReplaceSpanAt(raw string, statusIdx int) (start, end int, ok bool) {
+	spans, ok := isDataRow(raw, statusIdx)
 	if !ok {
 		return 0, 0, false
 	}
-	s, e := trimSpan(raw, spans[statusCellIndex])
+	s, e := trimSpan(raw, spans[statusIdx])
 	if s >= e {
 		return 0, 0, false
 	}
 	return s, e, true
 }
 
-// spliceStatus replaces the status cell and returns the rewritten row. Every
-// byte outside the replaced range is preserved exactly.
-func spliceStatus(raw, newStatus string) (string, bool) {
-	start, end, ok := statusReplaceSpan(raw)
+// statusReplaceSpan is the legacy entry point using the default column index.
+func statusReplaceSpan(raw string) (start, end int, ok bool) {
+	return statusReplaceSpanAt(raw, defaultStatusCellIndex)
+}
+
+// spliceStatusAt replaces the status cell at statusIdx and returns the
+// rewritten row. Every byte outside the replaced range is preserved exactly.
+func spliceStatusAt(raw, newStatus string, statusIdx int) (string, bool) {
+	start, end, ok := statusReplaceSpanAt(raw, statusIdx)
 	if !ok {
 		return raw, false
 	}
 	return raw[:start] + newStatus + raw[end:], true
+}
+
+// spliceStatus is the legacy entry point using the default column index.
+func spliceStatus(raw, newStatus string) (string, bool) {
+	return spliceStatusAt(raw, newStatus, defaultStatusCellIndex)
 }
