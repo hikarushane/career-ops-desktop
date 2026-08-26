@@ -895,18 +895,20 @@ func StatusPriority(status string) int {
 		return 0
 	case "offer":
 		return 1
-	case "responded":
+	case "hired":
 		return 2
-	case "applied":
+	case "responded":
 		return 3
-	case "evaluated":
+	case "applied":
 		return 4
-	case "skip":
+	case "evaluated":
 		return 5
-	case "rejected":
+	case "skip":
 		return 6
-	case "discarded":
+	case "rejected":
 		return 7
+	case "discarded":
+		return 8
 	default:
 		return 8
 	}

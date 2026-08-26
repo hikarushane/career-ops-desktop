@@ -21,7 +21,7 @@ export const TABS: { key: FilterKey; label: string }[] = [
 
 /** Group display order, from pipeline.go:99. */
 export const STATUS_GROUP_ORDER = [
-  'interview', 'offer', 'responded', 'applied',
+  'interview', 'offer', 'hired', 'responded', 'applied',
   'evaluated', 'skip', 'rejected', 'discarded',
 ];
 
@@ -126,6 +126,7 @@ export function scoreBand(score: number): 'high' | 'mid' | 'neutral' | 'low' {
 const STATUS_LABELS: Record<string, string> = {
   interview: 'Interview',
   offer: 'Offer',
+  hired: 'Hired',
   responded: 'Responded',
   applied: 'Applied',
   evaluated: 'Evaluated',
