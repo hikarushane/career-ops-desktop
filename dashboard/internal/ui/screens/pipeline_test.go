@@ -13,7 +13,7 @@ import (
 func tabIndexForFilter(t *testing.T, filter string) int {
 	t.Helper()
 
-	for i, tab := range pipelineTabs {
+	for i, tab := range getPipelineTabs() {
 		if tab.filter == filter {
 			return i
 		}
@@ -349,6 +349,62 @@ func TestRejectedAndDiscardedTabsFilterCorrectly(t *testing.T) {
 	}
 }
 
+func TestRespondedTabFiltersCorrectly(t *testing.T) {
+	apps := []model.CareerApplication{
+		{
+			Company:    "Acme",
+			Role:       "Backend Engineer",
+			Status:     "Responded",
+			Score:      4.2,
+			ReportPath: "reports/001-acme.md",
+		},
+		{
+			Company:    "Beta",
+			Role:       "Platform Engineer",
+			Status:     "Applied",
+			Score:      3.8,
+			ReportPath: "reports/002-beta.md",
+		},
+		{
+			Company:    "Gamma",
+			Role:       "AI Engineer",
+			Status:     "Interview",
+			Score:      4.6,
+			ReportPath: "reports/003-gamma.md",
+		},
+	}
+
+	pm := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		apps,
+		model.PipelineMetrics{Total: len(apps)},
+		t.TempDir(),
+		120,
+		40,
+	)
+
+	pm.activeTab = tabIndexForFilter(t, filterResponded)
+	pm.applyFilterAndSort()
+	if len(pm.filtered) != 1 || pm.filtered[0].Status != "Responded" {
+		t.Fatalf("expected responded tab to isolate responded rows, got %+v", pm.filtered)
+	}
+}
+
+// The tab row follows the funnel order used by statusGroupOrder, where a
+// responded posting sits between interview and applied.
+func TestRespondedTabSitsBetweenInterviewAndApplied(t *testing.T) {
+	interview := tabIndexForFilter(t, filterInterview)
+	responded := tabIndexForFilter(t, filterResponded)
+	applied := tabIndexForFilter(t, filterApplied)
+
+	if !(interview < responded && responded < applied) {
+		t.Fatalf(
+			"expected tab order interview < responded < applied, got %d, %d, %d",
+			interview, responded, applied,
+		)
+	}
+}
+
 // Regression: with no committed search query, Esc must NOT close the screen.
 // The help bar advertises only `q quit`, so Esc quitting silently was a bug
 // that surfaced as accidental exits when users hit Esc to "back out" of the UI.
@@ -423,6 +479,251 @@ func TestSearchTypingDoesNotLoadReports(t *testing.T) {
 			if _, ok := msg.(PipelineLoadReportMsg); ok {
 				t.Fatal("Ctrl+U during search input should not emit PipelineLoadReportMsg")
 			}
+		}
+	}
+}
+
+func previewModelWith(t *testing.T, app model.CareerApplication) PipelineModel {
+	t.Helper()
+
+	pm := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		[]model.CareerApplication{app},
+		model.PipelineMetrics{Total: 1},
+		"..",
+		120,
+		40,
+	)
+	pm.applyFilterAndSort()
+	pm.cursor = 0
+	return pm
+}
+
+func TestPreviewKeepsDiscardReasonWhenTlDrIsCached(t *testing.T) {
+	app := model.CareerApplication{
+		Company:    "Acme",
+		Role:       "Backend Engineer",
+		Status:     "Descartado 2026-03-12",
+		Notes:      "took too long to respond",
+		ReportPath: "reports/001-acme.md",
+	}
+	pm := previewModelWith(t, app)
+	pm.reportCache[app.ReportPath] = reportSummary{tldr: "great team, fast pace"}
+
+	preview := pm.renderPreview()
+
+	if !strings.Contains(preview, "great team, fast pace") {
+		t.Fatalf("expected preview to keep the cached TL;DR, got %q", preview)
+	}
+	// Regression for #787: before the Outcome line, a cached TL;DR replaced the
+	// notes entirely and the discard reason disappeared from the preview.
+	if !strings.Contains(preview, "took too long to respond") {
+		t.Fatalf("expected preview to keep the discard reason alongside the TL;DR, got %q", preview)
+	}
+	if !strings.Contains(preview, "Descartado 2026-03-12") {
+		t.Fatalf("expected preview to show the closing status, got %q", preview)
+	}
+}
+
+func TestPreviewOutcomeShownWithoutReportSummary(t *testing.T) {
+	pm := previewModelWith(t, model.CareerApplication{
+		Company: "Beta",
+		Role:    "Platform Engineer",
+		Status:  "SKIP",
+		Notes:   "geo blocker",
+	})
+
+	preview := pm.renderPreview()
+
+	if !strings.Contains(preview, "Outcome:") || !strings.Contains(preview, "geo blocker") {
+		t.Fatalf("expected outcome line with notes for skipped app, got %q", preview)
+	}
+	if strings.Count(preview, "geo blocker") != 1 {
+		t.Fatalf("expected notes to appear exactly once, got %q", preview)
+	}
+}
+
+func TestPreviewOutcomeOmittedForActiveApps(t *testing.T) {
+	app := model.CareerApplication{
+		Company:    "Gamma",
+		Role:       "AI Engineer",
+		Status:     "Applied 2026-04-01",
+		Notes:      "warm intro via referral",
+		ReportPath: "reports/003-gamma.md",
+	}
+	pm := previewModelWith(t, app)
+	pm.reportCache[app.ReportPath] = reportSummary{tldr: "strong fit"}
+
+	preview := pm.renderPreview()
+
+	if strings.Contains(preview, "Outcome:") {
+		t.Fatalf("expected no outcome line for an active app, got %q", preview)
+	}
+}
+
+func TestPreviewOutcomeForStatusWithoutNotes(t *testing.T) {
+	pm := previewModelWith(t, model.CareerApplication{
+		Company: "Delta",
+		Role:    "SRE",
+		Status:  "**Rejected** 2026-05-02",
+	})
+
+	preview := pm.renderPreview()
+
+	if !strings.Contains(preview, "Rejected 2026-05-02") {
+		t.Fatalf("expected outcome to show the bare closing status, got %q", preview)
+	}
+	if strings.Contains(preview, "Loading preview...") {
+		t.Fatalf("expected outcome line to replace the loading placeholder, got %q", preview)
+	}
+}
+
+func TestWithReloadedDataPreservesCursorWhenAppRemoved(t *testing.T) {
+	initialApps := []model.CareerApplication{
+		{
+			Company:    "Acme",
+			Role:       "Backend Engineer",
+			Status:     "Applied",
+			Score:      4.2,
+			ReportPath: "reports/001-acme.md",
+		},
+		{
+			Company:    "Beta",
+			Role:       "Platform Engineer",
+			Status:     "Applied",
+			Score:      4.6,
+			ReportPath: "reports/002-beta.md",
+		},
+		{
+			Company:    "Gamma",
+			Role:       "AI Engineer",
+			Status:     "Applied",
+			Score:      4.8,
+			ReportPath: "reports/003-gamma.md",
+		},
+	}
+
+	pm := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		initialApps,
+		model.PipelineMetrics{Total: len(initialApps)},
+		"..",
+		120,
+		40,
+	)
+	pm.activeTab = tabIndexForFilter(t, filterApplied)
+	pm.applyFilterAndSort()
+	pm.cursor = 1
+
+	refreshedApps := []model.CareerApplication{
+		initialApps[0],
+		{
+			Company:    "Beta",
+			Role:       "Platform Engineer",
+			Status:     "Rejected", // Changed!
+			Score:      4.6,
+			ReportPath: "reports/002-beta.md",
+		},
+		initialApps[2],
+	}
+
+	reloaded := pm.WithReloadedData(refreshedApps, model.PipelineMetrics{Total: len(refreshedApps)})
+
+	if got := len(reloaded.filtered); got != 2 {
+		t.Fatalf("expected 2 filtered apps after refresh, got %d", got)
+	}
+	if reloaded.cursor < 0 || reloaded.cursor >= len(reloaded.filtered) {
+		t.Fatalf("expected cursor to be within [0, %d], got %d", len(reloaded.filtered)-1, reloaded.cursor)
+	}
+}
+
+// Regression: the viewer status path starts the discard reason picker (or the
+// hired celebration) on the pipeline model and then immediately reloads data.
+// WithReloadedData must carry that in-progress flow state over — wiping it
+// meant picking Discarded/SKIP from the report viewer never showed the reason
+// picker and never persisted the status change.
+func TestWithReloadedDataPreservesDiscardAndHiredFlow(t *testing.T) {
+	apps := []model.CareerApplication{
+		{
+			Company:      "Acme",
+			Role:         "Backend Engineer",
+			Status:       "Evaluated",
+			Score:        4.2,
+			ReportPath:   "reports/001-acme.md",
+			ReportNumber: "1",
+		},
+	}
+
+	pm := NewPipelineModel(theme.NewTheme("catppuccin-mocha"), apps, model.PipelineMetrics{Total: len(apps)}, "..", 120, 40)
+	pm.applyFilterAndSort()
+
+	pm, _ = pm.StartDiscardReasonFlow(apps[0], "SKIP")
+	pm.discardCursor = 2
+	pm.discardCustomInput = true
+	pm.discardCustomText = "typed"
+	pm.hiredApp = apps[0]
+	pm.hiredStep = 1
+
+	reloaded := pm.WithReloadedData(apps, model.PipelineMetrics{Total: len(apps)})
+
+	if !reloaded.discardPicker {
+		t.Fatal("discardPicker = false, want true (reason picker must survive reload)")
+	}
+	if reloaded.discardPendingStatus != "SKIP" {
+		t.Fatalf("discardPendingStatus = %q, want SKIP", reloaded.discardPendingStatus)
+	}
+	if reloaded.discardPendingApp.Company != "Acme" {
+		t.Fatalf("discardPendingApp lost: %+v", reloaded.discardPendingApp)
+	}
+	if len(reloaded.discardOptions) == 0 {
+		t.Fatal("discardOptions were wiped by reload")
+	}
+	if reloaded.discardCursor != 2 || !reloaded.discardCustomInput || reloaded.discardCustomText != "typed" {
+		t.Fatalf("discard cursor/custom-input lost: cursor=%d customInput=%v customText=%q",
+			reloaded.discardCursor, reloaded.discardCustomInput, reloaded.discardCustomText)
+	}
+	if reloaded.discardPredictedCount != pm.discardPredictedCount {
+		t.Fatalf("discardPredictedCount = %d, want %d", reloaded.discardPredictedCount, pm.discardPredictedCount)
+	}
+	if reloaded.hiredStep != 1 || reloaded.hiredApp.Company != "Acme" {
+		t.Fatalf("hired flow lost: step=%d app=%+v", reloaded.hiredStep, reloaded.hiredApp)
+	}
+}
+
+func TestGetStatusPairsPinsCurrentStatusToFront(t *testing.T) {
+	base := getStatusPairs("")
+
+	ordered := getStatusPairs("applied")
+	if ordered[0].Canonical != "Applied" {
+		t.Fatalf("ordered[0].Canonical = %q, want Applied", ordered[0].Canonical)
+	}
+	if len(ordered) != len(base) {
+		t.Fatalf("len(ordered) = %d, want %d (no entries added or dropped)", len(ordered), len(base))
+	}
+
+	// The rest of the list keeps its original relative order.
+	var restGotWithoutApplied []string
+	for _, pair := range ordered[1:] {
+		restGotWithoutApplied = append(restGotWithoutApplied, pair.Canonical)
+	}
+	var restWant []string
+	for _, pair := range base {
+		if pair.Canonical != "Applied" {
+			restWant = append(restWant, pair.Canonical)
+		}
+	}
+	if strings.Join(restGotWithoutApplied, ",") != strings.Join(restWant, ",") {
+		t.Fatalf("rest of list reordered: got %v, want %v", restGotWithoutApplied, restWant)
+	}
+}
+
+func TestGetStatusPairsUnrecognizedStatusFallsBackToStaticOrder(t *testing.T) {
+	base := getStatusPairs("")
+	got := getStatusPairs("some-unmapped-status")
+
+	for i := range base {
+		if got[i].Canonical != base[i].Canonical {
+			t.Fatalf("got[%d].Canonical = %q, want %q (static order)", i, got[i].Canonical, base[i].Canonical)
 		}
 	}
 }
