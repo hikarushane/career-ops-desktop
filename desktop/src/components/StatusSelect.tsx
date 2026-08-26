@@ -1,4 +1,4 @@
-import { CANONICAL_STATUSES } from '../api';
+import { getCanonicalLabels } from '../lib/contracts';
 
 type Props = {
   value: string;
@@ -10,9 +10,10 @@ type Props = {
 export default function StatusSelect({ value, normStatus, disabled, onChange }: Props) {
   // A legacy row may hold a non-canonical status ("aplicado", "hold"). Keep it
   // in the list so the select can display it, but never write it back.
-  const options = CANONICAL_STATUSES.includes(value as never)
-    ? [...CANONICAL_STATUSES]
-    : [value, ...CANONICAL_STATUSES];
+  const canonical = getCanonicalLabels();
+  const options = canonical.includes(value)
+    ? [...canonical]
+    : [value, ...canonical];
 
   return (
     <select

@@ -1,9 +1,15 @@
 /**
- * Minimal filled icon set. DESIGN.md §6 asks for exact source icons or a
- * verified matching library; this app's icon surface is small enough (6
- * glyphs) that hand-drawn, consistently-filled SVGs avoid pulling in an
- * icon-library dependency for six shapes. Every icon shares a 24x24
- * viewBox and `currentColor` fill so size/color are set by the caller.
+ * Icon set — DESIGN.md §9.3: "Preserve the source's filled-icon style and
+ * consistent optical size." All icons share a 24×24 viewBox, use
+ * `currentColor` fill, and are `aria-hidden`. Stroke-based icons are
+ * replaced with filled equivalents to match the Figma source's filled
+ * language. The set is small enough (~15 glyphs) that inline SVGs avoid
+ * pulling in a full icon-library dependency.
+ *
+ * Optical-size note: nav icons default to 24px; header utility icons
+ * default to 20px (STITCH-PROMPT §4.1: "25–32px utility icons" refers to
+ * the hit-target, not the glyph — the 20px glyph sits inside a larger
+ * button). Callers can override via `size`.
  */
 type IconProps = { size?: number; className?: string };
 
@@ -27,11 +33,9 @@ export function ProgressIcon({ size = 24, className }: IconProps) {
 
 export function ReloadIcon({ size = 20, className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M3 12a9 9 0 0 1 15.4-6.36L21 8" />
-      <path d="M21 3v5h-5" />
-      <path d="M21 12a9 9 0 0 1-15.4 6.36L3 16" />
-      <path d="M3 21v-5h5" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 4a8 8 0 0 1 7.4 5H16a1 1 0 1 0 0 2h5a1 1 0 0 0 1-1V5a1 1 0 1 0-2 0v2.3A10 10 0 0 0 2 12a1 1 0 1 0 2 0 8 8 0 0 1 8-8z" />
+      <path d="M12 20a8 8 0 0 1-7.4-5H8a1 1 0 1 0 0-2H3a1 1 0 0 0-1 1v5a1 1 0 1 0 2 0v-2.3A10 10 0 0 0 22 12a1 1 0 1 0-2 0 8 8 0 0 1-8 8z" />
     </svg>
   );
 }
@@ -46,16 +50,93 @@ export function FolderIcon({ size = 20, className }: IconProps) {
 
 export function CheckIcon({ size = 16, className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M4 12.5 9.5 18 20 6" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M9.55 18a1 1 0 0 1-.7-.3l-4.56-4.56a1 1 0 1 1 1.42-1.42l3.84 3.84 9.28-9.28a1 1 0 1 1 1.42 1.42l-10 10a1 1 0 0 1-.7.3z" />
+    </svg>
+  );
+}
+
+export function HomeIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M3 12.5l9-8 9 8V20a1 1 0 0 1-1 1h-5v-5h-6v5H4a1 1 0 0 1-1-1v-7.5z" />
+    </svg>
+  );
+}
+
+export function SearchIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M10.5 2a8.5 8.5 0 0 1 6.68 13.77l4.27 4.27a1 1 0 0 1-1.42 1.42l-4.27-4.27A8.5 8.5 0 1 1 10.5 2zm0 2a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13z" />
+    </svg>
+  );
+}
+
+export function InterviewIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M4 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8l-4 4V4z" />
+    </svg>
+  );
+}
+
+export function ProfileIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M5.5 21a6.5 6.5 0 0 1 13 0H5.5z" />
+    </svg>
+  );
+}
+
+export function SettingsIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.2.47.51.86.91 1.13a1.65 1.65 0 0 0 .6.36H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+export function HelpIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 15a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm1.1-4.6c-.6.4-1.1.8-1.1 1.1a.5.5 0 0 1-1 0c0-.9.8-1.5 1.4-1.9.7-.5 1.1-.8 1.1-1.6a1.5 1.5 0 0 0-3 0 .5.5 0 0 1-1 0 2.5 2.5 0 0 1 5 0c0 1.3-.8 1.9-1.4 2.4z" />
+    </svg>
+  );
+}
+
+export function AiIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+      <path d="M2 12l10 5 10-5v2l-10 5L2 14v-2z" />
+      <path d="M2 17l10 5 10-5v-2l-10 5L2 15v2z" />
+    </svg>
+  );
+}
+
+export function ImportIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 2a1 1 0 0 1 1 1v10.59l3.3-3.3a1 1 0 1 1 1.4 1.42l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 0 1 1.4-1.42l3.3 3.3V3a1 1 0 0 1 1-1z" />
+      <path d="M4 19a1 1 0 0 1 1-1h14a1 1 0 1 1 0 2H5a1 1 0 0 1-1-1z" />
+    </svg>
+  );
+}
+
+export function PlayIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M6 4l14 8-14 8V4z" />
     </svg>
   );
 }
 
 export function CloseIcon({ size = 20, className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={className} aria-hidden="true">
-      <path d="M6 6l12 12M18 6 6 18" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M6.7 5.3a1 1 0 0 0-1.4 1.4L10.6 12l-5.3 5.3a1 1 0 1 0 1.4 1.4L12 13.4l5.3 5.3a1 1 0 0 0 1.4-1.4L13.4 12l5.3-5.3a1 1 0 0 0-1.4-1.4L12 10.6 6.7 5.3z" />
     </svg>
   );
 }

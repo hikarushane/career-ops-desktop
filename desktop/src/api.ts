@@ -88,6 +88,37 @@ export type SetStatusResult = {
   backup: string;
 };
 
+export type StateEntry = {
+  id: string;
+  label: string;
+  terminal: boolean;
+  priority: number;
+  group: string;
+};
+
+export type ContractsResult = {
+  ok: true;
+  states: StateEntry[];
+};
+
+export type ProviderState = 'not_installed' | 'installed' | 'ready' | 'error';
+
+export type ProviderEntry = {
+  id: string;
+  displayName: string;
+  binary: string;
+  headlessCmd: string;
+  state: ProviderState;
+  version?: string;
+  path?: string;
+  error?: string;
+};
+
+export type ProvidersResult = {
+  ok: true;
+  providers: ProviderEntry[];
+};
+
 export type SidecarError = {
   ok: false;
   error: string;
@@ -99,17 +130,55 @@ export function isError(r: { ok: boolean }): r is SidecarError {
   return r.ok === false;
 }
 
-export const CANONICAL_STATUSES = [
-  'Evaluated',
-  'Applied',
-  'Responded',
-  'Interview',
-  'Offer',
-  'Hired',
-  'Rejected',
-  'Discarded',
-  'SKIP',
-] as const;
+export type TaskType =
+  | 'evaluate'
+  | 'scan'
+  | 'batch'
+  | 'pdf'
+  | 'deep'
+  | 'interview-prep'
+  | 'interview-plan'
+  | 'interview-practice'
+  | 'interview-debrief';
+
+export type TaskStarted = {
+  task_id: string;
+};
+
+export type TaskOutputEvent = {
+  task_id: string;
+  stream: 'stdout' | 'stderr';
+  data: string;
+};
+
+export type TaskFinishedEvent = {
+  task_id: string;
+  exit_code: number | null;
+  success: boolean;
+};
+
+export function runTask(
+  taskType: TaskType,
+  providerId: string,
+  args: Record<string, string>,
+  path: string,
+) {
+  return invoke<TaskStarted>('run_task', {
+    input: { taskType, providerId, args, path },
+  });
+}
+
+export function cancelTask(taskId: string) {
+  return invoke<void>('cancel_task', { taskId });
+}
+
+export function contracts() {
+  return invoke<ContractsResult | SidecarError>('contracts');
+}
+
+export function providers() {
+  return invoke<ProvidersResult | SidecarError>('providers');
+}
 
 export function doctor(root: string) {
   return invoke<DoctorResult | SidecarError>('doctor', { path: root });

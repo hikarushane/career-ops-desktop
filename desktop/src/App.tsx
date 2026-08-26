@@ -1,38 +1,55 @@
 import { useCallback, useEffect, useState } from 'react';
-import { doctor, isError, listApplications, type DoctorResult, type ListResult } from './api';
+import { doctor, isError, listApplications, type Application, type DoctorResult, type ListResult } from './api';
 import { loadRoot, pickRoot } from './config';
+import { loadContracts } from './lib/contracts';
 import Header from './components/Header';
-import { PipelineIcon, ProgressIcon } from './components/icons';
+import {
+  HomeIcon, PipelineIcon, ProgressIcon, InterviewIcon,
+  ProfileIcon, HelpIcon,
+} from './components/icons';
 import EmptyState from './screens/EmptyState';
+import Onboarding from './screens/Onboarding';
+import Home from './screens/Home';
 import Pipeline from './screens/Pipeline';
 import Progress from './screens/Progress';
+import Evaluate from './screens/Evaluate';
+import Scanner from './screens/Scanner';
+import Interview from './screens/Interview';
+import InterviewWorkflow from './screens/InterviewWorkflow';
+import ProfileSettings from './screens/ProfileSettings';
+import Help from './screens/Help';
+
+type Screen =
+  | 'home' | 'pipeline' | 'progress' | 'evaluate'
+  | 'scanner' | 'interview' | 'interview-workflow'
+  | 'profile' | 'help';
 
 export default function App() {
   const [root, setRoot] = useState<string | null>(null);
   const [probe, setProbe] = useState<DoctorResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ListResult | null>(null);
-  const [screen, setScreen] = useState<'pipeline' | 'progress'>('pipeline');
+  const [screen, setScreen] = useState<Screen>('home');
+  const [onboarded, setOnboarded] = useState(true);
+  const [evalUrl, setEvalUrl] = useState<string | undefined>();
+  const [iwMode, setIwMode] = useState<'interview-plan' | 'interview-practice' | 'interview-debrief'>('interview-plan');
+  const [iwCompany, setIwCompany] = useState('');
+  const [iwRole, setIwRole] = useState('');
 
   const refresh = useCallback(async (path: string) => {
     setError(null);
     try {
       const r = await doctor(path);
-      if (isError(r)) {
-        setError(r.message);
-        return;
-      }
+      if (isError(r)) { setError(r.message); return; }
       setProbe(r);
+      if (r.missing.length > 0) setOnboarded(false);
     } catch (e) {
       setError(String(e));
     }
   }, []);
 
   useEffect(() => {
-    // .catch, not just .then: a corrupt settings.json or a filesystem
-    // permissions error here would otherwise become an unhandled promise
-    // rejection, and the UI would silently fall back to the "no folder
-    // selected" empty state instead of surfacing the real failure.
+    loadContracts().catch(() => {});
     loadRoot()
       .then((p) => {
         setRoot(p);
@@ -57,12 +74,27 @@ export default function App() {
 
   useEffect(() => { if (probe?.ready) reload(); }, [probe, reload]);
 
-  // Empty, Error, and this loading flash all render before the shell
-  // mounts — no Header, no Sidebar. DESIGN.md's "shell stays consistent
-  // across every screen" rule (§4.1) assumes a signed-in app; these three
-  // are career-ops's pre-shell states (no folder chosen yet, sidecar
-  // unreachable, or the first fetch hasn't landed), closer to the
-  // source's own undefined "logged out" case than to a real screen.
+  const navigate = useCallback((target: string, params?: Record<string, string>) => {
+    if (target === 'evaluate') {
+      setEvalUrl(params?.url);
+      setScreen('evaluate');
+    } else if (target === 'scanner') {
+      setScreen('scanner');
+    } else {
+      setScreen(target as Screen);
+    }
+  }, []);
+
+  const startInterviewWorkflow = useCallback(
+    (mode: string, app: Application) => {
+      setIwMode(mode as typeof iwMode);
+      setIwCompany(app.company);
+      setIwRole(app.role);
+      setScreen('interview-workflow');
+    },
+    [],
+  );
+
   if (error) {
     return (
       <main className="state-screen">
@@ -76,29 +108,61 @@ export default function App() {
     return <EmptyState root={root} missing={probe?.missing ?? []} onPick={onPick} />;
   }
 
+  if (!onboarded) {
+    return <Onboarding root={root} onComplete={() => { setOnboarded(true); reload(); }} />;
+  }
+
   if (!data) return <main className="state-screen"><p className="state-loading">Loading…</p></main>;
+
+  const NAV: { key: Screen; label: string; Icon: React.ComponentType<{ size?: number }> }[] = [
+    { key: 'home', label: 'Home', Icon: HomeIcon },
+    { key: 'pipeline', label: 'Jobs', Icon: PipelineIcon },
+    { key: 'interview', label: 'Interview', Icon: InterviewIcon },
+    { key: 'progress', label: 'Progress', Icon: ProgressIcon },
+    { key: 'profile', label: 'Profile', Icon: ProfileIcon },
+    { key: 'help', label: 'Help', Icon: HelpIcon },
+  ];
+
+  function renderScreen() {
+    switch (screen) {
+      case 'home':
+        return <Home root={root!} data={data!} onNavigate={navigate} />;
+      case 'pipeline':
+        return <Pipeline root={root!} data={data!} onReload={reload} />;
+      case 'progress':
+        return <Progress data={data!.progress} />;
+      case 'evaluate':
+        return <Evaluate root={root!} initialUrl={evalUrl} onDone={() => { reload(); setScreen('pipeline'); }} />;
+      case 'scanner':
+        return <Scanner root={root!} onDone={() => { reload(); setScreen('pipeline'); }} />;
+      case 'interview':
+        return <Interview data={data!} onAction={startInterviewWorkflow} />;
+      case 'interview-workflow':
+        return <InterviewWorkflow root={root!} mode={iwMode} company={iwCompany} role={iwRole} onBack={() => setScreen('interview')} />;
+      case 'profile':
+        return <ProfileSettings root={root!} />;
+      case 'help':
+        return <Help />;
+    }
+  }
 
   return (
     <div className="shell">
       <Header
-        title={screen === 'pipeline' ? 'Pipeline' : 'Progress'}
+        title={NAV.find((n) => n.key === screen)?.label ?? screen}
         root={root}
         onReload={reload}
         onChangeFolder={onPick}
       />
       <nav className="nav">
-        <button aria-current={screen === 'pipeline'} onClick={() => setScreen('pipeline')}>
-          <PipelineIcon />
-          <span>Pipeline</span>
-        </button>
-        <button aria-current={screen === 'progress'} onClick={() => setScreen('progress')}>
-          <ProgressIcon />
-          <span>Progress</span>
-        </button>
+        {NAV.map(({ key, label, Icon }) => (
+          <button key={key} aria-current={screen === key} onClick={() => setScreen(key)}>
+            <Icon />
+            <span>{label}</span>
+          </button>
+        ))}
       </nav>
-      {screen === 'pipeline'
-        ? <Pipeline root={root!} data={data} onReload={reload} />
-        : <Progress data={data.progress} />}
+      {renderScreen()}
     </div>
   );
 }
