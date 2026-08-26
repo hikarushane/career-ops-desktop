@@ -1,4 +1,5 @@
 import type { Application } from '../api';
+import { getGroupOrder, getStatusLabels } from './contracts';
 
 export type FilterKey =
   | 'all' | 'evaluated' | 'applied' | 'interview'
@@ -19,11 +20,10 @@ export const TABS: { key: FilterKey; label: string }[] = [
   { key: 'discarded', label: 'DISCARDED' },
 ];
 
-/** Group display order, from pipeline.go:99. */
-export const STATUS_GROUP_ORDER = [
-  'interview', 'offer', 'hired', 'responded', 'applied',
-  'evaluated', 'skip', 'rejected', 'discarded',
-];
+/** Group display order, derived from sidecar contracts (priority ascending). */
+export function statusGroupOrder(): string[] {
+  return getGroupOrder();
+}
 
 /** Mirrors matchesSearch (pipeline.go:516-531). */
 export function matchesSearch(app: Application, query: string): boolean {
@@ -100,7 +100,7 @@ export function applyFilterAndSort(
  * filters change — see desktop/STITCH-PROMPT.md §6.3.
  */
 export function groupByStatus(apps: Application[]): { status: string; apps: Application[] }[] {
-  return STATUS_GROUP_ORDER.map((status) => ({
+  return statusGroupOrder().map((status) => ({
     status,
     apps: apps.filter((a) => a.normStatus === status),
   }));
@@ -122,19 +122,6 @@ export function scoreBand(score: number): 'high' | 'mid' | 'neutral' | 'low' {
   return 'low';
 }
 
-/** Display labels for normalized statuses, matching statusLabel (pipeline.go:1129). */
-const STATUS_LABELS: Record<string, string> = {
-  interview: 'Interview',
-  offer: 'Offer',
-  hired: 'Hired',
-  responded: 'Responded',
-  applied: 'Applied',
-  evaluated: 'Evaluated',
-  skip: 'SKIP',
-  rejected: 'Rejected',
-  discarded: 'Discarded',
-};
-
 export function statusLabel(norm: string): string {
-  return STATUS_LABELS[norm] ?? norm;
+  return getStatusLabels()[norm] ?? norm;
 }
