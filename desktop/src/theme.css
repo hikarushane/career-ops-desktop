@@ -70,6 +70,7 @@
 :root {
   --status-interview: var(--color-primary);
   --status-offer: var(--color-primary);
+  --status-hired: var(--color-primary);
   --status-applied: var(--color-accent-teal);
   --status-responded: var(--color-accent-teal);
   --status-evaluated: var(--color-accent-magenta);
@@ -80,6 +81,7 @@
   /* Text color to use ON TOP of each --status-* fill above. */
   --status-interview-on: var(--color-text-on-primary-dark);
   --status-offer-on: var(--color-text-on-primary-dark);
+  --status-hired-on: var(--color-text-on-primary-dark);
   --status-applied-on: var(--color-text-on-teal-dark);
   --status-responded-on: var(--color-text-on-teal-dark);
   --status-evaluated-on: var(--color-text-on-magenta);

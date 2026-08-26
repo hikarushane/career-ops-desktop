@@ -105,6 +105,7 @@ export const CANONICAL_STATUSES = [
   'Responded',
   'Interview',
   'Offer',
+  'Hired',
   'Rejected',
   'Discarded',
   'SKIP',

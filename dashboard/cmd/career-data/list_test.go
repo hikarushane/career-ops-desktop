@@ -52,8 +52,8 @@ func TestRunListParsesFixture(t *testing.T) {
 	if first.Archetype != "Platform / Infra" {
 		t.Errorf("Archetype = %q, want %q", first.Archetype, "Platform / Infra")
 	}
-	if first.PDFPath != "output/offerpad-cv.pdf" {
-		t.Errorf("PDFPath = %q, want %q", first.PDFPath, "output/offerpad-cv.pdf")
+	if first.PDFPath != "output/cv-offerpad.pdf" {
+		t.Errorf("PDFPath = %q, want %q", first.PDFPath, "output/cv-offerpad.pdf")
 	}
 
 	// Row 2's notes contain "Interview" while its status is "Applied".
@@ -77,13 +77,13 @@ func TestRunListEmitsDerivedStatusFields(t *testing.T) {
 		prio int
 	}{
 		"Offerpad": {"offer", 1},
-		"Acme":     {"applied", 3},
-		"Globex":   {"evaluated", 4},
-		"Initech":  {"skip", 5},
+		"Acme":     {"applied", 4},
+		"Globex":   {"evaluated", 5},
+		"Initech":  {"skip", 6},
 		"Umbrella": {"interview", 0},
-		"Hooli":    {"rejected", 6},
-		"Soylent":  {"discarded", 7},
-		"Vehement": {"responded", 2},
+		"Hooli":    {"rejected", 7},
+		"Soylent":  {"discarded", 8},
+		"Vehement": {"responded", 3},
 	}
 	for _, a := range res.Applications {
 		w, ok := want[a.Company]
