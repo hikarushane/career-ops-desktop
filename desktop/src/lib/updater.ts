@@ -19,81 +19,131 @@ export type UpdateState = {
   error?: string;
 };
 
-const POLL_INTERVAL_MS = 30 * 60 * 1000;
+type UpdaterDependencies = {
+  check: typeof check;
+  relaunch: typeof relaunch;
+};
 
+type StateListener = (state: UpdateState) => void;
+
+const POLL_INTERVAL_MS = 30 * 60 * 1000;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
-let lastCheckedVersion: string | null = null;
-let pendingUpdate: Update | null = null;
 
 export function initialState(): UpdateState {
   return { status: 'idle', currentVersion: '' };
 }
 
-export async function checkForUpdate(
-  onStateChange: (s: UpdateState) => void,
-  currentVersion: string,
-  manual: boolean,
-): Promise<void> {
-  const base: UpdateState = { status: 'checking', currentVersion };
-  onStateChange(base);
+export function createUpdaterController(dependencies: UpdaterDependencies) {
+  let state = initialState();
+  let pendingUpdate: Update | null = null;
+  let checkInFlight: Promise<void> | null = null;
+  let installInFlight: Promise<void> | null = null;
 
-  try {
-    const update = await check();
+  const publish = (listener: StateListener, next: UpdateState) => {
+    state = next;
+    listener(next);
+  };
 
-    if (!update) {
-      onStateChange({ ...base, status: 'up_to_date' });
-      return;
-    }
-
-    if (lastCheckedVersion === update.version && !manual) return;
-    lastCheckedVersion = update.version;
-    pendingUpdate = update;
-
-    onStateChange({
+  const availableState = (currentVersion: string, update = pendingUpdate): UpdateState | null => {
+    if (!update) return null;
+    return {
       status: 'available',
       currentVersion,
       availableVersion: update.version,
       releaseNotes: update.body ?? undefined,
       releaseDate: update.date ?? undefined,
-    });
-  } catch (e) {
-    if (manual) {
-      onStateChange({ ...base, status: 'error', error: String(e) });
-    }
-    // Background errors stay silent
-  }
+    };
+  };
+
+  return {
+    getState: () => state,
+    deferUpdate: () => state,
+
+    checkForUpdate(listener: StateListener, currentVersion: string, manual: boolean): Promise<void> {
+      if (checkInFlight) return checkInFlight;
+
+      const knownAvailable = availableState(currentVersion);
+      if (manual || !knownAvailable) {
+        publish(listener, { status: 'checking', currentVersion });
+      }
+
+      checkInFlight = (async () => {
+        try {
+          const update = await dependencies.check();
+          if (!update) {
+            pendingUpdate = null;
+            publish(listener, { status: 'up_to_date', currentVersion });
+            return;
+          }
+
+          pendingUpdate = update;
+          publish(listener, availableState(currentVersion, update)!);
+        } catch (error) {
+          const preserved = availableState(currentVersion);
+          if (!manual && preserved) {
+            publish(listener, preserved);
+          } else if (manual) {
+            publish(listener, {
+              ...(preserved ?? { currentVersion }),
+              status: 'error',
+              error: String(error),
+            });
+          } else {
+            publish(listener, { status: 'idle', currentVersion });
+          }
+        } finally {
+          checkInFlight = null;
+        }
+      })();
+      return checkInFlight;
+    },
+
+    downloadAndInstall(listener: StateListener, currentVersion: string): Promise<void> {
+      if (installInFlight) return installInFlight;
+      if (!pendingUpdate) return Promise.resolve();
+
+      const update = pendingUpdate;
+      const details = availableState(currentVersion, update)!;
+      publish(listener, { ...details, status: 'downloading' });
+
+      installInFlight = (async () => {
+        try {
+          await update.downloadAndInstall();
+          publish(listener, { ...details, status: 'installing' });
+          await dependencies.relaunch();
+        } catch (error) {
+          publish(listener, { ...details, status: 'error', error: String(error) });
+        } finally {
+          installInFlight = null;
+        }
+      })();
+      return installInFlight;
+    },
+  };
+}
+
+const defaultController = createUpdaterController({ check, relaunch });
+
+export async function checkForUpdate(
+  onStateChange: StateListener,
+  currentVersion: string,
+  manual: boolean,
+): Promise<void> {
+  return defaultController.checkForUpdate(onStateChange, currentVersion, manual);
 }
 
 export async function downloadAndInstall(
-  onStateChange: (s: UpdateState) => void,
+  onStateChange: StateListener,
   currentVersion: string,
 ): Promise<void> {
-  if (!pendingUpdate) return;
-
-  const base: UpdateState = {
-    status: 'downloading',
-    currentVersion,
-    availableVersion: pendingUpdate.version,
-  };
-  onStateChange(base);
-
-  try {
-    await pendingUpdate.downloadAndInstall();
-    onStateChange({ ...base, status: 'installing' });
-    await relaunch();
-  } catch (e) {
-    onStateChange({ ...base, status: 'error', error: String(e) });
-  }
+  return defaultController.downloadAndInstall(onStateChange, currentVersion);
 }
 
-export function startPolling(
-  onStateChange: (s: UpdateState) => void,
-  currentVersion: string,
-): void {
+export function startPolling(onStateChange: StateListener, currentVersion: string): void {
   stopPolling();
-  checkForUpdate(onStateChange, currentVersion, false);
+  void checkForUpdate(onStateChange, currentVersion, false);
   pollTimer = setInterval(
-    () => checkForUpdate(onStateChange, currentVersion, false),
+    () => void checkForUpdate(onStateChange, currentVersion, false),
     POLL_INTERVAL_MS,
   );
 }
