@@ -48,6 +48,10 @@ Commands:
   list        --path <dir>
   report      --path <dir> --file <reportPath>
   set-status  --path <dir> --report-number <n> --expect-status <s> --status <s>
+  language-settings     --path <dir>
+  set-analysis-language --path <dir> --language <ISO code>
+  help-document         --path <dir> --language <ISO code>
+  resolve-job-language  --path <dir> --text <job description>
 `
 
 func main() {
@@ -155,6 +159,69 @@ func run(args []string) int {
 			return fail("not-found", "applications.md not found under "+*path)
 		case err != nil:
 			return fail("io-error", err.Error())
+		}
+		return emit(res)
+
+	case "language-settings":
+		fs := flag.NewFlagSet("language-settings", flag.ContinueOnError)
+		path := fs.String("path", "", "career-ops root directory")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *path == "" {
+			return fail("usage", "--path is required")
+		}
+		res, err := runProfileLanguage(*path, "--settings")
+		if err != nil {
+			return fail("language-error", err.Error())
+		}
+		return emit(res)
+
+	case "set-analysis-language":
+		fs := flag.NewFlagSet("set-analysis-language", flag.ContinueOnError)
+		path := fs.String("path", "", "career-ops root directory")
+		language := fs.String("language", "", "analysis language ISO code")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *path == "" || *language == "" {
+			return fail("usage", "--path and --language are both required")
+		}
+		res, err := runProfileLanguage(*path, "--set-analysis", *language)
+		if err != nil {
+			return fail("language-error", err.Error())
+		}
+		return emit(res)
+
+	case "help-document":
+		fs := flag.NewFlagSet("help-document", flag.ContinueOnError)
+		path := fs.String("path", "", "career-ops root directory")
+		language := fs.String("language", "", "guide language ISO code")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *path == "" || *language == "" {
+			return fail("usage", "--path and --language are both required")
+		}
+		res, err := runProfileLanguage(*path, "--help-readme", *language)
+		if err != nil {
+			return fail("language-error", err.Error())
+		}
+		return emit(res)
+
+	case "resolve-job-language":
+		fs := flag.NewFlagSet("resolve-job-language", flag.ContinueOnError)
+		path := fs.String("path", "", "career-ops root directory")
+		text := fs.String("text", "", "job description text")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *path == "" || *text == "" {
+			return fail("usage", "--path and --text are both required")
+		}
+		res, err := runJobLanguage(*path, *text)
+		if err != nil {
+			return fail("language-error", err.Error())
 		}
 		return emit(res)
 

@@ -64,16 +64,12 @@ function languageName(code) {
   }
 }
 
-/** Discover language choices from shipped README translations and market modes. */
+/** Discover language choices from market mode directories. */
 export function analysisLanguageOptions(root = process.cwd()) {
   const options = new Set([DEFAULT_ANALYSIS_LANGUAGE]);
-  const translationDir = join(root, 'docs', 'readme-translations');
-  if (existsSync(translationDir)) {
-    for (const filename of readdirSync(translationDir)) {
-      const language = readmeLanguageFromFilename(filename);
-      if (language) options.add(language);
-    }
-  }
+
+  // zh-TW README exists at root — always offer it
+  if (existsSync(join(root, 'README.zh-TW.md'))) options.add('zh-TW');
 
   const modesDir = join(root, 'modes');
   if (existsSync(modesDir)) {
@@ -91,17 +87,17 @@ export function analysisLanguageOptions(root = process.cwd()) {
 
 export function resolveHelpReadme(root, language) {
   const requestedLanguage = normalizedLanguage(language) ?? DEFAULT_ANALYSIS_LANGUAGE;
-  const filenameLanguage = Object.entries(README_FILENAME_ALIASES)
-    .find(([, code]) => code.toLowerCase() === requestedLanguage.toLowerCase())?.[0]
-    ?? requestedLanguage;
-  const translated = join(root, 'docs', 'readme-translations', `README.${filenameLanguage}.md`);
-  if (existsSync(translated)) {
-    return {
-      language: requestedLanguage,
-      path: relative(root, translated),
-      fallback: false,
-      markdown: readFileSync(translated, 'utf-8'),
-    };
+  // Help documentation only supports zh-TW and English fallback.
+  if (requestedLanguage.toLowerCase() === 'zh-tw') {
+    const zhTW = join(root, 'README.zh-TW.md');
+    if (existsSync(zhTW)) {
+      return {
+        language: 'zh-TW',
+        path: 'README.zh-TW.md',
+        fallback: false,
+        markdown: readFileSync(zhTW, 'utf-8'),
+      };
+    }
   }
   const english = join(root, 'README.md');
   return {

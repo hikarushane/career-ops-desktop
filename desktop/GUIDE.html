@@ -1,1042 +1,831 @@
-<title>career-ops 桌面版指南</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
-<style>
-:root {
-  --bg: #eff1f5;
-  --surface: #e6e9ef;
-  --surface-deep: #dce0e8;
-  --text: #4c4f69;
-  --subtext: #6c6f85;
-  --accent: #1e66f5;
-  --accent-soft: #1e66f518;
-  --peach: #fe640b;
-  --peach-soft: #fe640b14;
-  --green: #40a02b;
-  --green-soft: #40a02b14;
-  --red: #d20f39;
-  --overlay: #9ca0b0;
-  --mauve: #8839ef;
-  --sky: #04a5e5;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #1e1e2e;
-    --surface: #313244;
-    --surface-deep: #181825;
-    --text: #cdd6f4;
-    --subtext: #a6adc8;
-    --accent: #89b4fa;
-    --accent-soft: #89b4fa18;
-    --peach: #fab387;
-    --peach-soft: #fab38718;
-    --green: #a6e3a1;
-    --green-soft: #a6e3a114;
-    --red: #f38ba8;
-    --overlay: #585b70;
-    --mauve: #cba6f7;
-    --sky: #89dceb;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #1e1e2e;
-  --surface: #313244;
-  --surface-deep: #181825;
-  --text: #cdd6f4;
-  --subtext: #a6adc8;
-  --accent: #89b4fa;
-  --accent-soft: #89b4fa18;
-  --peach: #fab387;
-  --peach-soft: #fab38718;
-  --green: #a6e3a1;
-  --green-soft: #a6e3a114;
-  --red: #f38ba8;
-  --overlay: #585b70;
-  --mauve: #cba6f7;
-  --sky: #89dceb;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 16px;
-  line-height: 1.75;
-  -webkit-font-smoothing: antialiased;
-}
-article {
-  max-width: 740px;
-  margin: 0 auto;
-  padding: 48px 24px 96px;
-}
-header { margin-bottom: 48px; }
-header h1 {
-  font-family: 'Noto Serif TC', serif;
-  font-size: 2rem;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--text);
-  text-wrap: balance;
-  margin-bottom: 12px;
-}
-header .lead {
-  font-size: 1.05rem;
-  color: var(--subtext);
-  max-width: 560px;
-}
-h2 {
-  font-family: 'Noto Serif TC', serif;
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: var(--text);
-  margin: 56px 0 20px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--surface);
-  text-wrap: balance;
-}
-h2 .num {
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-  margin-right: 6px;
-}
-h3 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  margin: 32px 0 12px;
-  color: var(--text);
-}
-p { margin-bottom: 14px; }
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-code {
-  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
-  font-size: 0.88em;
-  background: var(--surface);
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-pre {
-  background: var(--surface-deep);
-  border: 1px solid var(--overlay);
-  border-radius: 6px;
-  padding: 16px 20px;
-  overflow-x: auto;
-  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  margin: 16px 0 20px;
-  color: var(--text);
-}
-pre .comment { color: var(--subtext); }
-pre .file { color: var(--green); }
-pre .key { color: var(--mauve); }
-pre .val { color: var(--accent); }
-pre.prompt {
-  background: var(--surface);
-  border-color: var(--accent);
-  border-width: 2px;
-  position: relative;
-  padding-top: 28px;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-pre.prompt::before {
-  content: 'PROMPT — 貼進 Codex';
-  position: absolute;
-  top: -1px;
-  left: -2px;
-  background: var(--accent);
-  color: var(--bg);
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 6px 0 4px 0;
-  letter-spacing: 0.04em;
-  font-family: 'Noto Sans TC', sans-serif;
-}
-.ref-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-  margin: 12px 0 16px;
-}
-.ref-table th {
-  text-align: left;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--subtext);
-  padding: 8px 12px;
-  border-bottom: 2px solid var(--surface);
-}
-.ref-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--surface);
-  vertical-align: top;
-}
-.ref-table td:first-child { white-space: nowrap; }
-
-/* Table of contents */
-.toc {
-  background: var(--surface);
-  border-radius: 8px;
-  padding: 20px 28px;
-  margin-bottom: 40px;
-}
-.toc h2 {
-  font-size: 0.9rem;
-  font-family: 'Noto Sans TC', sans-serif;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--subtext);
-  margin: 0 0 12px;
-  padding: 0;
-  border: none;
-}
-.toc ol {
-  list-style: none;
-  columns: 2;
-  column-gap: 32px;
-}
-@media (max-width: 560px) { .toc ol { columns: 1; } }
-.toc li {
-  margin-bottom: 6px;
-  break-inside: avoid;
-}
-.toc a {
-  color: var(--text);
-  font-size: 0.92rem;
-}
-.toc a:hover { color: var(--accent); }
-
-/* Callout boxes */
-.callout {
-  border-left: 3px solid var(--accent);
-  background: var(--accent-soft);
-  padding: 14px 18px;
-  border-radius: 0 6px 6px 0;
-  margin: 16px 0 20px;
-  font-size: 0.94rem;
-}
-.callout.warn {
-  border-color: var(--peach);
-  background: var(--peach-soft);
-}
-.callout.ok {
-  border-color: var(--green);
-  background: var(--green-soft);
-}
-.callout strong { font-weight: 700; }
-.callout p { margin-bottom: 6px; }
-.callout p:last-child { margin-bottom: 0; }
-
-/* Checklist */
-.checklist {
-  list-style: none;
-  margin: 16px 0;
-}
-.checklist li {
-  padding: 12px 16px;
-  background: var(--surface);
-  border-radius: 6px;
-  margin-bottom: 8px;
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-.checklist .badge {
-  display: inline-block;
-  min-width: 24px;
-  height: 24px;
-  line-height: 24px;
-  text-align: center;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--bg);
-  font-size: 0.75rem;
-  font-weight: 700;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.checklist .body { flex: 1; }
-.checklist .name { font-weight: 700; }
-.checklist .desc { font-size: 0.88rem; color: var(--subtext); }
-
-/* File tree */
-.file-tree {
-  font-family: ui-monospace, 'SF Mono', monospace;
-  font-size: 0.85rem;
-  line-height: 1.8;
-  background: var(--surface-deep);
-  border: 1px solid var(--overlay);
-  border-radius: 6px;
-  padding: 16px 20px;
-  margin: 16px 0 20px;
-  overflow-x: auto;
-}
-.file-tree .dir { color: var(--accent); font-weight: 700; }
-.file-tree .you { color: var(--green); font-weight: 700; }
-.file-tree .auto { color: var(--subtext); }
-.file-tree .note { color: var(--overlay); font-style: italic; }
-
-/* SVG diagrams */
-.diagram {
-  margin: 24px 0;
-  text-align: center;
-}
-.diagram svg {
-  max-width: 100%;
-  height: auto;
-}
-
-/* Screen feature list */
-.features {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-  margin: 16px 0 20px;
-}
-.feat {
-  background: var(--surface);
-  border-radius: 6px;
-  padding: 14px 16px;
-}
-.feat .label {
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--subtext);
-  margin-bottom: 4px;
-}
-.feat .detail { font-size: 0.92rem; }
-
-/* Score bands visual */
-.score-bands {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 12px 0 16px;
-}
-.band {
-  padding: 6px 14px;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  border: 1px solid var(--overlay);
-}
-.band.high { color: var(--green); border-color: var(--green); }
-.band.mid { color: var(--peach); border-color: var(--peach); }
-.band.neutral { color: var(--subtext); }
-.band.low { color: var(--red); border-color: var(--red); }
-
-/* Status list */
-.statuses {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0 16px;
-}
-.st {
-  font-size: 0.82rem;
-  padding: 3px 10px;
-  border-radius: 12px;
-  font-weight: 500;
-}
-.st.int { color: var(--green); background: var(--green-soft); }
-.st.app { color: var(--sky); background: var(--accent-soft); }
-.st.eval { color: var(--subtext); background: var(--surface); }
-.st.skip { color: var(--red); background: var(--peach-soft); }
-
-/* FAQ */
-details {
-  border: 1px solid var(--surface);
-  border-radius: 6px;
-  margin-bottom: 8px;
-}
-details[open] { border-color: var(--overlay); }
-summary {
-  padding: 12px 16px;
-  cursor: pointer;
-  font-weight: 500;
-  list-style: none;
-}
-summary::before {
-  content: '▸ ';
-  color: var(--accent);
-}
-details[open] summary::before { content: '▾ '; }
-details .inner { padding: 0 16px 14px; font-size: 0.94rem; }
-
-/* Workflow steps */
-.workflow {
-  position: relative;
-  margin: 20px 0;
-  padding-left: 28px;
-}
-.workflow::before {
-  content: '';
-  position: absolute;
-  left: 10px;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
-  background: var(--overlay);
-}
-.wstep {
-  position: relative;
-  margin-bottom: 20px;
-}
-.wstep::before {
-  content: '';
-  position: absolute;
-  left: -22px;
-  top: 8px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.wstep .wlabel {
-  font-weight: 700;
-  font-size: 0.92rem;
-}
-.wstep .wdesc {
-  font-size: 0.9rem;
-  color: var(--subtext);
-}
-</style>
-
-<article>
-
-<header>
-  <h1>career-ops 桌面版指南</h1>
-  <p class="lead">從零開始設定 career-ops 桌面 app，用圖形介面管理你的求職進度。寫給不熟程式的你。</p>
-</header>
-
-<nav class="toc">
-  <h2>目錄</h2>
-  <ol>
-    <li><a href="#what">這是什麼</a></li>
-    <li><a href="#install">安裝準備</a></li>
-    <li><a href="#setup">設定你的資料</a></li>
-    <li><a href="#launch">第一次啟動</a></li>
-    <li><a href="#pipeline">Pipeline 主畫面</a></li>
-    <li><a href="#progress">Progress 統計頁面</a></li>
-    <li><a href="#workflow">日常使用</a></li>
-    <li><a href="#faq">常見問題</a></li>
-  </ol>
-</nav>
-
-<!-- ─── 1. 這是什麼 ─── -->
-<section id="what">
-<h2><span class="num">1.</span> 這是什麼</h2>
-
-<p>career-ops 是一套用 AI 助手管理求職的工具。AI 助手（Codex、Claude Code、Gemini CLI 等）在終端機裡評估職缺、產生客製化履歷、掃描公司招聘頁。<strong>桌面版</strong>把這些資料用視覺介面呈現，不用打指令就能瀏覽、篩選、追蹤申請。</p>
-
-<p>兩者搭配使用，各司其職：</p>
-
-<div class="diagram">
-<svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Noto Sans TC', sans-serif;">
-  <!-- Left: AI assistant -->
-  <rect x="10" y="30" width="180" height="140" rx="8" fill="var(--surface)" stroke="var(--overlay)" stroke-width="1.5"/>
-  <text x="100" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="var(--accent)">AI 助手（CLI）</text>
-  <text x="100" y="90" text-anchor="middle" font-size="12" fill="var(--subtext)">評估職缺、打分</text>
-  <text x="100" y="112" text-anchor="middle" font-size="12" fill="var(--subtext)">產生客製化履歷</text>
-  <text x="100" y="134" text-anchor="middle" font-size="12" fill="var(--subtext)">掃描招聘頁</text>
-  <text x="100" y="156" text-anchor="middle" font-size="12" fill="var(--subtext)">面試準備</text>
-
-  <!-- Center: data folder -->
-  <rect x="250" y="30" width="180" height="140" rx="8" fill="var(--surface-deep)" stroke="var(--accent)" stroke-width="2"/>
-  <text x="340" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)">career-ops 資料夾</text>
-  <text x="340" y="90" text-anchor="middle" font-size="12" fill="var(--green)" font-family="ui-monospace, monospace">cv.md</text>
-  <text x="340" y="112" text-anchor="middle" font-size="12" fill="var(--green)" font-family="ui-monospace, monospace">profile.yml</text>
-  <text x="340" y="134" text-anchor="middle" font-size="12" fill="var(--green)" font-family="ui-monospace, monospace">applications.md</text>
-  <text x="340" y="156" text-anchor="middle" font-size="12" fill="var(--green)" font-family="ui-monospace, monospace">reports/</text>
-
-  <!-- Right: desktop app -->
-  <rect x="490" y="30" width="180" height="140" rx="8" fill="var(--surface)" stroke="var(--overlay)" stroke-width="1.5"/>
-  <text x="580" y="62" text-anchor="middle" font-size="14" font-weight="700" fill="var(--accent)">桌面 app</text>
-  <text x="580" y="90" text-anchor="middle" font-size="12" fill="var(--subtext)">瀏覽所有申請</text>
-  <text x="580" y="112" text-anchor="middle" font-size="12" fill="var(--subtext)">篩選、排序、搜尋</text>
-  <text x="580" y="134" text-anchor="middle" font-size="12" fill="var(--subtext)">閱讀評估報告</text>
-  <text x="580" y="156" text-anchor="middle" font-size="12" fill="var(--subtext)">更改申請狀態</text>
-
-  <!-- Arrows -->
-  <line x1="190" y1="100" x2="250" y2="100" stroke="var(--overlay)" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <line x1="430" y1="100" x2="490" y2="100" stroke="var(--overlay)" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="220" y="88" text-anchor="middle" font-size="10" fill="var(--subtext)">寫入</text>
-  <text x="460" y="88" text-anchor="middle" font-size="10" fill="var(--subtext)">讀取</text>
-  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--overlay)"/></marker></defs>
-</svg>
-</div>
-
-<p>你現有的履歷、cover letter、論文、研究成果，都可以整理進 <code>cv.md</code>。career-ops 讀這些資料來替你客製化每份申請。</p>
-</section>
-
-<!-- ─── 2. 安裝準備 ─── -->
-<section id="install">
-<h2><span class="num">2.</span> 安裝準備</h2>
-
-<p>桌面 app 目前只支援 macOS。需要四個工具，打開「終端機」（Spotlight 搜尋 Terminal）逐一安裝。</p>
-
-<ul class="checklist">
-  <li>
-    <span class="badge">0</span>
-    <div class="body">
-      <div class="name">Homebrew（套件管理器）</div>
-      <div class="desc">Mac 上裝開發工具最方便的方式。如果已經裝過可以跳過。</div>
-    </div>
-  </li>
-</ul>
-<pre>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</pre>
-
-<ul class="checklist">
-  <li>
-    <span class="badge">1</span>
-    <div class="body">
-      <div class="name">Go 1.24+</div>
-      <div class="desc">桌面 app 的資料層用 Go 寫成。</div>
-    </div>
-  </li>
-</ul>
-<pre>brew install go</pre>
-
-<ul class="checklist">
-  <li>
-    <span class="badge">2</span>
-    <div class="body">
-      <div class="name">Node.js 22+</div>
-      <div class="desc">前端介面用 React 寫成，需要 Node。</div>
-    </div>
-  </li>
-</ul>
-<pre>brew install node</pre>
-
-<ul class="checklist">
-  <li>
-    <span class="badge">3</span>
-    <div class="body">
-      <div class="name">Rust 1.96+</div>
-      <div class="desc">Tauri 框架的底層，負責把 app 包成原生視窗。</div>
-    </div>
-  </li>
-</ul>
-<pre>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</pre>
-<div class="callout">
-  <p>安裝過程會問你要不要用預設設定，按 Enter 選預設即可。裝完後關掉終端機再重新開，讓 <code>cargo</code> 指令生效。</p>
-</div>
-
-<ul class="checklist">
-  <li>
-    <span class="badge">4</span>
-    <div class="body">
-      <div class="name">Xcode Command Line Tools</div>
-      <div class="desc">macOS 編譯原生程式碼的基礎工具。</div>
-    </div>
-  </li>
-</ul>
-<pre>xcode-select --install</pre>
-
-<p>裝完後可以用以下指令確認版本：</p>
-<pre>go version     <span class="comment"># go1.24.x 以上</span>
-node -v        <span class="comment"># v22.x 以上</span>
-cargo --version <span class="comment"># 1.96.x 以上</span></pre>
-</section>
-
-<!-- ─── 3. 設定你的資料 ─── -->
-<section id="setup">
-<h2><span class="num">3.</span> 設定你的資料</h2>
-
-<p>career-ops 用幾個文字檔認識你。設定好這些檔案，AI 助手才能替你客製化履歷和評估職缺。桌面 app 也讀同一組資料。</p>
-
-<div class="callout">
-  <p>你不用自己編輯這些檔案。在終端機裡開 Codex，把下面的 prompt 貼進去，Codex 會問你問題、讀你的文件、幫你全部設好。</p>
-</div>
-
-<h3>資料夾結構</h3>
-<p>以下是你會用到的檔案。標記 <span style="color:var(--green);font-weight:700">你填</span> 的需要你自己編輯，標記 <span style="color:var(--subtext)">自動</span> 的由工具產生。</p>
-
-<div class="file-tree">
-career-ops/
-├── <span class="you">cv.md</span>               <span class="note">← 你的履歷（必填）</span>
-├── config/
-│   └── <span class="you">profile.yml</span>     <span class="note">← 姓名、目標職位、薪資（必填）</span>
-├── <span class="you">portals.yml</span>         <span class="note">← 要掃哪些公司（建議填）</span>
-├── modes/
-│   └── <span class="auto">_profile.md</span>     <span class="note">← 個人化設定（自動從範本產生）</span>
-├── data/
-│   └── <span class="auto">applications.md</span> <span class="note">← 追蹤表（工具自動維護）</span>
-├── <span class="auto">reports/</span>            <span class="note">← 評估報告（每次評估自動產生）</span>
-├── <span class="auto">output/</span>             <span class="note">← 產出的 PDF 履歷</span>
-└── desktop/              <span class="note">← 桌面 app 本體</span>
-</div>
-
-<h3>用 Codex 一次搞定</h3>
-
-<p>在終端機裡進入 <code>career-ops</code> 資料夾，啟動 Codex：</p>
-<pre>cd career-ops
-codex</pre>
-
-<p>Codex 開好後，貼上以下 prompt。把 <code>~/Documents/求職資料/</code> 換成你放履歷、cover letter、論文的資料夾路徑：</p>
-
-<pre class="prompt">我要設定 career-ops。我的履歷、cover letter、論文等文件
-在 ~/Documents/求職資料/ 這個資料夾裡。
-
-請讀取那個資料夾的內容，幫我建好以下四個檔案：
-
-1. cv.md — 從我的文件整理出 Markdown 格式的履歷，
-   包含：簡介、經歷、學歷、發表與研究、技能。
-   如果論文很多，另外建 article-digest.md 放精簡摘要。
-
-2. config/profile.yml — 從 config/profile.example.yml 複製。
-   問我：姓名、email、所在地、時區、
-   目標職位（可多個）、期望年薪範圍和幣別，填入後讓我確認。
-
-3. portals.yml — 從 templates/portals.example.yml 複製。
-   根據我的目標職位更新 title_filter.positive 的關鍵字。
-
-4. modes/_profile.md — 如果不存在就從
-   modes/_profile.template.md 複製。
-
-每建好一個檔案，跟我確認內容再繼續下一個。</pre>
-
-<div class="callout ok">
-  <p><strong>沒有現成文件？</strong>不用準備資料夾也行。把 prompt 第一段的路徑刪掉，Codex 會直接問你的經歷、學歷、技能，從頭幫你寫 <code>cv.md</code>。</p>
-</div>
-
-<div class="callout">
-  <p><strong>Cover letter 不用事先準備。</strong>career-ops 的 AI 助手會根據你的 cv.md 和每個職缺的內容即時產生客製化的 cover letter，不需要你自己寫好放著。</p>
-</div>
-
-<h3>各檔案的用途</h3>
-
-<p>Codex 建完後，了解每個檔案做什麼。之後要修改，在 Codex 裡說「幫我改 profile.yml 的目標職位」就好。</p>
-
-<table class="ref-table">
-  <thead>
-    <tr><th>檔案</th><th>用途</th><th>什麼時候改</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code>cv.md</code></td>
-      <td>你的履歷主檔，AI 助手客製化每份申請時的素材庫</td>
-      <td>換工作、發新論文、學新技能</td>
-    </tr>
-    <tr>
-      <td><code>config/profile.yml</code></td>
-      <td>姓名、聯絡方式、目標職位、薪資範圍</td>
-      <td>改目標職位或薪資期待</td>
-    </tr>
-    <tr>
-      <td><code>portals.yml</code></td>
-      <td>要掃描哪些公司的招聘頁，用哪些關鍵字篩選</td>
-      <td>加新公司或改搜尋關鍵字</td>
-    </tr>
-    <tr>
-      <td><code>modes/_profile.md</code></td>
-      <td>你的角色定位、獨特賣點、談薪話術</td>
-      <td>AI 評估分數不準時微調</td>
-    </tr>
-    <tr>
-      <td><code>article-digest.md</code></td>
-      <td>論文和專案的精簡摘要（選填）</td>
-      <td>有新發表或新專案成果</td>
-    </tr>
-  </tbody>
-</table>
-</section>
-
-<!-- ─── 4. 第一次啟動 ─── -->
-<section id="launch">
-<h2><span class="num">4.</span> 第一次啟動</h2>
-
-<p>在終端機裡，進入 <code>desktop</code> 資料夾：</p>
-<pre>cd desktop
-npm install        <span class="comment"># 第一次才需要，安裝前端套件</span>
-npm run tauri:dev  <span class="comment"># 啟動 app（會自動編譯 Go sidecar）</span></pre>
-
-<p>第一次編譯需要幾分鐘。完成後 app 視窗會自動開啟。</p>
-
-<p>第一次開啟會看到這個畫面：</p>
-
-<div class="diagram">
-<svg viewBox="0 0 500 260" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Noto Sans TC', sans-serif;">
-  <rect x="1" y="1" width="498" height="258" rx="10" fill="var(--surface-deep)" stroke="var(--overlay)" stroke-width="1"/>
-  <!-- Title bar -->
-  <rect x="1" y="1" width="498" height="28" rx="10" fill="var(--surface)"/>
-  <rect x="1" y="20" width="498" height="9" fill="var(--surface)"/>
-  <circle cx="18" cy="14" r="5" fill="var(--red)" opacity="0.6"/>
-  <circle cx="34" cy="14" r="5" fill="var(--peach)" opacity="0.6"/>
-  <circle cx="50" cy="14" r="5" fill="var(--green)" opacity="0.6"/>
-
-  <text x="250" y="68" text-anchor="middle" font-size="16" font-weight="700" fill="var(--text)">career-ops is not set up yet</text>
-  <text x="250" y="92" text-anchor="middle" font-size="11" fill="var(--subtext)">No career-ops folder selected.</text>
-
-  <!-- Missing files -->
-  <rect x="80" y="110" width="340" height="32" rx="4" fill="var(--surface)" stroke="var(--peach)" stroke-width="0" style="border-left:3px"/>
-  <line x1="80" y1="110" x2="80" y2="142" stroke="var(--peach)" stroke-width="3"/>
-  <text x="96" y="130" font-size="11" fill="var(--peach)" font-family="ui-monospace, monospace">cv.md</text>
-  <text x="170" y="130" font-size="10" fill="var(--subtext)">Your CV in markdown.</text>
-
-  <rect x="80" y="150" width="340" height="32" rx="4" fill="var(--surface)"/>
-  <line x1="80" y1="150" x2="80" y2="182" stroke="var(--peach)" stroke-width="3"/>
-  <text x="96" y="170" font-size="11" fill="var(--peach)" font-family="ui-monospace, monospace">config/profile.yml</text>
-  <text x="218" y="170" font-size="10" fill="var(--subtext)">Name, location, target roles.</text>
-
-  <!-- Button -->
-  <rect x="160" y="208" width="180" height="32" rx="4" fill="var(--accent)"/>
-  <text x="250" y="229" text-anchor="middle" font-size="12" font-weight="500" fill="var(--bg)">Choose your career-ops folder</text>
-</svg>
-</div>
-
-<p>按下按鈕選擇你的 <code>career-ops</code> 根目錄。如果上一步的檔案都設定好了，就會直接進入主畫面。如果有缺少的檔案，app 會列出來。</p>
-
-<div class="callout">
-  <p><strong>以後再開 app，不需要重新選資料夾。</strong>app 會記住你上次選的路徑。直接執行 <code>npm run tauri:dev</code> 就好。</p>
-</div>
-</section>
-
-<!-- ─── 5. Pipeline 主畫面 ─── -->
-<section id="pipeline">
-<h2><span class="num">5.</span> Pipeline 主畫面</h2>
-
-<p>主畫面分成四個區域：</p>
-
-<div class="diagram">
-<svg viewBox="0 0 640 340" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Noto Sans TC', sans-serif;">
-  <!-- Window -->
-  <rect x="1" y="1" width="638" height="338" rx="10" fill="var(--surface-deep)" stroke="var(--overlay)" stroke-width="1"/>
-  <!-- Title bar -->
-  <rect x="1" y="1" width="638" height="24" rx="10" fill="var(--surface)"/>
-  <rect x="1" y="16" width="638" height="9" fill="var(--surface)"/>
-
-  <!-- Nav -->
-  <rect x="10" y="30" width="620" height="24" rx="4" fill="var(--surface)"/>
-  <text x="30" y="46" font-size="11" font-weight="700" fill="var(--accent)">Pipeline</text>
-  <text x="100" y="46" font-size="11" fill="var(--subtext)">Progress</text>
-
-  <!-- A: Metrics bar -->
-  <rect x="10" y="60" width="620" height="40" rx="4" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <text x="35" y="75" font-size="9" fill="var(--subtext)">Total</text>
-  <text x="35" y="90" font-size="13" font-weight="700" fill="var(--text)" font-variant="tabular-nums">30</text>
-  <text x="110" y="75" font-size="9" fill="var(--subtext)">Avg</text>
-  <text x="110" y="90" font-size="13" font-weight="700" fill="var(--text)">3.8</text>
-  <text x="175" y="75" font-size="9" fill="var(--subtext)">Top</text>
-  <text x="175" y="90" font-size="13" font-weight="700" fill="var(--text)">4.6</text>
-  <text x="245" y="75" font-size="9" fill="var(--subtext)">Actionable</text>
-  <text x="245" y="90" font-size="13" font-weight="700" fill="var(--text)">25</text>
-  <text x="350" y="75" font-size="9" fill="var(--subtext)">With PDF</text>
-  <text x="350" y="90" font-size="13" font-weight="700" fill="var(--text)">12</text>
-  <!-- Label A -->
-  <text x="590" y="84" text-anchor="end" font-size="10" font-weight="700" fill="var(--accent)">A 指標列</text>
-
-  <!-- B: Toolbar -->
-  <rect x="10" y="106" width="620" height="28" rx="4" fill="var(--surface)" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <rect x="16" y="111" width="32" height="18" rx="3" fill="var(--accent)"/>
-  <text x="32" y="124" text-anchor="middle" font-size="9" font-weight="700" fill="var(--bg)">ALL</text>
-  <text x="64" y="124" font-size="9" fill="var(--subtext)">EVALUATED</text>
-  <text x="132" y="124" font-size="9" fill="var(--subtext)">APPLIED</text>
-  <text x="188" y="124" font-size="9" fill="var(--subtext)">INTERVIEW</text>
-  <text x="254" y="124" font-size="9" fill="var(--subtext)">TOP ≥4</text>
-  <rect x="430" y="111" width="120" height="18" rx="3" fill="var(--bg)" stroke="var(--overlay)" stroke-width="0.5"/>
-  <text x="440" y="124" font-size="9" fill="var(--overlay)">Search...</text>
-  <!-- Label B -->
-  <text x="590" y="124" text-anchor="end" font-size="10" font-weight="700" fill="var(--green)">B 工具列</text>
-
-  <!-- C: Table -->
-  <rect x="10" y="140" width="370" height="190" rx="4" fill="var(--surface)" stroke="var(--peach)" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <!-- Table header -->
-  <text x="24" y="158" font-size="9" font-weight="700" fill="var(--subtext)">#</text>
-  <text x="50" y="158" font-size="9" font-weight="700" fill="var(--subtext)">Date</text>
-  <text x="115" y="158" font-size="9" font-weight="700" fill="var(--subtext)">Company</text>
-  <text x="210" y="158" font-size="9" font-weight="700" fill="var(--subtext)">Role</text>
-  <text x="310" y="158" font-size="9" font-weight="700" fill="var(--subtext)">Score</text>
-  <text x="350" y="158" font-size="9" font-weight="700" fill="var(--subtext)">Status</text>
-  <line x1="18" y1="164" x2="372" y2="164" stroke="var(--overlay)" stroke-width="0.5"/>
-  <!-- Group head -->
-  <text x="24" y="180" font-size="9" font-weight="700" fill="var(--green)">Interview</text>
-  <!-- Row 1 -->
-  <rect x="14" y="185" width="362" height="22" rx="2" fill="var(--accent-soft)"/>
-  <text x="24" y="200" font-size="10" fill="var(--text)">1</text>
-  <text x="50" y="200" font-size="10" fill="var(--text)">07-01</text>
-  <text x="115" y="200" font-size="10" fill="var(--text)">Acme Inc</text>
-  <text x="210" y="200" font-size="10" fill="var(--text)">PM</text>
-  <text x="310" y="200" font-size="10" font-weight="700" fill="var(--green)">4.6</text>
-  <text x="350" y="200" font-size="10" fill="var(--green)">Interview</text>
-  <!-- Group head 2 -->
-  <text x="24" y="226" font-size="9" font-weight="700" fill="var(--sky)">Applied</text>
-  <!-- Row 2 -->
-  <text x="24" y="244" font-size="10" fill="var(--text)">2</text>
-  <text x="50" y="244" font-size="10" fill="var(--text)">07-03</text>
-  <text x="115" y="244" font-size="10" fill="var(--text)">Beta Corp</text>
-  <text x="210" y="244" font-size="10" fill="var(--text)">UXR</text>
-  <text x="310" y="244" font-size="10" fill="var(--peach)">3.9</text>
-  <text x="350" y="244" font-size="10" fill="var(--sky)">Applied</text>
-  <!-- Row 3 -->
-  <text x="24" y="264" font-size="10" fill="var(--text)">3</text>
-  <text x="50" y="264" font-size="10" fill="var(--text)">07-05</text>
-  <text x="115" y="264" font-size="10" fill="var(--text)">Gamma Ltd</text>
-  <text x="210" y="264" font-size="10" fill="var(--text)">TPM</text>
-  <text x="310" y="264" font-size="10" fill="var(--text)">3.2</text>
-  <text x="350" y="264" font-size="10" fill="var(--sky)">Applied</text>
-  <!-- Row selected indicator -->
-  <text x="24" y="284" font-size="9" fill="var(--subtext)">⋮</text>
-  <!-- Label C -->
-  <text x="340" y="322" text-anchor="end" font-size="10" font-weight="700" fill="var(--peach)">C 申請列表</text>
-
-  <!-- D: Report pane -->
-  <rect x="386" y="140" width="244" height="190" rx="4" fill="var(--surface)" stroke="var(--mauve)" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <text x="400" y="160" font-size="9" fill="var(--subtext)">Company</text>
-  <text x="460" y="160" font-size="11" font-weight="700" fill="var(--text)">Acme Inc</text>
-  <text x="400" y="178" font-size="9" fill="var(--subtext)">Role</text>
-  <text x="460" y="178" font-size="11" fill="var(--text)">Product Manager</text>
-  <text x="400" y="196" font-size="9" fill="var(--subtext)">Archetype</text>
-  <text x="460" y="196" font-size="11" fill="var(--text)">Technical PM</text>
-  <text x="400" y="214" font-size="9" fill="var(--subtext)">Remote</text>
-  <text x="460" y="214" font-size="11" fill="var(--text)">Hybrid</text>
-  <line x1="396" y1="224" x2="622" y2="224" stroke="var(--overlay)" stroke-width="0.5"/>
-  <!-- Buttons -->
-  <rect x="400" y="232" width="96" height="20" rx="3" fill="var(--accent)"/>
-  <text x="448" y="246" text-anchor="middle" font-size="9" fill="var(--bg)">Open job posting</text>
-  <rect x="504" y="232" width="70" height="20" rx="3" fill="var(--accent)"/>
-  <text x="539" y="246" text-anchor="middle" font-size="9" fill="var(--bg)">Open PDF</text>
-  <line x1="396" y1="260" x2="622" y2="260" stroke="var(--overlay)" stroke-width="0.5"/>
-  <text x="400" y="278" font-size="9" fill="var(--subtext)">評估報告內容…</text>
-  <text x="400" y="294" font-size="9" fill="var(--subtext)">Block A: Relevance 4.5/5</text>
-  <text x="400" y="310" font-size="9" fill="var(--subtext)">Block B: Comp 4.0/5 …</text>
-  <!-- Label D -->
-  <text x="610" y="322" text-anchor="end" font-size="10" font-weight="700" fill="var(--mauve)">D 報告面板</text>
-</svg>
-</div>
-
-<h3>A. 指標列</h3>
-<p>最上方五個數字，一眼掌握全局：總申請數、平均分、最高分、可行動的數量、已有 PDF 履歷的數量。</p>
-
-<h3>B. 工具列</h3>
-<div class="features">
-  <div class="feat">
-    <div class="label">篩選分頁</div>
-    <div class="detail">按狀態篩選。ALL 看全部，TOP ≥4 只看高分職缺。</div>
-  </div>
-  <div class="feat">
-    <div class="label">搜尋</div>
-    <div class="detail">輸入公司名、職稱或備註的關鍵字。</div>
-  </div>
-  <div class="feat">
-    <div class="label">排序</div>
-    <div class="detail">可按分數、日期、公司名、狀態排序。</div>
-  </div>
-  <div class="feat">
-    <div class="label">顯示模式</div>
-    <div class="detail">Grouped 按狀態分組，Flat 單純列表。</div>
-  </div>
-</div>
-
-<h3>C. 申請列表</h3>
-<p>每一列是一筆申請，點選欄位標頭（Date、Score 等）可以改變排序方向。分數用顏色區分：</p>
-
-<div class="score-bands">
-  <span class="band high">≥ 4.2 推薦</span>
-  <span class="band mid">≥ 3.8 可考慮</span>
-  <span class="band neutral">≥ 3.0 一般</span>
-  <span class="band low">&lt; 3.0 不建議</span>
-</div>
-
-<p>每一列的 Status 欄位是下拉選單，可以直接改狀態。可用的狀態：</p>
-<div class="statuses">
-  <span class="st int">Interview</span>
-  <span class="st int">Offer</span>
-  <span class="st app">Responded</span>
-  <span class="st app">Applied</span>
-  <span class="st eval">Evaluated</span>
-  <span class="st skip">SKIP</span>
-  <span class="st eval">Rejected</span>
-  <span class="st eval">Discarded</span>
-</div>
-
-<div class="callout warn">
-  <p><strong>安全機制：</strong>改狀態時，app 會先確認檔案裡的狀態跟你畫面上看到的一致。如果其他工具同時改了同一筆，app 會拒絕寫入並提示你 Reload。每次寫入前都會自動備份到 <code>data/.applications.md.bak</code>。</p>
-</div>
-
-<h3>D. 報告面板</h3>
-<p>點選列表中任何一列，右側面板會顯示：</p>
-<ul style="margin:8px 0 16px; padding-left: 24px;">
-  <li>公司、職稱、角色類型、遠端政策、薪資估計</li>
-  <li>「Open job posting」按鈕（在瀏覽器開啟職缺原始連結）</li>
-  <li>「Open PDF」按鈕（開啟已產生的客製化履歷）</li>
-  <li>完整的評估報告內容</li>
-</ul>
-</section>
-
-<!-- ─── 6. Progress ─── -->
-<section id="progress">
-<h2><span class="num">6.</span> Progress 統計頁面</h2>
-
-<p>點選上方導覽列的 Progress 切換到統計頁面。四張卡片各自呈現一個面向：</p>
-
-<div class="diagram">
-<svg viewBox="0 0 540 280" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Noto Sans TC', sans-serif;">
-  <!-- Card 1: Funnel -->
-  <rect x="10" y="10" width="250" height="120" rx="6" fill="var(--surface)" stroke="var(--overlay)" stroke-width="1"/>
-  <text x="26" y="34" font-size="12" font-weight="700" fill="var(--text)">Funnel 漏斗</text>
-  <!-- Horizontal bars -->
-  <rect x="26" y="46" width="180" height="10" rx="2" fill="var(--accent)" opacity="0.9"/>
-  <text x="212" y="55" font-size="8" fill="var(--subtext)">Evaluated 30</text>
-  <rect x="26" y="62" width="100" height="10" rx="2" fill="var(--accent)" opacity="0.7"/>
-  <text x="132" y="71" font-size="8" fill="var(--subtext)">Applied 16</text>
-  <rect x="26" y="78" width="50" height="10" rx="2" fill="var(--accent)" opacity="0.5"/>
-  <text x="82" y="87" font-size="8" fill="var(--subtext)">Interview 5</text>
-  <rect x="26" y="94" width="20" height="10" rx="2" fill="var(--accent)" opacity="0.4"/>
-  <text x="52" y="103" font-size="8" fill="var(--subtext)">Offer 2</text>
-  <text x="26" y="122" font-size="9" fill="var(--subtext)">申請各階段的數量</text>
-
-  <!-- Card 2: Score distribution -->
-  <rect x="280" y="10" width="250" height="120" rx="6" fill="var(--surface)" stroke="var(--overlay)" stroke-width="1"/>
-  <text x="296" y="34" font-size="12" font-weight="700" fill="var(--text)">Score 分數分佈</text>
-  <!-- Vertical bars -->
-  <rect x="310" y="52" width="24" height="50" rx="2" fill="var(--green)"/>
-  <rect x="346" y="62" width="24" height="40" rx="2" fill="var(--peach)"/>
-  <rect x="382" y="47" width="24" height="55" rx="2" fill="var(--subtext)" opacity="0.5"/>
-  <rect x="418" y="72" width="24" height="30" rx="2" fill="var(--subtext)" opacity="0.3"/>
-  <rect x="454" y="85" width="24" height="17" rx="2" fill="var(--red)" opacity="0.6"/>
-  <text x="318" y="114" text-anchor="middle" font-size="8" fill="var(--subtext)">≥4.2</text>
-  <text x="354" y="114" text-anchor="middle" font-size="8" fill="var(--subtext)">3.8</text>
-  <text x="390" y="114" text-anchor="middle" font-size="8" fill="var(--subtext)">3.0</text>
-  <text x="426" y="114" text-anchor="middle" font-size="8" fill="var(--subtext)">2.5</text>
-  <text x="462" y="114" text-anchor="middle" font-size="8" fill="var(--subtext)">&lt;2.5</text>
-  <text x="296" y="122" font-size="9" fill="var(--subtext)">各分數區間的職缺數</text>
-
-  <!-- Card 3: Rates -->
-  <rect x="10" y="150" width="250" height="120" rx="6" fill="var(--surface)" stroke="var(--overlay)" stroke-width="1"/>
-  <text x="26" y="174" font-size="12" font-weight="700" fill="var(--text)">Rates 轉換率</text>
-  <!-- Rate values -->
-  <text x="50" y="210" text-anchor="middle" font-size="20" font-weight="700" fill="var(--text)" font-variant="tabular-nums">50%</text>
-  <text x="50" y="226" text-anchor="middle" font-size="9" fill="var(--subtext)">Response</text>
-  <text x="135" y="210" text-anchor="middle" font-size="20" font-weight="700" fill="var(--text)" font-variant="tabular-nums">33%</text>
-  <text x="135" y="226" text-anchor="middle" font-size="9" fill="var(--subtext)">Interview</text>
-  <text x="220" y="210" text-anchor="middle" font-size="20" font-weight="700" fill="var(--text)" font-variant="tabular-nums">13%</text>
-  <text x="220" y="226" text-anchor="middle" font-size="9" fill="var(--subtext)">Offer</text>
-  <!-- Count values -->
-  <text x="90" y="260" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)">25 <tspan font-size="9" font-weight="400" fill="var(--subtext)">Active</tspan></text>
-  <text x="180" y="260" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)">2 <tspan font-size="9" font-weight="400" fill="var(--subtext)">Offers</tspan></text>
-
-  <!-- Card 4: Weekly -->
-  <rect x="280" y="150" width="250" height="120" rx="6" fill="var(--surface)" stroke="var(--overlay)" stroke-width="1"/>
-  <text x="296" y="174" font-size="12" font-weight="700" fill="var(--text)">Weekly 每週活動量</text>
-  <!-- Vertical bars -->
-  <rect x="310" y="215" width="20" height="30" rx="2" fill="var(--mauve)" opacity="0.6"/>
-  <rect x="340" y="195" width="20" height="50" rx="2" fill="var(--mauve)" opacity="0.7"/>
-  <rect x="370" y="205" width="20" height="40" rx="2" fill="var(--mauve)" opacity="0.7"/>
-  <rect x="400" y="225" width="20" height="20" rx="2" fill="var(--mauve)" opacity="0.5"/>
-  <rect x="430" y="185" width="20" height="60" rx="2" fill="var(--mauve)" opacity="0.9"/>
-  <rect x="460" y="210" width="20" height="35" rx="2" fill="var(--mauve)" opacity="0.6"/>
-  <text x="316" y="258" text-anchor="middle" font-size="7" fill="var(--subtext)">W1</text>
-  <text x="346" y="258" text-anchor="middle" font-size="7" fill="var(--subtext)">W2</text>
-  <text x="376" y="258" text-anchor="middle" font-size="7" fill="var(--subtext)">W3</text>
-  <text x="406" y="258" text-anchor="middle" font-size="7" fill="var(--subtext)">W4</text>
-  <text x="436" y="258" text-anchor="middle" font-size="7" fill="var(--subtext)">W5</text>
-  <text x="466" y="258" text-anchor="middle" font-size="7" fill="var(--subtext)">W6</text>
-  <text x="296" y="262" font-size="9" fill="var(--subtext)">每週評估了多少職缺</text>
-</svg>
-</div>
-
-<p>這些數字全部自動計算，不需要手動更新。每次 Reload 都會重新讀取追蹤表的最新狀態。</p>
-</section>
-
-<!-- ─── 7. 日常使用 ─── -->
-<section id="workflow">
-<h2><span class="num">7.</span> 日常使用</h2>
-
-<p>設定完成後，日常流程大致如下：</p>
-
-<div class="workflow">
-  <div class="wstep">
-    <div class="wlabel">AI 助手掃描新職缺</div>
-    <div class="wdesc">在終端機的 AI 助手裡執行掃描指令，或貼上職缺連結請它評估。AI 助手會自動把結果寫進追蹤表和報告資料夾。</div>
-  </div>
-  <div class="wstep">
-    <div class="wlabel">開桌面 app 瀏覽結果</div>
-    <div class="wdesc">啟動桌面 app（或按 Reload），新的職缺會出現在列表裡。用篩選和排序快速找到最值得投的。</div>
-  </div>
-  <div class="wstep">
-    <div class="wlabel">讀報告、決定要不要投</div>
-    <div class="wdesc">點選任何一列，右邊的報告面板會顯示完整的評估分析。分數 ≥ 4.0 的通常值得認真考慮。</div>
-  </div>
-  <div class="wstep">
-    <div class="wlabel">申請後更新狀態</div>
-    <div class="wdesc">投了履歷後，在列表裡把狀態從 Evaluated 改成 Applied。拿到面試改成 Interview，以此類推。</div>
-  </div>
-  <div class="wstep">
-    <div class="wlabel">定期看 Progress 檢視進度</div>
-    <div class="wdesc">切換到 Progress 頁面，看漏斗轉換率和每週活動量。回應率太低可能要調整目標職位或履歷。</div>
-  </div>
-</div>
-
-<div class="callout ok">
-  <p><strong>不用擔心資料遺失。</strong>所有資料都存在你電腦上的文字檔裡，不上傳任何伺服器。桌面 app 只是讀取和顯示這些檔案。每次改狀態前都會自動備份。</p>
-</div>
-</section>
-
-<!-- ─── 8. FAQ ─── -->
-<section id="faq">
-<h2><span class="num">8.</span> 常見問題</h2>
-
-<details>
-  <summary>app 開不起來，終端機顯示錯誤</summary>
-  <div class="inner">
-    <p>先確認四個工具都裝好了（<code>go version</code>、<code>node -v</code>、<code>cargo --version</code>）。最常見的原因是安裝 Rust 後沒有重開終端機，導致 <code>cargo</code> 找不到。關掉終端機重開再試一次。</p>
-  </div>
-</details>
-
-<details>
-  <summary>打開 app 後顯示「not set up yet」</summary>
-  <div class="inner">
-    <p>代表你選的資料夾裡缺少必要檔案。畫面上會列出缺少哪些。回到<a href="#setup">第 3 節</a>，把 <code>cv.md</code> 和 <code>config/profile.yml</code> 建好，然後在 app 裡按 Reload。</p>
-  </div>
-</details>
-
-<details>
-  <summary>列表是空的，一筆資料都沒有</summary>
-  <div class="inner">
-    <p>桌面 app 只顯示資料，不產生資料。你需要先用 AI 助手（Claude Code 等）評估至少一個職缺，讓它寫進 <code>data/applications.md</code> 和 <code>reports/</code>。評估完後回到 app 按 Reload。</p>
-  </div>
-</details>
-
-<details>
-  <summary>改狀態時出現「file changed externally」</summary>
-  <div class="inner">
-    <p>代表在你上次載入後，其他工具（例如 AI 助手）改了同一筆資料。這是保護機制，防止互相覆蓋。按 Reload 重新載入最新狀態，再改一次就好。</p>
-  </div>
-</details>
-
-<details>
-  <summary>怎麼讓 Codex 評估職缺？</summary>
-  <div class="inner">
-    <p>在終端機進入 <code>career-ops</code> 資料夾，開 Codex，直接貼上職缺網址。Codex 會自動評估、產生報告和分數、更新追蹤表。完成後回到桌面 app 按 Reload 就能看到結果。也可以輸入 <code>/career-ops-scan</code> 讓 Codex 自動掃描 portals.yml 裡設定的所有公司。</p>
-  </div>
-</details>
-
-<details>
-  <summary>可以在 Windows 或 Linux 上用嗎？</summary>
-  <div class="inner">
-    <p>目前只支援 macOS。Tauri 框架本身跨平台，但這個 app 還沒有在其他系統上測試過。</p>
-  </div>
-</details>
-
-<details>
-  <summary>我的資料會上傳到哪裡嗎？</summary>
-  <div class="inner">
-    <p>不會。所有資料只存在你的電腦上。桌面 app 完全離線運作，不連接任何外部伺服器。</p>
-  </div>
-</details>
-
-<details>
-  <summary>怎麼更新 app？</summary>
-  <div class="inner">
-    <p>在 <code>desktop</code> 資料夾裡執行 <code>git pull</code> 拉取最新版本，然後重新跑 <code>npm install</code> 和 <code>npm run tauri:dev</code>。你的個人資料（cv.md、profile.yml、applications.md）不會被覆蓋。</p>
-  </div>
-</details>
-</section>
-
-</article>
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CareerOps Desktop 使用指南</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --canvas: #FFFFFF;
+      --surface-subtle: #F5F5F5;
+      --surface-muted: #E4E4E4;
+      --text-primary: #000000;
+      --text-secondary: #575757;
+      --icon-default: #222222;
+      --line-strong: #33363F;
+      --primary: #0AB239;
+      --teal: #148B84;
+      --amber: #D68C1E;
+      --red: #B20000;
+      --magenta: #AC2C80;
+      --on-accent: #FFFFFF;
+      --divider: rgba(0,0,0,.20);
+      --shadow-card: 0 4px 5px rgba(0,0,0,.30);
+      --shadow-panel: 0 0 5px 5px rgba(0,0,0,.10);
+      --radius-card: 20px;
+      --radius-control: 20px;
+      --radius-nav: 30px;
+      --radius-track: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--text-primary);
+      font-family: "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: var(--teal);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    a:hover { color: var(--primary); }
+
+    a:focus-visible,
+    button:focus-visible,
+    summary:focus-visible {
+      outline: 3px solid rgba(10,178,57,.28);
+      outline-offset: 3px;
+      border-radius: 8px;
+    }
+
+    .page {
+      width: min(100% - 40px, 980px);
+      margin: 0 auto;
+      padding: 48px 0 96px;
+    }
+
+    .hero {
+      padding: 40px;
+      background: var(--surface-subtle);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-panel);
+      margin-bottom: 32px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--teal);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: .13px;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      margin-top: 0;
+      color: var(--text-primary);
+    }
+
+    h1 {
+      margin-bottom: 12px;
+      font-size: clamp(32px, 5vw, 40px);
+      line-height: 1.2;
+      font-weight: 700;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 30px;
+      line-height: 1.2;
+      font-weight: 600;
+      letter-spacing: .3px;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: .18px;
+    }
+
+    p { margin: 0 0 16px; }
+
+    .lead {
+      max-width: 760px;
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .notice {
+      margin-top: 20px;
+      padding: 16px 20px;
+      border-left: 4px solid var(--amber);
+      background: #FFF9EF;
+      border-radius: 0 12px 12px 0;
+      font-size: 14px;
+    }
+
+    .notice strong { font-weight: 700; }
+
+    .toc {
+      margin: 0 0 40px;
+      padding: 24px;
+      border: 1px solid var(--divider);
+      border-radius: var(--radius-card);
+      background: var(--canvas);
+    }
+
+    .toc-title {
+      margin-bottom: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: .14px;
+    }
+
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 24px;
+    }
+
+    .toc a {
+      display: block;
+      padding: 8px 12px;
+      color: var(--text-primary);
+      text-decoration: none;
+      border-radius: var(--radius-nav);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .toc a:hover {
+      background: var(--surface-subtle);
+      color: var(--primary);
+    }
+
+    section {
+      padding: 36px 0;
+      border-bottom: 1px solid var(--divider);
+    }
+
+    section:last-of-type { border-bottom: 0; }
+
+    .section-intro {
+      max-width: 760px;
+      color: var(--text-secondary);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .card {
+      padding: 20px;
+      background: var(--canvas);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+    }
+
+    .card p:last-child { margin-bottom: 0; }
+
+    .card-label {
+      display: inline-block;
+      min-height: 25px;
+      margin-bottom: 12px;
+      padding: 4px 10px;
+      border-radius: var(--radius-control);
+      background: var(--surface-subtle);
+      font-size: 13px;
+      line-height: 17px;
+      font-weight: 600;
+    }
+
+    .card-label.primary { background: var(--primary); color: var(--on-accent); }
+    .card-label.teal { background: var(--teal); color: var(--on-accent); }
+    .card-label.amber { background: var(--amber); color: var(--on-accent); }
+    .card-label.red { background: var(--red); color: var(--on-accent); }
+
+    .steps {
+      display: grid;
+      gap: 12px;
+      margin-top: 20px;
+      counter-reset: step;
+    }
+
+    .step {
+      position: relative;
+      padding: 18px 20px 18px 64px;
+      border-radius: var(--radius-card);
+      background: var(--surface-subtle);
+      counter-increment: step;
+    }
+
+    .step::before {
+      content: counter(step);
+      position: absolute;
+      left: 20px;
+      top: 18px;
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: var(--on-accent);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 20px 0;
+      padding: 20px;
+      background: var(--surface-subtle);
+      border-radius: var(--radius-card);
+    }
+
+    .flow-node {
+      padding: 7px 12px;
+      border: 1px solid var(--divider);
+      border-radius: var(--radius-control);
+      background: var(--canvas);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .flow-node.active {
+      background: var(--primary);
+      color: var(--on-accent);
+      border-color: var(--primary);
+    }
+
+    .flow-arrow {
+      color: var(--text-secondary);
+      font-weight: 700;
+    }
+
+    .status-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    .status {
+      padding: 5px 10px;
+      border-radius: var(--radius-control);
+      background: var(--surface-subtle);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .status.ready { color: var(--primary); border: 1px solid var(--primary); background: var(--canvas); }
+    .status.warn { color: var(--amber); border: 1px solid var(--amber); background: var(--canvas); }
+    .status.error { color: var(--red); border: 1px solid var(--red); background: var(--canvas); }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: var(--surface-subtle);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .9em;
+    }
+
+    pre {
+      margin: 16px 0;
+      padding: 16px 20px;
+      overflow-x: auto;
+      border: 1px solid var(--divider);
+      border-radius: 12px;
+      background: var(--surface-subtle);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    table {
+      width: 100%;
+      margin-top: 16px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--divider);
+    }
+
+    th {
+      font-weight: 700;
+      background: var(--surface-subtle);
+    }
+
+    .language-example {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+      margin: 20px 0;
+    }
+
+    .language-box {
+      min-height: 118px;
+      padding: 20px;
+      border-radius: var(--radius-card);
+      background: var(--surface-subtle);
+    }
+
+    .language-box strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .language-box p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .language-arrow {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .callout {
+      margin: 20px 0 0;
+      padding: 16px 20px;
+      border-radius: 12px;
+      background: var(--surface-subtle);
+      font-size: 14px;
+    }
+
+    .callout.success { border-left: 4px solid var(--primary); }
+    .callout.warning { border-left: 4px solid var(--amber); }
+    .callout.danger { border-left: 4px solid var(--red); }
+
+    .callout p:last-child { margin-bottom: 0; }
+
+    details {
+      margin-bottom: 12px;
+      border: 1px solid var(--divider);
+      border-radius: 12px;
+      overflow: clip;
+      background: var(--canvas);
+    }
+
+    summary {
+      padding: 14px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    details[open] summary {
+      background: var(--surface-subtle);
+    }
+
+    .details-body {
+      padding: 16px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .details-body p:last-child { margin-bottom: 0; }
+
+    .muted {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--divider);
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    @media (max-width: 720px) {
+      .page { width: min(100% - 24px, 980px); padding-top: 24px; }
+      .hero { padding: 28px 24px; }
+      .toc-grid,
+      .cards { grid-template-columns: 1fr; }
+      .language-example { grid-template-columns: 1fr; }
+      .language-arrow { transform: rotate(90deg); text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <p class="eyebrow">CareerOps Desktop</p>
+      <h1>使用指南</h1>
+      <p class="lead">從第一次啟動到分析職缺、找工作、追蹤申請與準備面試。一般使用不需要自己操作 Markdown、YAML 或 coding-agent prompt。</p>
+      <div class="notice">
+        <strong>目前版本範圍：</strong>這份指南只描述 <code>tauri-dashboard</code> 已有的功能。尚未合併的 release、自動更新、Homebrew 與 Windows 發佈流程不列入本指南。
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="指南目錄">
+      <div class="toc-title">目錄</div>
+      <div class="toc-grid">
+        <a href="#overview">1. CareerOps Desktop 是什麼</a>
+        <a href="#first-run">2. 第一次啟動</a>
+        <a href="#background">3. 匯入背景資料</a>
+        <a href="#language">4. Analysis Language 與 Job Language</a>
+        <a href="#ai">5. 選擇 AI Provider</a>
+        <a href="#home">6. Home：從這裡開始</a>
+        <a href="#evaluate">7. 分析單一職缺</a>
+        <a href="#scanner">8. 找符合條件的職缺</a>
+        <a href="#jobs">9. Jobs：管理申請</a>
+        <a href="#interview">10. Interview：準備、練習、複盤</a>
+        <a href="#progress">11. Progress 與 Profile</a>
+        <a href="#help">12. Help 與疑難排解</a>
+      </div>
+    </nav>
+
+    <section id="overview">
+      <h2>1. CareerOps Desktop 是什麼</h2>
+      <p class="section-intro">CareerOps Desktop 是建立在 CareerOps 核心上的原生桌面介面。Desktop 負責 UX 與流程編排；CareerOps 上游仍負責 tracker、report、scanner、batch、文件產生與其他 domain logic。</p>
+
+      <div class="flow" aria-label="CareerOps Desktop 架構流程">
+        <span class="flow-node active">Desktop UI</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">AgentRunner / Tauri</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">AI Provider</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">CareerOps Core</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Canonical files</span>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <span class="card-label primary">Desktop 負責</span>
+          <h3>讓流程可以直接操作</h3>
+          <p>Onboarding、Home、Evaluate、Scanner、Jobs、Interview、Progress、Profile 與 Help 都可從 App 進入。</p>
+        </div>
+        <div class="card">
+          <span class="card-label teal">CareerOps Core 負責</span>
+          <h3>維持真正的求職邏輯</h3>
+          <p>評估、tracker、狀態、報告、職缺掃描、batch 與文件格式仍以上游為準，Desktop 不另外複製一套規則。</p>
+        </div>
+      </div>
+
+      <div class="callout success">
+        <p><strong>Human in the loop：</strong>AI 可以分析、起草與建議，但不會替你直接送出申請或寄出 outreach。最後決定仍由你控制。</p>
+      </div>
+    </section>
+
+    <section id="first-run">
+      <h2>2. 第一次啟動</h2>
+      <p class="section-intro">第一次開啟 App 時，先指定 CareerOps 根目錄。若 App 偵測到必要資料尚未完成，就會進入 onboarding。</p>
+
+      <div class="steps">
+        <div class="step">
+          <strong>選擇 CareerOps 資料夾</strong>
+          <p>App 會記住這個位置，之後不需要每次重新選。</p>
+        </div>
+        <div class="step">
+          <strong>Welcome</strong>
+          <p>開始 onboarding；也可以先跳過文件匯入，之後再補。</p>
+        </div>
+        <div class="step">
+          <strong>Import your background</strong>
+          <p>選擇放有 CV、cover letter、portfolio、論文或專案資料的資料夾。</p>
+        </div>
+        <div class="step">
+          <strong>選擇 Analysis Language</strong>
+          <p>決定你閱讀 Dashboard 與分析報告時使用的語言。</p>
+        </div>
+        <div class="step">
+          <strong>Set up AI</strong>
+          <p>App 偵測本機已安裝並可使用的 AI CLI，選一個作為預設 Provider。</p>
+        </div>
+        <div class="step">
+          <strong>Ready</strong>
+          <p>進入 Home，開始分析單一職缺或掃描符合條件的工作。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="background">
+      <h2>3. 匯入背景資料</h2>
+      <p class="section-intro">Onboarding 可以讓你選擇一個包含求職背景資料的資料夾，目標是讓 CareerOps 用既有 CV、cover letter、作品集、論文與專案資料建立更完整的個人背景。</p>
+
+      <div class="cards">
+        <div class="card">
+          <span class="card-label">適合放進去</span>
+          <h3>背景素材</h3>
+          <p>CV / Resume、Cover Letter、Thesis、Paper、Portfolio、Project notes、Work samples。</p>
+        </div>
+        <div class="card">
+          <span class="card-label amber">目前限制</span>
+          <h3>選資料夾 ≠ 已完成抽取</h3>
+          <p>目前 onboarding 會記錄你選擇的來源，但完整文件 extraction 尚未在這個畫面中完全自動化。不要把「已選取來源」理解成「AI 已經讀完全部內容」。</p>
+        </div>
+      </div>
+
+      <p class="muted">CareerOps 的 canonical profile 仍以既有核心檔案為準，例如 <code>cv.md</code>、<code>config/profile.yml</code> 與 <code>modes/_profile.md</code>。進階使用者仍可以直接檢查這些檔案。</p>
+    </section>
+
+    <section id="language">
+      <h2>4. Analysis Language 與 Job Language</h2>
+      <p class="section-intro">CareerOps Desktop 不再用同一個語言設定控制所有輸出。你閱讀分析的語言，和每份職缺實際使用的文件語言，是兩件不同的事。</p>
+
+      <div class="language-example">
+        <div class="language-box">
+          <strong>Analysis Language</strong>
+          <p>你用什麼語言閱讀 Dashboard 與 report。可在 onboarding 或 Profile → Job Search 中修改。</p>
+        </div>
+        <div class="language-arrow">≠</div>
+        <div class="language-box">
+          <strong>Job Language</strong>
+          <p>每個職缺各自從 JD 判斷。CV、cover letter 與 interview material 跟著這個語言。</p>
+        </div>
+      </div>
+
+      <div class="callout success">
+        <p><strong>例子：</strong>Analysis Language 選繁體中文，貼入德文 JD → 分析內容可以是繁中，但 CV、cover letter 與面試材料仍使用德文。</p>
+      </div>
+
+      <h3>Job Language 怎麼決定？</h3>
+      <p>CareerOps 會優先使用你對該職缺的手動 override；沒有 override 時，再從 JD 或可靠的職缺內容判斷。若信心偏低，Evaluate 畫面會顯示偵測結果與 <code>[Change]</code>，讓你直接改。</p>
+
+      <div class="callout warning">
+        <p><strong>Market mode 是第三件事。</strong>它處理市場詞彙與地方規則，不等於 Analysis Language，也不等於 Job Language。</p>
+      </div>
+    </section>
+
+    <section id="ai">
+      <h2>5. 選擇 AI Provider</h2>
+      <p class="section-intro">CareerOps Desktop 透過本機 AI CLI 執行需要 reasoning 的工作，不需要另外設定一個 localhost port。你可以在 onboarding 選 Provider，也可以之後到 Profile → AI 切換。</p>
+
+      <div class="status-list" aria-label="AI Provider 狀態">
+        <span class="status ready">Ready</span>
+        <span class="status warn">Not installed</span>
+        <span class="status warn">Not authenticated</span>
+        <span class="status error">Error</span>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <span class="card-label primary">想用 Codex</span>
+          <h3>先讓 Codex 本機可用</h3>
+          <p>如果 App 偵測到 Codex 為 <strong>Ready</strong>，直接選它即可。選擇會保存成 preferred provider。</p>
+        </div>
+        <div class="card">
+          <span class="card-label">Provider 切換</span>
+          <h3>不用重跑 onboarding</h3>
+          <p>之後可在 Profile → AI 選其他已 Ready 的 Provider。AgentRunner 會使用目前偏好的 Provider。</p>
+        </div>
+      </div>
+
+      <div class="callout warning">
+        <p>如果 Provider 顯示 <strong>Not authenticated</strong> 或 <strong>Error</strong>，先回到該 CLI 自己的登入／驗證流程處理，再重新開啟或重新偵測。</p>
+      </div>
+    </section>
+
+    <section id="home">
+      <h2>6. Home：從這裡開始</h2>
+      <p class="section-intro">Home 是日常入口。上方會顯示 tracked、interviewing、applied 與平均分數；主要有兩條工作流。</p>
+
+      <div class="cards">
+        <div class="card">
+          <span class="card-label primary">Evaluate a job</span>
+          <h3>已經有一個職缺</h3>
+          <p>貼上職缺 URL 或 JD 文字，進入單一職缺分析。</p>
+        </div>
+        <div class="card">
+          <span class="card-label teal">Find matching jobs</span>
+          <h3>讓 CareerOps 幫你找</h3>
+          <p>從設定好的來源執行 Scanner，找出符合條件的新機會。</p>
+        </div>
+      </div>
+
+      <p class="muted">Home 下方也會顯示最近活動，方便快速回到 Jobs 查看申請。</p>
+    </section>
+
+    <section id="evaluate">
+      <h2>7. 分析單一職缺</h2>
+      <p class="section-intro">在 Home 貼上職缺 URL 或 JD 後，Evaluate 會透過 AgentRunner 執行 CareerOps 的評估流程。</p>
+
+      <div class="flow">
+        <span class="flow-node active">Read posting</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Match background</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Role requirements</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Compensation</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Evaluation</span>
+      </div>
+
+      <h3>開始前可以調整文件語言</h3>
+      <p>預設讓 CareerOps 從 JD 判斷。若你已經知道應該使用哪個語言，可以直接在 <strong>Document language</strong> 手動指定。</p>
+
+      <h3>Agent Activity</h3>
+      <p>執行期間會顯示階段、輸出與錯誤資訊。你可以 Cancel；失敗後可以 Retry。完成後回到 Jobs 查看結果與 report。</p>
+    </section>
+
+    <section id="scanner">
+      <h2>8. 找符合條件的職缺</h2>
+      <p class="section-intro">Scanner 會讀取已設定的求職來源，先找新職缺，再去重複、預篩，最後評估符合條件的候選工作。</p>
+
+      <div class="flow">
+        <span class="flow-node active">Scanning sources</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Deduplicating</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Pre-screening</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Evaluating matches</span>
+      </div>
+
+      <div class="callout success">
+        <p>掃描完成後按 <strong>View results</strong> 回到 Jobs。CareerOps 的 scanner / batch domain logic 仍由核心處理，Desktop 主要負責啟動、顯示進度與結果。</p>
+      </div>
+    </section>
+
+    <section id="jobs">
+      <h2>9. Jobs：管理申請</h2>
+      <p class="section-intro">Jobs 是原本 Pipeline 的產品化介面。你可以篩選、排序、搜尋、切換檢視方式、閱讀 report，並更新申請狀態。</p>
+
+      <div class="cards">
+        <div class="card">
+          <span class="card-label">Grouped / Kanban</span>
+          <h3>按狀態整理</h3>
+          <p>以 board 方式瀏覽申請。點選項目時，report 會在 drawer 中顯示。</p>
+        </div>
+        <div class="card">
+          <span class="card-label">Table / Split</span>
+          <h3>快速比較</h3>
+          <p>用表格排序與搜尋，選取後可在旁邊閱讀 report。</p>
+        </div>
+      </div>
+
+      <h3>狀態修改有保護</h3>
+      <p>Desktop 不會直接任意重寫 tracker。它使用目前讀到的狀態作 optimistic lock；如果檔案已被別的流程改過，會拒絕 stale write，要求 Reload。</p>
+
+      <div class="callout warning">
+        <p>狀態選項來自 CareerOps 的 canonical contracts，不要把某一組固定狀態視為 Desktop 自己的硬編碼規則。</p>
+      </div>
+    </section>
+
+    <section id="interview">
+      <h2>10. Interview：準備、練習、複盤</h2>
+      <p class="section-intro">Jobs 中狀態為 Interview 的申請會自動出現在 Interview 頁。每一個 active interview 都有三種工作流。</p>
+
+      <div class="cards">
+        <div class="card">
+          <span class="card-label primary">Prep plan</span>
+          <h3>準備計畫</h3>
+          <p>讀取職缺情境，建立面試準備計畫與時間安排。</p>
+        </div>
+        <div class="card">
+          <span class="card-label teal">Practice</span>
+          <h3>模擬練習</h3>
+          <p>準備面試題目與練習材料，透過 AgentRunner 執行。</p>
+        </div>
+        <div class="card">
+          <span class="card-label amber">Debrief</span>
+          <h3>面試後複盤</h3>
+          <p>整理面試筆記、找出缺口，並讓 CareerOps 更新可重用的知識資料。</p>
+        </div>
+      </div>
+
+      <p>Interview 畫面也可以設定 <strong>Interview language</strong>。Practice、planning 與 debrief material 使用 Job Language；Analysis Language 仍維持你選擇的閱讀語言。</p>
+    </section>
+
+    <section id="progress">
+      <h2>11. Progress 與 Profile</h2>
+
+      <div class="cards">
+        <div class="card">
+          <span class="card-label">Progress</span>
+          <h3>看求職漏斗</h3>
+          <p>用 CareerOps 已有資料查看追蹤數量、各狀態分布與進度統計，不另外建立 Desktop-only database。</p>
+        </div>
+        <div class="card">
+          <span class="card-label">Profile</span>
+          <h3>調整你的設定</h3>
+          <p>Profile &amp; Settings 分成 My Background、Job Search、Search Sources、AI 四個區域。</p>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Profile 區域</th>
+            <th>用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>My Background</td>
+            <td>查看背景資料來源，進階使用者可直接檢查 <code>cv.md</code> 與 <code>config/profile.yml</code>。</td>
+          </tr>
+          <tr>
+            <td>Job Search</td>
+            <td>目標職位、地點、remote、薪資等偏好，以及 Analysis Language。</td>
+          </tr>
+          <tr>
+            <td>Search Sources</td>
+            <td>CareerOps 要掃描的公司與 job board，對應 <code>portals.yml</code>。</td>
+          </tr>
+          <tr>
+            <td>AI</td>
+            <td>查看 Provider 狀態並切換 preferred AI Provider。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="help">
+      <h2>12. Help 與疑難排解</h2>
+      <p class="section-intro">Help 頁提供 scores、scanner、AI 能做什麼／不能做什麼、privacy、troubleshooting 與 advanced 等快速說明，也可以載入完整 README 文件。</p>
+
+      <h3>常見問題</h3>
+
+      <details>
+        <summary>我需要一直開 Codex / Claude 的 Terminal 嗎？</summary>
+        <div class="details-body">
+          <p>一般 Desktop 工作流不需要你手動留在 coding-agent session 裡操作。App 透過 AgentRunner 呼叫你已設定好的本機 Provider。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>我想固定使用 Codex，要改 port 嗎？</summary>
+        <div class="details-body">
+          <p>不用。這個架構使用本機 CLI provider，不是連 localhost HTTP server。只要 Codex 被偵測為 Ready，於 onboarding 或 Profile → AI 選 Codex 即可。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>為什麼職缺語言和分析語言不同？</summary>
+        <div class="details-body">
+          <p>這是刻意設計。Analysis Language 是你閱讀分析的語言；Job Language 是該職缺的工作文件語言。兩者分開，才能例如用繁中看分析、同時產生德文履歷。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>掃描或分析卡住怎麼辦？</summary>
+        <div class="details-body">
+          <p>先看 Agent Activity 的目前階段與 Technical output。可以 Cancel 後 Retry。若 Provider 是 Error / Not authenticated，先處理 Provider 本身；若 sidecar 無法啟動，開發環境可在 <code>desktop</code> 執行既有的 sidecar build script。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Background Import 選完資料夾，AI 已經讀完了嗎？</summary>
+        <div class="details-body">
+          <p>目前沒有。現階段 UI 會記錄選取來源，但完整 extraction 尚未在這個 onboarding 畫面中完成。請以 canonical profile files 的實際內容為準。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>資料會傳到 CareerOps 的雲端嗎？</summary>
+        <div class="details-body">
+          <p>CareerOps Desktop 本身不是 hosted backend。資料主要保存在本機 CareerOps files；需要 AI 分析時，實際傳送範圍與處理由你選擇的 AI Provider 決定。</p>
+        </div>
+      </details>
+
+      <div class="callout danger">
+        <p><strong>本指南尚未包含：</strong>App 內自動更新、GitHub Release 安裝、Homebrew、Windows installer 與 biweekly upstream maintenance。這些屬於尚未 merge 進 <code>tauri-dashboard</code> 的 <code>feature/fork-release-system</code>。</p>
+      </div>
+    </section>
+
+    <footer>
+      CareerOps Desktop guide · downstream fork based on santifer/career-ops · UI structure follows this repository's DESIGN.md.
+    </footer>
+  </main>
+</body>
+</html>

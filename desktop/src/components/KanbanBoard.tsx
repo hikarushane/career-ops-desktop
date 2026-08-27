@@ -11,10 +11,9 @@ type Props = {
 };
 
 /**
- * Pipeline's Grouped view. career-ops already buckets applications into 8
- * status groups (STATUS_GROUP_ORDER); that maps directly onto DESIGN.md
- * §5.4's project-portal columns. 8 columns don't fit one 1366px screen, so
- * the board scrolls horizontally — see desktop/STITCH-PROMPT.md §6.3.
+ * Pipeline's Grouped view. career-ops buckets applications by canonical
+ * status, while empty groups are omitted so filtered cards stay visible.
+ * When populated columns exceed the viewport, the board scrolls horizontally.
  */
 export default function KanbanBoard({ apps, selected, onSelect, onStatusChange, pendingRow }: Props) {
   const columns = groupByStatus(apps);

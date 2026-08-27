@@ -130,6 +130,29 @@ export function isError(r: { ok: boolean }): r is SidecarError {
   return r.ok === false;
 }
 
+async function invokeSidecar<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const stdout = await invoke<string>(command, args);
+  try {
+    return JSON.parse(stdout) as T;
+  } catch (reason) {
+    throw new Error(`Sidecar returned invalid JSON: ${String(reason)}`);
+  }
+}
+
+function isSidecarError(value: unknown): value is SidecarError {
+  return typeof value === 'object'
+    && value !== null
+    && (value as { ok?: unknown }).ok === false
+    && typeof (value as { error?: unknown }).error === 'string'
+    && typeof (value as { message?: unknown }).message === 'string';
+}
+
+async function invokeLanguageSidecar<T>(command: string, args: Record<string, unknown>): Promise<T> {
+  const result = await invokeSidecar<T | SidecarError>(command, args);
+  if (isSidecarError(result)) throw new Error(result.message);
+  return result;
+}
+
 export type TaskType =
   | 'evaluate'
   | 'scan'
@@ -206,23 +229,23 @@ export function cancelTask(taskId: string) {
 }
 
 export function contracts() {
-  return invoke<ContractsResult | SidecarError>('contracts');
+  return invokeSidecar<ContractsResult | SidecarError>('contracts');
 }
 
 export function providers() {
-  return invoke<ProvidersResult | SidecarError>('providers');
+  return invokeSidecar<ProvidersResult | SidecarError>('providers');
 }
 
 export function doctor(root: string) {
-  return invoke<DoctorResult | SidecarError>('doctor', { path: root });
+  return invokeSidecar<DoctorResult | SidecarError>('doctor', { path: root });
 }
 
 export function listApplications(root: string) {
-  return invoke<ListResult | SidecarError>('list_applications', { path: root });
+  return invokeSidecar<ListResult | SidecarError>('list_applications', { path: root });
 }
 
 export function readReport(root: string, file: string) {
-  return invoke<ReportResult | SidecarError>('read_report', { path: root, file });
+  return invokeSidecar<ReportResult | SidecarError>('read_report', { path: root, file });
 }
 
 export function setStatus(
@@ -231,7 +254,7 @@ export function setStatus(
   expectStatus: string,
   status: string,
 ) {
-  return invoke<SetStatusResult | SidecarError>('set_status', {
+  return invokeSidecar<SetStatusResult | SidecarError>('set_status', {
     path: root,
     reportNumber,
     expectStatus,
@@ -240,17 +263,17 @@ export function setStatus(
 }
 
 export function languageSettings(root: string) {
-  return invoke<LanguageSettings>('language_settings', { path: root });
+  return invokeLanguageSidecar<LanguageSettings>('language_settings', { path: root });
 }
 
 export function setAnalysisLanguage(root: string, language: string) {
-  return invoke<LanguageSettings>('set_analysis_language', { path: root, language });
+  return invokeLanguageSidecar<LanguageSettings>('set_analysis_language', { path: root, language });
 }
 
 export function helpDocument(root: string, language: string) {
-  return invoke<HelpDocument>('help_document', { path: root, language });
+  return invokeLanguageSidecar<HelpDocument>('help_document', { path: root, language });
 }
 
 export function resolveJobLanguage(root: string, text: string) {
-  return invoke<JobLanguageResolution>('resolve_job_language', { path: root, text });
+  return invokeLanguageSidecar<JobLanguageResolution>('resolve_job_language', { path: root, text });
 }

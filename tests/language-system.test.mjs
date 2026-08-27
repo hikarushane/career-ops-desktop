@@ -26,19 +26,26 @@ check(migrated.includes('candidate:\n  full_name: Test') && migrated.includes('t
 
 const fixture = mkdtempSync(join(ROOT, '.tmp-language-system-'));
 try {
-  mkdirSync(join(fixture, 'docs', 'readme-translations'), { recursive: true });
   mkdirSync(join(fixture, 'modes', 'id'), { recursive: true });
   writeFileSync(join(fixture, 'README.md'), '# English\n');
-  writeFileSync(join(fixture, 'docs', 'readme-translations', 'README.de.md'), '# Deutsch\n');
-  writeFileSync(join(fixture, 'docs', 'readme-translations', 'README.zh-TW.md'), '# 繁體中文\n');
+  writeFileSync(join(fixture, 'README.zh-TW.md'), '# 繁體中文\n');
 
   const options = analysisLanguageOptions(fixture);
-  check(options.some((option) => option.code === 'de') && options.some((option) => option.code === 'id'), 'options are discovered from translations and modes rather than a React list');
+  check(options.some((option) => option.code === 'zh-TW'), 'options include zh-TW from root README.zh-TW.md');
+  check(options.some((option) => option.code === 'id'), 'options are discovered from market mode directories');
+  check(!options.some((option) => option.code === 'de'), 'options do not include languages without a mode directory');
+
+  const zhTWHelp = resolveHelpReadme(fixture, 'zh-TW');
+  check(zhTWHelp.path === 'README.zh-TW.md' && !zhTWHelp.fallback, 'Help selects zh-TW README at root');
 
   const germanHelp = resolveHelpReadme(fixture, 'de');
-  check(germanHelp.path === 'docs/readme-translations/README.de.md' && !germanHelp.fallback, 'Help selects the configured translation');
-  const missingHelp = resolveHelpReadme(fixture, 'id');
-  check(missingHelp.path === 'README.md' && missingHelp.fallback, 'Help falls back to English without changing analysis language');
+  check(germanHelp.path === 'README.md' && germanHelp.fallback, 'Help falls back to English for unsupported languages');
+
+  const japaneseHelp = resolveHelpReadme(fixture, 'ja');
+  check(japaneseHelp.path === 'README.md' && japaneseHelp.fallback, 'Help falls back to English for ja');
+
+  const englishHelp = resolveHelpReadme(fixture, 'en');
+  check(englishHelp.path === 'README.md' && englishHelp.fallback, 'Help returns English README for en');
 
   const written = writeAnalysisLanguage(fixture, 'zh-TW');
   check(written.analysisLanguage === 'zh-TW' && languageSettings(fixture).analysisLanguage === 'zh-TW', 'onboarding/settings writer persists only the analysis language');
