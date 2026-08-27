@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "version": "0.3.0",
-  "preparedCommit": "258bbf83654abef3aa7fb71d51677691ed92ae36",
-  "releaseNotesHash": "97159631e547ab212f6202da20540a74b0d91f8bb16c7f92f4dcb7713521ea3c",
-  "metadataHash": "a1fdf7970d6d147aaf04ef0c3819d5653c87d8e9e947a61fd3fbb022a26247f1"
+  "version": "0.4.0",
+  "preparedCommit": "7964a9725e68916372e3d42b9b64cb98d57c3c09",
+  "releaseNotesHash": "4fe386543aadf3e2da3bf3a09dda8508e6d988e0344da8b334f83defbb7c5d44",
+  "metadataHash": "0476eed28e5660b285e3daae6eecbc706d52da4874685c5ac93acd33d9ab5a18"
 }
