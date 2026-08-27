@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[English](README.md) | [Español](docs/readme-translations/README.es.md) | [Deutsch](docs/readme-translations/README.de.md) | [Français](docs/readme-translations/README.fr.md) | [Português (Brasil)](docs/readme-translations/README.pt-BR.md) | [한국어](docs/readme-translations/README.ko-KR.md) | [日本語](docs/readme-translations/README.ja.md) | [简体中文](docs/readme-translations/README.cn.md) | [繁體中文](docs/readme-translations/README.zh-TW.md) | [Українська](docs/readme-translations/README.ua.md) | [Русский](docs/readme-translations/README.ru.md) | [Polski](docs/readme-translations/README.pl.md) | [Dansk](docs/readme-translations/README.da.md) | [தமிழ்](docs/readme-translations/README.ta.md) | [العربية](docs/readme-translations/README.ar.md) | [हिन्दी](docs/readme-translations/README.hi.md) | [Türkçe](docs/readme-translations/README.tr.md)
+[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [தமிழ்](README.ta.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [Türkçe](README.tr.md)
 
 </div>
 
@@ -16,19 +16,19 @@
   <em>Now it's open source.</em>
 </p>
 
-<h2 align="center">People hired with career-ops</h2>
+<hr>
 
 <p align="center">
-  <a href="HIRED.md"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsantifer%2Fcareer-ops%2Fmain%2Fdocs%2Fhired-count.json&query=%24.count&label=%F0%9F%8E%89%20PEOPLE%20HIRED&color=2ea44f&style=for-the-badge&labelColor=2b3137" alt="People hired with career-ops"></a>
+  <a href="HIRED.md"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsantifer%2Fcareer-ops%2Fmain%2Fdocs%2Fhired-count.json&query=%24.count&label=%F0%9F%8E%89%20HIRED%20WITH%20CAREER-OPS&suffix=%20verified&color=2ea44f&style=for-the-badge&labelColor=2b3137" alt="Hired with career-ops: verified count"></a>
 </p>
 
-<p align="center"><sub>Every single count links to a public story. <a href="HIRED.md">Audit the wall →</a></sub></p>
+<p align="center"><sub>Landed yours? <a href="https://github.com/santifer/career-ops/issues/new?template=i-got-hired.yml">Share it →</a> · your card shows someone mid-search that the way out exists.</sub></p>
 
 <p align="center">
   <a href="HIRED.md"><img src="docs/hired-wall.svg" alt="The three most recent hired stories" width="800"></a>
 </p>
 
-<p align="center"><sub>Read all stories in <a href="HIRED.md">HIRED.md</a> · Just landed yours? <a href="https://github.com/santifer/career-ops/issues/new?template=i-got-hired.yml">Share it →</a> (your agent can draft it: ask it after recording the outcome)</sub></p>
+<p align="center"><sub>Every count is a public story you can <a href="HIRED.md">audit →</a> · every one of them started where you are now.</sub></p>
 
 <p align="center">
   <a href="https://trendshift.io/repositories/25195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/25195" alt="santifer%2Fcareer-ops | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
@@ -132,7 +132,6 @@ career-ops is the first reference implementation of [the CareerOps Manifesto](ht
 | **Funded Company Discovery** | Review-first `company:funded` command surfaces recently funded companies and source diagnostics from structured public feeds without editing your data |
 | **Batch Processing**     | Parallel evaluation with headless CLI workers (`claude -p` / `opencode run`)                                                             |
 | **Dashboard TUI**        | Terminal UI to browse, filter, and sort your pipeline                                                                                    |
-| **Desktop Dashboard**    | Native Tauri app: same pipeline data, filters and sorts, report viewer, and progress charts, with guarded inline status writeback        |
 | **Human-in-the-Loop**    | AI evaluates and recommends, you decide and act. The system never submits an application -- you always have the final call <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. -->               |
 | **Pipeline Integrity**   | Automated merge, dedup, status normalization, health checks                                                                              |
 | **Interview Suite**      | Time-blocked prep plans, practice sessions with feedback, post-interview debriefs ([`interview/`](modes/interview/README.md)), and a company red-flag detector ([`interview-redflag`](modes/interview-redflag.md)) |
@@ -395,19 +394,6 @@ npm run build:dashboard   # optional: build the standalone binary
 Features: 6 filter tabs, 4 sort modes, grouped/flat view, lazy-loaded previews, inline status changes.
 
 There is also an **experimental web UI** (alpha, opt-in — nothing runs unless you start it): see [`web/README.md`](web/README.md).
-
-## Desktop App
-
-A native Tauri dashboard is also available, for anyone who prefers a GUI over the terminal:
-
-    cd desktop
-    npm install
-    npm run tauri:dev
-
-It reuses the TUI's Go data layer through a bundled sidecar, so pipeline filtering,
-sorting, and status rules never drift between the two. See
-[`desktop/README.md`](desktop/README.md) for requirements (Rust, Node), architecture, and
-how tracker writes are guarded.
 
 ## Project Structure
 
