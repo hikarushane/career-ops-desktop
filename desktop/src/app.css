@@ -300,6 +300,7 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
 }
 .btn-primary { background: var(--color-primary); color: var(--color-text-on-primary-dark); }
 .btn-secondary { background: var(--color-accent-teal); color: var(--color-text-on-teal-dark); }
+.btn-primary:not(:disabled):hover, .btn-secondary:not(:disabled):hover { filter: brightness(1.05); }
 .btn-primary:active, .btn-secondary:active { transform: translateY(1px); }
 .btn-primary:disabled, .btn-secondary:disabled {
   background: var(--color-surface-muted); color: var(--color-text-secondary); cursor: default; transform: none;

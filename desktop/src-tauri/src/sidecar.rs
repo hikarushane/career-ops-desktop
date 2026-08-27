@@ -1,18 +1,15 @@
 //! The only place that spawns the career-data sidecar.
 //!
 //! No parsing happens here. Domain logic lives in Go, presentation lives in
-//! TypeScript, and this file moves bytes between them.
+//! TypeScript, and this file forwards the sidecar's JSON text between them.
 
-use serde_json::Value;
-use std::process::Command;
 use tauri_plugin_shell::ShellExt;
 
-/// Runs the sidecar and returns its stdout parsed as JSON.
+/// Runs the sidecar and returns its stdout without interpreting the payload.
 ///
-/// A `{"ok": false, ...}` payload is a successful call: the sidecar ran and
-/// reported a domain error, which the frontend renders. `Err` is reserved for
-/// the sidecar failing to run or not producing JSON at all.
-async fn run(app: &tauri::AppHandle, args: Vec<String>) -> Result<Value, String> {
+/// A `{"ok": false, ...}` payload remains a normal sidecar response. `Err`
+/// is reserved for the sidecar failing to run or not producing stdout.
+async fn run(app: &tauri::AppHandle, args: Vec<String>) -> Result<String, String> {
     let command = app
         .shell()
         .sidecar("career-data")
@@ -24,78 +21,32 @@ async fn run(app: &tauri::AppHandle, args: Vec<String>) -> Result<Value, String>
         .await
         .map_err(|e| format!("sidecar failed to start: {e}"))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    serde_json::from_str::<Value>(stdout.trim()).map_err(|e| {
-        format!("sidecar did not return JSON ({e}).\nstdout: {stdout}\nstderr: {stderr}")
-    })
-}
-
-fn run_language_script(path: &str, args: &[&str]) -> Result<Value, String> {
-    let output = Command::new("node")
-        .arg("profile-language.mjs")
-        .args(args)
-        .current_dir(path)
-        .output()
-        .map_err(|error| format!("could not run profile-language.mjs: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|error| format!("sidecar returned non-UTF-8 stdout: {error}"))?;
+    if stdout.trim().is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("sidecar returned no stdout. stderr: {stderr}"));
     }
-    serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("profile-language.mjs did not return JSON: {error}"))
-}
-
-fn run_job_language_script(path: &str, text: &str) -> Result<Value, String> {
-    let output = Command::new("node")
-        .args(["job-language.mjs", "--resolve", text])
-        .current_dir(path)
-        .output()
-        .map_err(|error| format!("could not run job-language.mjs: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
-    }
-    serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("job-language.mjs did not return JSON: {error}"))
+    Ok(stdout)
 }
 
 #[tauri::command]
-pub fn language_settings(path: String) -> Result<Value, String> {
-    run_language_script(&path, &["--settings"])
-}
-
-#[tauri::command]
-pub fn set_analysis_language(path: String, language: String) -> Result<Value, String> {
-    run_language_script(&path, &["--set-analysis", &language])
-}
-
-#[tauri::command]
-pub fn help_document(path: String, language: String) -> Result<Value, String> {
-    run_language_script(&path, &["--help-readme", &language])
-}
-
-#[tauri::command]
-pub fn resolve_job_language(path: String, text: String) -> Result<Value, String> {
-    run_job_language_script(&path, &text)
-}
-
-#[tauri::command]
-pub async fn contracts(app: tauri::AppHandle) -> Result<Value, String> {
+pub async fn contracts(app: tauri::AppHandle) -> Result<String, String> {
     run(&app, vec!["contracts".into()]).await
 }
 
 #[tauri::command]
-pub async fn providers(app: tauri::AppHandle) -> Result<Value, String> {
+pub async fn providers(app: tauri::AppHandle) -> Result<String, String> {
     run(&app, vec!["providers".into()]).await
 }
 
 #[tauri::command]
-pub async fn doctor(app: tauri::AppHandle, path: String) -> Result<Value, String> {
+pub async fn doctor(app: tauri::AppHandle, path: String) -> Result<String, String> {
     run(&app, vec!["doctor".into(), "--path".into(), path]).await
 }
 
 #[tauri::command]
-pub async fn list_applications(app: tauri::AppHandle, path: String) -> Result<Value, String> {
+pub async fn list_applications(app: tauri::AppHandle, path: String) -> Result<String, String> {
     run(&app, vec!["list".into(), "--path".into(), path]).await
 }
 
@@ -104,7 +55,7 @@ pub async fn read_report(
     app: tauri::AppHandle,
     path: String,
     file: String,
-) -> Result<Value, String> {
+) -> Result<String, String> {
     run(
         &app,
         vec![
@@ -125,7 +76,7 @@ pub async fn set_status(
     report_number: String,
     expect_status: String,
     status: String,
-) -> Result<Value, String> {
+) -> Result<String, String> {
     run(
         &app,
         vec![
@@ -138,6 +89,72 @@ pub async fn set_status(
             expect_status,
             "--status".into(),
             status,
+        ],
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn language_settings(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    run(
+        &app,
+        vec!["language-settings".into(), "--path".into(), path],
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn set_analysis_language(
+    app: tauri::AppHandle,
+    path: String,
+    language: String,
+) -> Result<String, String> {
+    run(
+        &app,
+        vec![
+            "set-analysis-language".into(),
+            "--path".into(),
+            path,
+            "--language".into(),
+            language,
+        ],
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn help_document(
+    app: tauri::AppHandle,
+    path: String,
+    language: String,
+) -> Result<String, String> {
+    run(
+        &app,
+        vec![
+            "help-document".into(),
+            "--path".into(),
+            path,
+            "--language".into(),
+            language,
+        ],
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn resolve_job_language(
+    app: tauri::AppHandle,
+    path: String,
+    text: String,
+) -> Result<String, String> {
+    run(
+        &app,
+        vec![
+            "resolve-job-language".into(),
+            "--path".into(),
+            path,
+            "--text".into(),
+            text,
         ],
     )
     .await

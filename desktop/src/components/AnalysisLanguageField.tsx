@@ -58,7 +58,7 @@ export default function AnalysisLanguageField({ root, onSaved }: Props) {
           ))}
         </select>
       </label>
-      {error && <p className="language-error">{error}</p>}
+      {error && <p className="language-error" role="alert">{error}</p>}
       <button className="btn-primary" onClick={save} disabled={saving || options.length === 0}>
         {saving ? 'Saving…' : 'Save analysis language'}
       </button>
