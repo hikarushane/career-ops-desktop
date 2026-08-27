@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -41,6 +41,9 @@ describe('pre-push hook behavior', () => {
     }
     write('desktop/package.json', '{"version":"0.1.0"}\n');
     write('desktop/src/main.ts', 'export const releaseSource = true;\n');
+    write('.agents/skills/career-ops/SKILL.md', '# Fixture skill\n');
+    mkdirSync(join(repo, '.claude/skills/career-ops'), { recursive: true });
+    symlinkSync('../../../.agents/skills/career-ops/SKILL.md', join(repo, '.claude/skills/career-ops/SKILL.md'));
     write('desktop/package-lock.json', '{"version":"0.1.0","packages":{"":{"version":"0.1.0"}}}\n');
     write('desktop/src-tauri/Cargo.toml', '[package]\nname = "desktop"\nversion = "0.1.0"\n');
     write('desktop/src-tauri/Cargo.lock', '[[package]]\nname = "desktop"\nversion = "0.1.0"\n');
@@ -105,5 +108,34 @@ describe('pre-push hook behavior', () => {
     const result = runHook('refs/heads/main');
     expect(result.status).not.toBe(0);
     expect(result.stdout + result.stderr).toContain('metadataHash is stale');
+  });
+
+  it('keeps prepared metadata valid across Git symlink checkout modes', () => {
+    const link = join(repo, '.claude/skills/career-ops/SKILL.md');
+    const linkTarget = '../../../.agents/skills/career-ops/SKILL.md';
+    rmSync(link);
+    writeFileSync(link, linkTarget);
+    git('config', 'core.symlinks', 'false');
+    expect(git('status', '--short')).toBe('');
+
+    const base = git('rev-parse', 'HEAD');
+    execFileSync(process.execPath, ['scripts/release/prepared-metadata.mjs', 'create', '--base', base], {
+      cwd: repo,
+      stdio: 'pipe',
+    });
+    git('add', 'release-prepared.json');
+    git('commit', '-qm', 'chore(release): prepare v0.1.0');
+
+    const clone = mkdtempSync(join(tmpdir(), 'career-ops-prepared-clone-'));
+    try {
+      execFileSync('git', ['clone', '-q', repo, clone]);
+      const result = spawnSync(process.execPath, ['scripts/release/prepared-metadata.mjs', 'validate'], {
+        cwd: clone,
+        encoding: 'utf8',
+      });
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+    } finally {
+      rmSync(clone, { recursive: true, force: true });
+    }
   });
 });
