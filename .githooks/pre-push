@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Pre-push hook: blocks unprepared pushes to main and unverified release tags.
+# This hook ONLY verifies and blocks. It never commits, pushes, or modifies source.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+DESKTOP="$ROOT/desktop"
+
+check_version_consistency() {
+  local pkg_ver tauri_ver cargo_ver
+  pkg_ver=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('$DESKTOP/package.json','utf8')).version)")
+  tauri_ver=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('$DESKTOP/src-tauri/tauri.conf.json','utf8')).version)")
+  cargo_ver=$(grep -m1 '^version' "$DESKTOP/src-tauri/Cargo.toml" | sed 's/.*"\([^"]*\)".*/\1/')
+
+  if [ "$pkg_ver" != "$tauri_ver" ] || [ "$pkg_ver" != "$cargo_ver" ]; then
+    echo "BLOCKED: Version mismatch — package.json=$pkg_ver, tauri.conf=$tauri_ver, Cargo.toml=$cargo_ver"
+    return 1
+  fi
+  echo "  Version consistent: $pkg_ver"
+}
+
+check_release_notes() {
+  if [ ! -f "$ROOT/RELEASE_NOTES.md" ]; then
+    echo "BLOCKED: RELEASE_NOTES.md not found"
+    return 1
+  fi
+  echo "  Release notes present"
+}
+
+check_release_repo() {
+  local repo
+  if [ -f "$ROOT/.fork/release.json" ]; then
+    repo=$(node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('$ROOT/.fork/release.json','utf8')).repository ?? ''))")
+    if [ -z "$repo" ] || [ "$repo" = "null" ]; then
+      echo "BLOCKED: .fork/release.json repository is not set — configure your fork repo first"
+      return 1
+    fi
+  fi
+  echo "  Release repository configured"
+}
+
+while read -r local_ref local_oid remote_ref remote_oid; do
+  remote_branch="${remote_ref#refs/heads/}"
+  remote_tag="${remote_ref#refs/tags/}"
+
+  # Gate: pushing to main
+  if [ "$remote_branch" = "main" ]; then
+    echo "Pre-push: verifying release readiness for main push..."
+    check_version_consistency || exit 1
+    check_release_notes || exit 1
+    check_release_repo || exit 1
+    echo "  Main push checks passed."
+  fi
+
+  # Gate: pushing a release tag (v*)
+  if [[ "$remote_tag" == v* ]] && [ "$remote_tag" != "$remote_ref" ]; then
+    echo "Pre-push: verifying release tag $remote_tag..."
+    check_version_consistency || exit 1
+    check_release_notes || exit 1
+    check_release_repo || exit 1
+
+    local expected_ver="${remote_tag#v}"
+    local pkg_ver
+    pkg_ver=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('$DESKTOP/package.json','utf8')).version)")
+    if [ "$pkg_ver" != "$expected_ver" ]; then
+      echo "BLOCKED: Tag $remote_tag does not match fork version $pkg_ver"
+      exit 1
+    fi
+    echo "  Release tag checks passed."
+  fi
+done
+
+exit 0
