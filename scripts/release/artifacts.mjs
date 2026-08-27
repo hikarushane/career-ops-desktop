@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from '../../lib/is-main-module.mjs';
 import { releaseNotesSection } from './release-lib.mjs';
 
 function arg(name, fallback = null) {
@@ -105,8 +106,7 @@ export function finalizeArtifacts({ root, assetsDir, version, repository, gitSha
   return publicFiles;
 }
 
-const invoked = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (invoked) {
+if (isMainModule(import.meta.url)) {
   const command = process.argv[2];
   if (command === 'collect') {
     const copied = collectArtifacts({
