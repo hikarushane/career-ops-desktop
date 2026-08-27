@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { sidecarFilename } from '../../scripts/sidecar-naming.mjs';
+import { updaterPlatformFromTriple } from '../../../scripts/release/artifacts.mjs';
+import { renderCask } from '../../../scripts/release/homebrew.mjs';
+import { isProtectedPath } from '../../../scripts/release/protected-paths.mjs';
+import { validateReleaseConfiguration } from '../../../scripts/release/release-lib.mjs';
 
 const ROOT = resolve(__dirname, '../../..');
 const DESKTOP = join(ROOT, 'desktop');
@@ -141,6 +145,52 @@ describe('fork metadata', () => {
   it('.fork/protected-paths.json lists desktop/', () => {
     const paths = readJson(join(ROOT, '.fork', 'protected-paths.json'));
     expect(paths.protected).toContain('desktop/');
+  });
+});
+
+describe('release safety helpers', () => {
+  it.each([
+    '.github/workflows/release.yml',
+    '.github/workflows/release-readiness.yml',
+    '.github/workflows/upstream-maintenance.yml',
+    '.github/prompts/upstream-maintenance.md',
+    '.fork/release.json',
+    'packaging/homebrew/career-ops.rb',
+    'README.md',
+    'docs/readme-translations/README.md',
+    'docs/upstream/README.md',
+    'scripts/release/prepare.mjs',
+    'desktop/src-tauri/tauri.conf.json',
+  ])('classifies %s as protected infrastructure', (path) => {
+    const paths = readJson(join(ROOT, '.fork', 'protected-paths.json')).protected;
+    expect(isProtectedPath(path, paths)).toBe(true);
+  });
+
+  it('rejects placeholder production release configuration', () => {
+    const result = validateReleaseConfiguration(ROOT, { production: true });
+    expect(result.ok).toBe(false);
+    expect(result.errors.join('\n')).toMatch(/repository|public key|endpoint/i);
+  });
+
+  it.each([
+    ['aarch64-apple-darwin', 'darwin-aarch64'],
+    ['x86_64-apple-darwin', 'darwin-x86_64'],
+    ['x86_64-pc-windows-msvc', 'windows-x86_64'],
+  ])('maps %s to updater platform %s', (triple, platform) => {
+    expect(updaterPlatformFromTriple(triple)).toBe(platform);
+  });
+
+  it('renders a versioned Homebrew cask with a real checksum', () => {
+    const source = readFileSync(join(ROOT, 'packaging', 'homebrew', 'career-ops.rb'), 'utf8');
+    const sha = 'a'.repeat(64);
+    const rendered = renderCask(source, {
+      version: '1.2.3',
+      url: 'https://github.com/acme/career-ops/releases/download/desktop-v1.2.3/CareerOps_1.2.3_macOS.dmg',
+      sha256: sha,
+    });
+    expect(rendered).toContain('version "1.2.3"');
+    expect(rendered).toContain(`sha256 "${sha}"`);
+    expect(rendered).not.toContain(':no_check');
   });
 });
 
