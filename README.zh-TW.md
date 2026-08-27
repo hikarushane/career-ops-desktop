@@ -25,15 +25,37 @@ Desktop 架構刻意避免重寫 CareerOps 的 business logic。App 負責 UX �
 
 ### macOS
 
-從 [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases) 下載最新版 macOS 安裝檔。
+從本 fork 的 GitHub Releases 頁面下載最新版 DMG 或 `CareerOps-macOS-<version>.zip`。打開 DMG，把 CareerOps 拖進 Applications，再從 Applications 啟動。
 
-Homebrew 安裝會隨 Desktop release pipeline 完成後提供。
+Homebrew tap 設定完成後，可安裝同一份簽章 release：
+
+```bash
+brew install --cask <owner>/<tap>/career-ops
+```
+
+`<owner>/<tap>` 必須與 fork operator 設定的 tap repository 一致（例如 repository 名為 `homebrew-career-ops` 時，tap token 通常是 `career-ops`）。Release workflow 會計算 DMG 的 SHA256 並發佈版本化 cask，不會使用 `sha256 :no_check`。
 
 ### Windows
 
-從 [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases) 下載最新版 Windows 安裝檔。
+從本 fork 的 GitHub Releases 頁面下載 `CareerOps_<version>_Windows.exe` 或 `CareerOps-Windows-<version>.zip`，再執行 NSIS installer。
 
 > 在正式簽章的公開 release 尚未提供前，macOS 或 Windows 可能會顯示系統對未簽章 App 的標準安全提示。
+
+每個 release 也會提供 `SHA256SUMS.txt`、`release-provenance.json`、已簽章的 updater archives 與 `latest.json`。若不透過 App 安裝，請用 checksum manifest 驗證下載檔。
+
+## 第一次啟動
+
+1. 選擇或建立 CareerOps 資料資料夾；既有的 `cv.md`、profile、tracker、reports 與 output 都保留在該資料夾。
+2. 完成個人資料設定，避免 evaluation 繼續使用 shipped example targeting。
+3. 到 **Settings → AI Provider** 選擇可用的本機 provider，登入由 provider 自己的 CLI 處理；Desktop App 不儲存 provider password。
+4. 用 **Background Import** 匯入既有 CareerOps workspace。Import 會保留 user layer，並在執行 AI 工作前先列出偵測結果。
+5. 從 Home 貼上職缺 URL，或啟動 scanner。
+
+## Desktop updater
+
+CareerOps Desktop 會在背景檢查本 fork 的 Tauri signed update feed。發現新版後，header 的版本 badge 會持續顯示，直到你選擇 **Later** 或 **Update Now**。安裝前會驗證簽章，完成後重新啟動 App；暫時的網路錯誤不會清掉已知 update。
+
+Release publish 會在 fork repository、updater endpoint、public key 與 signing credentials 尚未設定時直接阻擋。Apple notarization 與 Windows Authenticode 是獨立於 Tauri updater signing 的 production credentials。
 
 ## Desktop 版增加了什麼
 
@@ -134,6 +156,19 @@ CareerOps Desktop 保留上游 human-in-the-loop 的原則。
 ### Codex 使用者
 
 CareerOps 支援 Codex 作為 AI provider。設定方式見 [CODEX.md](./CODEX.md)。Headless 模式下，在 repo 根目錄執行 `codex exec "prompt"`。Codex 不保證支援 slash commands，請改用自然語言 prompt。
+
+### Advanced / CLI 使用方式
+
+偏好 agent-driven workflow 的使用者與 maintainer 仍可使用完整 upstream CLI。在 repository root 執行：
+
+```bash
+node doctor.mjs --json
+node scan.mjs
+node tracker.mjs
+codex exec "Run career-ops pipeline mode for data/pipeline.md"
+```
+
+完整 mode 與 CLI reference 請見保留的 [upstream README](./docs/upstream/README.md)。CLI-only installation 仍可使用 `node update-system.mjs check`；一般 Desktop 使用者應使用 App updater，避免同時收到兩套更新通知。
 
 ### 環境需求
 

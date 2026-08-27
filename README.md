@@ -25,15 +25,37 @@ Prebuilt desktop releases are the intended installation path.
 
 ### macOS
 
-Download the latest macOS build from [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases).
+Download the latest DMG or `CareerOps-macOS-<version>.zip` from the fork's GitHub Releases page. Open the DMG, drag CareerOps into Applications, and launch it from Applications.
 
-Homebrew distribution is planned as part of the desktop release pipeline.
+When the Homebrew tap is configured, install the same signed release with:
+
+```bash
+brew install --cask <owner>/<tap>/career-ops
+```
+
+`<owner>/<tap>` must match the tap repository configured by the fork operator (for a repository named `homebrew-career-ops`, the tap token is normally `career-ops`). The release workflow computes the DMG SHA256 and publishes the versioned cask; it never uses `sha256 :no_check`.
 
 ### Windows
 
-Download the latest Windows installer from [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases).
+Download `CareerOps_<version>_Windows.exe` or `CareerOps-Windows-<version>.zip` from the fork's GitHub Releases page and run the NSIS installer.
 
 > Until signed public releases are available, macOS or Windows may show the operating system's standard warning for unsigned applications.
+
+Every release also publishes `SHA256SUMS.txt`, `release-provenance.json`, signed updater archives, and `latest.json`. Verify downloads against the checksum manifest when installing outside the app.
+
+## First launch
+
+1. Choose or create your CareerOps data folder. Existing `cv.md`, profile, tracker, reports, and output stay in that folder.
+2. Complete the profile prompts so evaluation uses your targets rather than shipped examples.
+3. Open **Settings → AI Provider** and select an available local provider. Sign in through that provider's own CLI; the Desktop app does not store a provider password.
+4. Use **Background Import** to bring an existing CareerOps workspace into the Desktop flow. Import preserves the user layer and reports what it discovered before running AI work.
+5. Paste a job URL or run the scanner from Home.
+
+## Desktop updater
+
+CareerOps Desktop checks the fork's signed Tauri update feed in the background. When an update is available, the header keeps the version badge visible until you choose **Later** or **Update Now**. Update installation is signature-verified and relaunches the app after the archive installs. A temporary network failure does not erase an update the app already found.
+
+Release publishing is intentionally blocked until the fork repository, updater endpoint, public key, and signing credentials are configured. Apple notarization and Windows Authenticode are separate production credentials from Tauri updater signing.
 
 ## What it adds
 
@@ -134,6 +156,19 @@ The old `desktop/README.md` has been consolidated into this file. There should b
 ### Codex users
 
 CareerOps supports Codex as an AI provider. See [CODEX.md](./CODEX.md) for setup. In headless mode, run `codex exec "prompt"` from the repository root. Slash commands are not guaranteed in Codex; use plain language prompts instead.
+
+### Advanced / CLI usage
+
+The complete upstream CLI remains available for maintainers and users who prefer agent-driven workflows. From the repository root:
+
+```bash
+node doctor.mjs --json
+node scan.mjs
+node tracker.mjs
+codex exec "Run career-ops pipeline mode for data/pipeline.md"
+```
+
+See the preserved [upstream README](./docs/upstream/README.md) for the full mode and CLI reference. CLI-only installations may still use `node update-system.mjs check`; normal Desktop users should use the in-app updater so they do not receive two update notification streams.
 
 ### Requirements
 
