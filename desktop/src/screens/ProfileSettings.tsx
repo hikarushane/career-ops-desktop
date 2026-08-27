@@ -113,7 +113,7 @@ export default function ProfileSettings({ root: _root }: Props) {
                   </div>
                 )}
                 {updateCheck.status === 'error' && (
-                  <div className="settings-update-status" style={{color: 'var(--color-accent-red)'}}>
+                  <div className="settings-update-status settings-update-error">
                     {updateCheck.error}
                   </div>
                 )}
