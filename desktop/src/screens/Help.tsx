@@ -51,7 +51,7 @@ export default function Help({ root }: Props) {
         {document && (
           <details>
             <summary>
-              {document.fallback ? 'English guide (translation unavailable)' : `Guide: ${document.path}`}
+              {document.fallback ? 'English guide' : `Guide (${document.language})`}
             </summary>
             <article className="help-readme-content"><ReactMarkdown>{document.markdown}</ReactMarkdown></article>
           </details>
