@@ -40,6 +40,7 @@ describe('pre-push hook behavior', () => {
       cpSync(join(ROOT, path), target);
     }
     write('desktop/package.json', '{"version":"0.1.0"}\n');
+    write('desktop/src/main.ts', 'export const releaseSource = true;\n');
     write('desktop/package-lock.json', '{"version":"0.1.0","packages":{"":{"version":"0.1.0"}}}\n');
     write('desktop/src-tauri/Cargo.toml', '[package]\nname = "desktop"\nversion = "0.1.0"\n');
     write('desktop/src-tauri/Cargo.lock', '[[package]]\nname = "desktop"\nversion = "0.1.0"\n');
@@ -87,5 +88,22 @@ describe('pre-push hook behavior', () => {
     git('add', 'release-prepared.json');
     git('commit', '-qm', 'chore(release): prepare v0.1.0');
     expect(runHook('refs/heads/main').status).toBe(0);
+  });
+
+  it('blocks main when tracked source changes after preparation', () => {
+    const base = git('rev-parse', 'HEAD');
+    execFileSync(process.execPath, ['scripts/release/prepared-metadata.mjs', 'create', '--base', base], {
+      cwd: repo,
+      stdio: 'pipe',
+    });
+    git('add', 'release-prepared.json');
+    git('commit', '-qm', 'chore(release): prepare v0.1.0');
+    write('desktop/src/main.ts', 'export const releaseSource = false;\n');
+    git('add', 'desktop/src/main.ts');
+    git('commit', '-qm', 'feat(desktop): change packaged source');
+
+    const result = runHook('refs/heads/main');
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain('metadataHash is stale');
   });
 });
