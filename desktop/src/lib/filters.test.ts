@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Application } from '../api';
-import { applyFilterAndSort, countForFilter, matchesSearch, scoreBand } from './filters';
+import { applyFilterAndSort, countForFilter, groupByStatus, matchesSearch, scoreBand } from './filters';
 
 function app(over: Partial<Application>): Application {
   return {
@@ -121,6 +121,16 @@ describe('applyFilterAndSort', () => {
     const order = FIXTURE.map((a) => a.company);
     applyFilterAndSort(FIXTURE, 'all', 'company', 'grouped', '');
     expect(FIXTURE.map((a) => a.company)).toEqual(order);
+  });
+});
+
+describe('groupByStatus', () => {
+  it('omits empty groups so filtered status results are immediately visible', () => {
+    const evaluated = applyFilterAndSort(FIXTURE, 'evaluated', 'score', 'grouped', '');
+
+    expect(groupByStatus(evaluated).map((group) => [group.status, group.apps.length])).toEqual([
+      ['evaluated', 2],
+    ]);
   });
 });
 

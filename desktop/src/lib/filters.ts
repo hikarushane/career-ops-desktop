@@ -94,16 +94,17 @@ export function applyFilterAndSort(
 }
 
 /**
- * Buckets an already filtered+sorted list into the 8 status columns for
- * the Kanban board (Pipeline grouped view). Always returns all 8 buckets,
- * empty ones included, so the board's column layout doesn't shift as
- * filters change — see desktop/STITCH-PROMPT.md §6.3.
+ * Buckets an already filtered+sorted list into populated status columns for
+ * the Kanban board (Pipeline grouped view). Empty buckets are omitted so a
+ * filtered result cannot be hidden beyond leading empty columns.
  */
 export function groupByStatus(apps: Application[]): { status: string; apps: Application[] }[] {
-  return statusGroupOrder().map((status) => ({
-    status,
-    apps: apps.filter((a) => a.normStatus === status),
-  }));
+  return statusGroupOrder()
+    .map((status) => ({
+      status,
+      apps: apps.filter((a) => a.normStatus === status),
+    }))
+    .filter((group) => group.apps.length > 0);
 }
 
 export function countForFilter(
