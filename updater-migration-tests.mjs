@@ -66,6 +66,14 @@ for (const [listName, entries] of [['SYSTEM_PATHS', systemPaths], ['BOOTSTRAP_PA
 }
 
 const requiredSystemPaths = [
+  '.fork/OWNERSHIP.md',
+  '.fork/protected-paths.json',
+  '.githooks/',
+  'packaging/',
+  'scripts/release/',
+  'scripts/setup-dev-hooks.mjs',
+  'RELEASE_NOTES.md',
+  'README.zh-TW.md',
   'modes/email.md',
   'modes/followup.md',
   'modes/interview.md',
@@ -111,6 +119,11 @@ const requiredBootstrapPaths = [
   'tracker-columns-tests.mjs',
 ];
 
+const requiredUserPaths = [
+  '.fork/release.json',
+  '.fork/upstream.json',
+];
+
 for (const path of requiredSystemPaths) {
   if (systemPaths.includes(path)) pass(`SYSTEM_PATHS covers ${path}`);
   else fail(`SYSTEM_PATHS missing ${path}`);
@@ -119,6 +132,11 @@ for (const path of requiredSystemPaths) {
 for (const path of requiredBootstrapPaths) {
   if (bootstrapPaths.includes(path)) pass(`BOOTSTRAP_PATHS covers ${path}`);
   else fail(`BOOTSTRAP_PATHS missing ${path}`);
+}
+
+for (const path of requiredUserPaths) {
+  if (userPaths.includes(path)) pass(`USER_PATHS preserves downstream operator state ${path}`);
+  else fail(`USER_PATHS missing downstream operator state ${path}`);
 }
 
 const twoPassManifestChecks = [

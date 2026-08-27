@@ -87,6 +87,16 @@ export const REEXEC_BUFFER_TIMEOUT_MS = parsePositiveInt(process.env.CAREER_OPS_
 // System layer paths — ONLY these files get updated
 const SYSTEM_PATHS = [
   '.gitattributes',
+  // Downstream release machinery is system-owned by the Desktop fork. Keep
+  // operator configuration/state below in USER_PATHS so the legacy CLI
+  // updater can never replace it with upstream defaults.
+  '.fork/OWNERSHIP.md',
+  '.fork/protected-paths.json',
+  '.githooks/',
+  'packaging/',
+  'scripts/release/',
+  'scripts/setup-dev-hooks.mjs',
+  'RELEASE_NOTES.md',
   'modes/README.md',
   'modes/_shared.md',
   'modes/_writing.md',
@@ -350,6 +360,7 @@ const SYSTEM_PATHS = [
   'ARCHITECTURE.md',
   'DESIGN.md',
   'README.md',
+  'README.zh-TW.md',
   'CHANGELOG.md',
   'CODE_OF_CONDUCT.md',
   'CONTRIBUTORS.md',
@@ -434,6 +445,8 @@ const BOOTSTRAP_PATHS = [
  * having an opinion about it (#2480).
  */
 export const USER_PATHS = [
+  '.fork/release.json',
+  '.fork/upstream.json',
   'cv.md',
   'config/profile.yml',
   'modes/_profile.md',
