@@ -1,0 +1,195 @@
+name: Upstream Maintenance
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC; the job body gates on ISO-week parity.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  upstream-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Biweekly parity gate
+        if: github.event_name == 'schedule'
+        run: |
+          WEEK=$(date +%V)
+          if (( WEEK % 2 != 0 )); then
+            echo "Odd ISO week ($WEEK) — skipping scheduled maintenance"
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          else
+            echo "Even ISO week ($WEEK) — proceeding"
+            echo "SKIP=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Skip on odd weeks
+        if: env.SKIP == 'true'
+        run: echo "::notice::Skipped (odd ISO week)"
+
+      - name: Read upstream config
+        if: env.SKIP != 'true'
+        id: upstream
+        run: |
+          REPO=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('.fork/upstream.json','utf8')).repository)")
+          BRANCH=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('.fork/upstream.json','utf8')).branch)")
+          LAST_SHA=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('.fork/upstream.json','utf8')).lastIntegratedSha)")
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "last_sha=$LAST_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch upstream
+        if: env.SKIP != 'true'
+        run: |
+          git remote add upstream "https://github.com/${{ steps.upstream.outputs.repo }}.git" || true
+          git fetch upstream "${{ steps.upstream.outputs.branch }}" --no-tags
+
+      - name: Check for new commits
+        if: env.SKIP != 'true'
+        id: diff
+        run: |
+          UPSTREAM_SHA=$(git rev-parse "upstream/${{ steps.upstream.outputs.branch }}")
+          LAST_SHA="${{ steps.upstream.outputs.last_sha }}"
+          echo "upstream_sha=$UPSTREAM_SHA" >> "$GITHUB_OUTPUT"
+          if [ "$UPSTREAM_SHA" = "$LAST_SHA" ]; then
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No upstream changes since $LAST_SHA"
+          else
+            echo "has_update=true" >> "$GITHUB_OUTPUT"
+            COMMIT_COUNT=$(git rev-list --count "$LAST_SHA..$UPSTREAM_SHA" 2>/dev/null || echo "unknown")
+            echo "commit_count=$COMMIT_COUNT" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create sync branch
+        if: env.SKIP != 'true' && steps.diff.outputs.has_update == 'true'
+        run: |
+          SHORT_SHA=$(echo "${{ steps.diff.outputs.upstream_sha }}" | head -c 8)
+          BRANCH="automation/upstream-sync-$(date +%Y%m%d)-${SHORT_SHA}"
+          git checkout -b "$BRANCH"
+          echo "SYNC_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: Attempt merge
+        if: env.SKIP != 'true' && steps.diff.outputs.has_update == 'true'
+        id: merge
+        run: |
+          UPSTREAM_SHA="${{ steps.diff.outputs.upstream_sha }}"
+          if git merge --no-ff --no-commit "$UPSTREAM_SHA" 2>/dev/null; then
+            echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
+            git reset HEAD  # unstage for Codex to handle
+          else
+            echo "has_conflicts=true" >> "$GITHUB_OUTPUT"
+            git merge --abort
+          fi
+
+      - uses: actions/setup-node@v4
+        if: env.SKIP != 'true' && steps.diff.outputs.has_update == 'true'
+        with:
+          node-version: 22
+      - uses: actions/setup-go@v5
+        if: env.SKIP != 'true' && steps.diff.outputs.has_update == 'true'
+        with:
+          go-version-file: dashboard/go.mod
+      - name: Install dependencies
+        if: env.SKIP != 'true' && steps.diff.outputs.has_update == 'true'
+        run: npm install
+        working-directory: desktop
+
+      - name: Run Codex maintenance
+        if: env.SKIP != 'true' && steps.diff.outputs.has_update == 'true'
+        uses: openai/codex-action@v1
+        with:
+          prompt-file: .github/prompts/upstream-maintenance.md
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          UPSTREAM_SHA: ${{ steps.diff.outputs.upstream_sha }}
+          LAST_SHA: ${{ steps.upstream.outputs.last_sha }}
+          HAS_CONFLICTS: ${{ steps.merge.outputs.has_conflicts }}
+          UPSTREAM_REPO: ${{ steps.upstream.outputs.repo }}
+
+      - name: Run independent CI
+        if: env.SKIP != 'true' && steps.diff.outputs.has_update == 'true'
+        run: |
+          echo "Running post-Codex verification..."
+          cd dashboard && go test ./... && cd ..
+          cd desktop && npx tsc --noEmit && npx vitest run && cd ..
+          node scripts/release/version-consistency.mjs
+          git diff --check || true
+
+      - name: Check protected paths
+        if: env.SKIP != 'true' && steps.diff.outputs.has_update == 'true'
+        id: protected
+        run: |
+          PROTECTED=$(node -e "
+            const p = JSON.parse(require('fs').readFileSync('.fork/protected-paths.json','utf8')).protected;
+            const diff = require('child_process').execSync('git diff --name-only HEAD', {encoding:'utf8'});
+            const touched = diff.split('\n').filter(Boolean);
+            const hits = touched.filter(f => p.some(pp => f.startsWith(pp)));
+            process.stdout.write(JSON.stringify(hits));
+          ")
+          if [ "$PROTECTED" != "[]" ]; then
+            echo "has_protected=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Protected paths modified by upstream: $PROTECTED"
+          else
+            echo "has_protected=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push sync branch
+        if: env.SKIP != 'true' && steps.diff.outputs.has_update == 'true'
+        run: git push origin "$SYNC_BRANCH"
+
+      - name: Create PR
+        if: env.SKIP != 'true' && steps.diff.outputs.has_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPSTREAM_SHA="${{ steps.diff.outputs.upstream_sha }}"
+          LAST_SHA="${{ steps.upstream.outputs.last_sha }}"
+          VERSION=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('desktop/package.json','utf8')).version)")
+          PROTECTED="${{ steps.protected.outputs.has_protected }}"
+
+          LABEL=""
+          if [ "$PROTECTED" = "true" ]; then
+            LABEL="--label 'manual-review-required'"
+          fi
+
+          gh pr create \
+            --title "chore(upstream): sync to ${UPSTREAM_SHA:0:8}" \
+            --body "$(cat <<'EOF'
+          ## Upstream Sync
+
+          | Field | Value |
+          |-------|-------|
+          | Previous SHA | $LAST_SHA |
+          | New SHA | $UPSTREAM_SHA |
+          | Conflicts | ${{ steps.merge.outputs.has_conflicts }} |
+          | Protected paths touched | ${{ steps.protected.outputs.has_protected }} |
+          | Fork version | $VERSION |
+
+          ### Checklist
+          - [ ] Go tests pass
+          - [ ] Desktop TypeScript compiles
+          - [ ] Vitest passes
+          - [ ] macOS package builds
+          - [ ] Windows package builds
+          - [ ] Version consistency verified
+          - [ ] No unexpected protected path changes
+          EOF
+          )" $LABEL
+
+      - name: Enable auto-merge (if safe)
+        if: >
+          env.SKIP != 'true' &&
+          steps.diff.outputs.has_update == 'true' &&
+          steps.merge.outputs.has_conflicts == 'false' &&
+          steps.protected.outputs.has_protected == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge --auto --squash "$SYNC_BRANCH" || echo "::notice::Auto-merge not available — PR awaits manual review"

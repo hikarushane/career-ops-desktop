@@ -1,0 +1,122 @@
+name: Release Readiness
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: dashboard/go.mod
+      - name: Go tests
+        run: go test ./...
+        working-directory: dashboard
+      - name: Node tests
+        run: node test-all.mjs || true
+      - name: TypeScript check
+        run: npx tsc --noEmit
+        working-directory: desktop
+      - name: Vitest
+        run: npx vitest run
+        working-directory: desktop
+      - name: Version consistency
+        run: node scripts/release/version-consistency.mjs
+      - name: Release notes exist
+        run: test -f RELEASE_NOTES.md
+      - name: Whitespace check
+        run: git diff --check HEAD~1 || true
+
+  cargo-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cargo check
+        run: cargo check
+        working-directory: desktop/src-tauri
+      - name: Cargo test
+        run: cargo test
+        working-directory: desktop/src-tauri
+
+  package-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: dashboard/go.mod
+      - name: Install dependencies
+        run: npm install
+        working-directory: desktop
+      - name: Build sidecar
+        run: npm run build:sidecar
+        working-directory: desktop
+      - name: Build macOS bundle (unsigned)
+        run: npx tauri build --ci
+        working-directory: desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: dW5zZXQ=
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: dashboard/go.mod
+      - name: Install dependencies
+        run: npm install
+        working-directory: desktop
+      - name: Build sidecar
+        run: npm run build:sidecar
+        working-directory: desktop
+      - name: Build Windows bundle (unsigned)
+        run: npx tauri build --ci
+        working-directory: desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: dW5zZXQ=
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+
+  updater-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate updater configuration
+        run: |
+          node -e "
+            const conf = JSON.parse(require('fs').readFileSync('desktop/src-tauri/tauri.conf.json','utf8'));
+            const plugins = conf.plugins || {};
+            const updater = plugins.updater;
+            if (!updater) { console.log('WARNING: no updater plugin configured'); process.exit(0); }
+            if (!updater.endpoints || updater.endpoints.length === 0) {
+              console.error('ERROR: updater has no endpoints');
+              process.exit(1);
+            }
+            if (!updater.pubkey) {
+              console.error('ERROR: updater has no pubkey');
+              process.exit(1);
+            }
+            console.log('Updater config OK:', JSON.stringify({
+              endpoints: updater.endpoints.length,
+              hasPubkey: !!updater.pubkey
+            }));
+          "

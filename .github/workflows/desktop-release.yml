@@ -1,0 +1,248 @@
+name: Desktop Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - '.fork/**'
+      - 'RELEASE_NOTES.md'
+
+permissions:
+  contents: write
+
+jobs:
+  detect-release:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          VERSION=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('desktop/package.json','utf8')).version)")
+          TAG="desktop-v${VERSION}"
+          if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q .; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+  build-macos:
+    needs: detect-release
+    if: needs.detect-release.outputs.should_release == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: dashboard/go.mod
+      - name: Install frontend dependencies
+        run: npm install
+        working-directory: desktop
+      - name: Build sidecar
+        run: npm run build:sidecar
+        working-directory: desktop
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: desktop
+      - name: Rename artifacts
+        run: |
+          VERSION="${{ needs.detect-release.outputs.version }}"
+          cd desktop/src-tauri/target/release/bundle
+          # DMG
+          for f in dmg/*.dmg; do
+            [ -f "$f" ] && cp "$f" "CareerOps_${VERSION}_macOS.dmg"
+          done
+          # Updater artifacts (tar.gz + sig)
+          for f in macos/*.tar.gz; do
+            [ -f "$f" ] && cp "$f" "CareerOps_${VERSION}_macOS.app.tar.gz"
+          done
+          for f in macos/*.sig; do
+            [ -f "$f" ] && cp "$f" "CareerOps_${VERSION}_macOS.app.tar.gz.sig"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: |
+            desktop/src-tauri/target/release/bundle/CareerOps_*
+          retention-days: 5
+
+  build-windows:
+    needs: detect-release
+    if: needs.detect-release.outputs.should_release == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: dashboard/go.mod
+      - name: Install frontend dependencies
+        run: npm install
+        working-directory: desktop
+      - name: Build sidecar
+        run: npm run build:sidecar
+        working-directory: desktop
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: desktop
+      - name: Rename artifacts
+        shell: bash
+        run: |
+          VERSION="${{ needs.detect-release.outputs.version }}"
+          cd desktop/src-tauri/target/release/bundle
+          for f in nsis/*.exe; do
+            [ -f "$f" ] && cp "$f" "CareerOps_${VERSION}_Windows.exe"
+          done
+          for f in nsis/*.nsis.zip; do
+            [ -f "$f" ] && cp "$f" "CareerOps_${VERSION}_Windows.nsis.zip"
+          done
+          for f in nsis/*.sig; do
+            [ -f "$f" ] && cp "$f" "CareerOps_${VERSION}_Windows.nsis.zip.sig"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            desktop/src-tauri/target/release/bundle/CareerOps_*
+          retention-days: 5
+
+  publish-release:
+    needs: [detect-release, build-macos, build-windows]
+    if: needs.detect-release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Check release repo configuration
+        run: |
+          REPO=$(node -e "
+            const r = JSON.parse(require('fs').readFileSync('.fork/release.json','utf8'));
+            process.stdout.write(String(r.repository ?? ''));
+          ")
+          if [ -z "$REPO" ] || [ "$REPO" = "null" ]; then
+            echo "::error::.fork/release.json repository not configured — cannot publish"
+            exit 1
+          fi
+      - name: Generate checksums
+        run: |
+          cd release-assets
+          sha256sum CareerOps_* > SHA256SUMS.txt 2>/dev/null || shasum -a 256 CareerOps_* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Create ZIP archives
+        run: |
+          VERSION="${{ needs.detect-release.outputs.version }}"
+          cd release-assets
+          [ -f "CareerOps_${VERSION}_macOS.dmg" ] && zip "CareerOps-macOS-${VERSION}.zip" "CareerOps_${VERSION}_macOS.dmg"
+          [ -f "CareerOps_${VERSION}_Windows.exe" ] && zip "CareerOps-Windows-${VERSION}.zip" "CareerOps_${VERSION}_Windows.exe"
+      - name: Generate latest.json
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const version = '${{ needs.detect-release.outputs.version }}';
+            const dir = 'release-assets';
+            const repo = JSON.parse(fs.readFileSync('.fork/release.json','utf8')).repository;
+            const base = 'https://github.com/' + repo + '/releases/download/desktop-v' + version;
+            const latest = { version: 'v' + version, notes: '', pub_date: new Date().toISOString(), platforms: {} };
+            // macOS
+            const macSig = path.join(dir, 'CareerOps_' + version + '_macOS.app.tar.gz.sig');
+            if (fs.existsSync(macSig)) {
+              latest.platforms['darwin-aarch64'] = {
+                signature: fs.readFileSync(macSig, 'utf8').trim(),
+                url: base + '/CareerOps_' + version + '_macOS.app.tar.gz'
+              };
+              latest.platforms['darwin-x86_64'] = latest.platforms['darwin-aarch64'];
+            }
+            // Windows
+            const winSig = path.join(dir, 'CareerOps_' + version + '_Windows.nsis.zip.sig');
+            if (fs.existsSync(winSig)) {
+              latest.platforms['windows-x86_64'] = {
+                signature: fs.readFileSync(winSig, 'utf8').trim(),
+                url: base + '/CareerOps_' + version + '_Windows.nsis.zip'
+              };
+            }
+            // Release notes
+            const rn = fs.readFileSync('RELEASE_NOTES.md', 'utf8');
+            const m = rn.match(new RegExp('## v' + version.replace(/\./g,'\\\\.') + '[\\s\\S]*?(?=\\n## |$)'));
+            if (m) latest.notes = m[0].trim();
+            fs.writeFileSync(path.join(dir, 'latest.json'), JSON.stringify(latest, null, 2));
+          "
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.detect-release.outputs.version }}"
+          TAG="desktop-v${VERSION}"
+
+          # Extract release notes section
+          NOTES=$(node -e "
+            const fs = require('fs');
+            const rn = fs.readFileSync('RELEASE_NOTES.md','utf8');
+            const m = rn.match(/## v${VERSION//./\\.}[\s\S]*?(?=\n## |\$)/);
+            process.stdout.write(m ? m[0] : 'Release v${VERSION}');
+          ")
+
+          gh release create "$TAG" \
+            --title "CareerOps Desktop v${VERSION}" \
+            --notes "$NOTES" \
+            release-assets/CareerOps_* \
+            release-assets/CareerOps-* \
+            release-assets/SHA256SUMS.txt \
+            release-assets/latest.json
+
+  update-homebrew:
+    needs: [detect-release, publish-release]
+    if: needs.detect-release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Homebrew tap configuration
+        run: |
+          TAP=$(node -e "
+            const r = JSON.parse(require('fs').readFileSync('.fork/release.json','utf8'));
+            process.stdout.write(String(r.homebrewTap ?? ''));
+          ")
+          if [ -z "$TAP" ] || [ "$TAP" = "null" ]; then
+            echo "::notice::Homebrew tap not configured in .fork/release.json — skipping"
+            exit 0
+          fi
+          echo "HOMEBREW_TAP=$TAP" >> "$GITHUB_ENV"
+      - name: Update Homebrew cask
+        if: env.HOMEBREW_TAP != ''
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          echo "::notice::Homebrew tap update would run here with $HOMEBREW_TAP"
+          echo "CONFIGURATION REQUIRED: set HOMEBREW_TAP_TOKEN secret and create the tap repo"
