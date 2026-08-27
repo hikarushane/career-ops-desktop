@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.3.0
+
+Released 2026-08-27.
+
+- Prepared the remediation release after passing the release-readiness gates.
+
 ## v0.2.0
 
 Released 2026-08-27.
