@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { nonEmptyArtifacts } from './release-lib.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const desktop = join(root, 'desktop');
@@ -31,7 +31,11 @@ if (!skipPackage && process.platform === 'darwin') {
     '--config', 'src-tauri/tauri.unsigned.conf.json',
   ], desktop);
   const bundle = join(tauri, 'target', 'release', 'bundle', 'dmg');
-  if (!existsSync(bundle)) throw new Error('macOS DMG output directory was not created');
+  const dmgs = nonEmptyArtifacts(bundle, '.dmg');
+  if (dmgs.length !== 1) {
+    throw new Error(`expected exactly one non-empty macOS DMG, found ${dmgs.length}`);
+  }
+  console.log(`Verified macOS DMG: ${dmgs[0].name} (${dmgs[0].size} bytes)`);
 } else if (!skipPackage) {
   console.log('Packaging runtime deferred to macos-latest/windows-latest; static readiness passed.');
 }

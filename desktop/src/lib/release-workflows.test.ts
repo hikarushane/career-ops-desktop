@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { finalizeArtifacts } from '../../../scripts/release/artifacts.mjs';
 import { protectedChanges } from '../../../scripts/release/protected-paths.mjs';
+import { nonEmptyArtifacts } from '../../../scripts/release/release-lib.mjs';
 
 const ROOT = resolve(__dirname, '../../..');
 const temporary: string[] = [];
@@ -46,6 +47,14 @@ describe('protected infrastructure range gate', () => {
 });
 
 describe('release artifact finalization', () => {
+  it('accepts only non-empty artifacts with the requested suffix', () => {
+    const root = temp('career-ops-non-empty-artifacts-');
+    write(root, 'valid.dmg', 'disk-image');
+    write(root, 'empty.dmg', '');
+    write(root, 'other.zip', 'archive');
+    expect(nonEmptyArtifacts(root, '.dmg')).toEqual([{ name: 'valid.dmg', size: 10 }]);
+  });
+
   it('creates ZIPs before a complete checksum manifest and emits provenance', () => {
     const root = temp('career-ops-artifacts-');
     const assets = join(root, 'assets');

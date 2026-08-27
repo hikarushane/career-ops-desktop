@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const RELEASE_INPUTS = [
@@ -25,6 +25,14 @@ export function sha256(value) {
 
 export function sha256File(path) {
   return sha256(readFileSync(path));
+}
+
+export function nonEmptyArtifacts(directory, suffix) {
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory)
+    .filter((name) => name.endsWith(suffix))
+    .map((name) => ({ name, size: statSync(join(directory, name)).size }))
+    .filter(({ size }) => size > 0);
 }
 
 export function versionSources(root) {
