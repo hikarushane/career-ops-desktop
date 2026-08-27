@@ -157,7 +157,7 @@ describe('release safety helpers', () => {
     '.fork/release.json',
     'packaging/homebrew/career-ops.rb',
     'README.md',
-    'docs/readme-translations/README.md',
+    'README.en.md',
     'docs/upstream/README.md',
     'scripts/release/prepare.mjs',
     'desktop/src-tauri/tauri.conf.json',

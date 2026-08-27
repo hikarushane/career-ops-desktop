@@ -13,7 +13,7 @@ fork repo                    (this repo — Desktop app, distribution, auto-upda
 ## Ownership boundaries
 
 - **Upstream owns**: scoring, tracker rules, scan logic, batch rules, interview business logic, modes, templates, pipeline scripts.
-- **Fork owns**: `desktop/`, `.fork/`, `packaging/`, release workflows, updater, distribution, root `README.md`, `docs/upstream/`.
+- **Fork owns**: `desktop/`, `.fork/`, `packaging/`, release workflows, updater, distribution, root `README.md` and `README.en.md`, `docs/upstream/`.
 
 ## Version identity
 

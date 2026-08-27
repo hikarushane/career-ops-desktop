@@ -1839,8 +1839,8 @@ const leakPatterns = [
 
 const scanExtensions = ['md', 'yml', 'html', 'mjs', 'sh', 'go', 'json'];
 const allowedFiles = [
-  // English + zh-TW README (both legitimately credit Santiago)
-  'README.md', 'README.zh-TW.md',
+  // Traditional Chinese + English README (both legitimately credit Santiago)
+  'README.md', 'README.en.md',
   // Standard project files
   'LICENSE', 'CITATION.cff', 'CONTRIBUTING.md', 'CHANGELOG.md', 'TRADEMARK.md',
   'package.json', '.github/FUNDING.yml', 'CLAUDE.md', 'AGENTS.md', 'go.mod', 'test-all.mjs',

@@ -39,8 +39,8 @@ const ROOT = __dirname;
 /**
  * Remove upstream translated READMEs that appear at root after an update.
  *
- * The downstream fork maintains only README.md (English) and README.zh-TW.md
- * (Traditional Chinese) at root. Upstream releases may still ship other
+ * The downstream fork maintains only README.md (Traditional Chinese) and
+ * README.en.md (English) at root. Upstream releases may still ship other
  * translated READMEs at root; this reconciliation deletes them so the
  * two-language layout is preserved deterministically.
  *
@@ -53,8 +53,8 @@ export function reconcileReadmeLayout(root = ROOT) {
 
   for (const filename of readdirSync(root)) {
     if (!/^README\.[A-Za-z-]+\.md$/.test(filename)) continue;
-    // README.zh-TW.md is the downstream canonical zh-TW README — keep it.
-    if (filename === 'README.zh-TW.md') continue;
+    // README.en.md is the downstream canonical English README — keep it.
+    if (filename === 'README.en.md') continue;
     unlinkSync(join(root, filename));
     deleted.push(filename);
   }
@@ -361,7 +361,7 @@ const SYSTEM_PATHS = [
   'ARCHITECTURE.md',
   'DESIGN.md',
   'README.md',
-  'README.zh-TW.md',
+  'README.en.md',
   'CHANGELOG.md',
   'CODE_OF_CONDUCT.md',
   'CONTRIBUTORS.md',
@@ -1846,7 +1846,7 @@ async function apply() {
     }
 
     // 3b.1 Two-language README layout. The downstream fork maintains only
-    // README.md and README.zh-TW.md at root. Upstream releases may still ship
+    // README.md and README.en.md at root. Upstream releases may still ship
     // other translated READMEs; delete them so the layout stays clean.
     try {
       const deletedReadmes = reconcileReadmeLayout(ROOT);

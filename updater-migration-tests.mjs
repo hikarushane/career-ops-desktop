@@ -74,7 +74,7 @@ const requiredSystemPaths = [
   'scripts/setup-dev-hooks.mjs',
   'RELEASE_NOTES.md',
   'release-prepared.json',
-  'README.zh-TW.md',
+  'README.en.md',
   'modes/email.md',
   'modes/followup.md',
   'modes/interview.md',

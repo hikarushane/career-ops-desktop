@@ -5,6 +5,7 @@
     ".fork/",
     "packaging/",
     "README.md",
+    "README.en.md",
     "docs/readme-translations/",
     "docs/upstream/",
     ".github/workflows/desktop-release",

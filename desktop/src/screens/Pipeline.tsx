@@ -12,14 +12,14 @@ import ReportPane from '../components/ReportPane';
 import Toolbar from '../components/Toolbar';
 
 // onReload is async because Task 11 awaits it after a successful write.
-type Props = { root: string; data: ListResult; onReload: () => Promise<void> };
+type Props = { root: string; data: ListResult; onReload: () => Promise<void>; initialSelected?: string };
 
-export default function Pipeline({ root, data, onReload }: Props) {
+export default function Pipeline({ root, data, onReload, initialSelected }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [sort, setSort] = useState<SortKey>('score');
   const [view, setView] = useState<ViewMode>('grouped');
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialSelected ?? null);
   const [pendingRow, setPendingRow] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<{ stale: boolean; message: string } | null>(null);
 

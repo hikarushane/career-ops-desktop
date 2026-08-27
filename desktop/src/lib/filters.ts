@@ -94,17 +94,16 @@ export function applyFilterAndSort(
 }
 
 /**
- * Buckets an already filtered+sorted list into populated status columns for
- * the Kanban board (Pipeline grouped view). Empty buckets are omitted so a
- * filtered result cannot be hidden beyond leading empty columns.
+ * Buckets an already filtered+sorted list into status columns for
+ * the Kanban board (Pipeline grouped view). All canonical statuses
+ * are shown so the full pipeline shape is always visible.
  */
 export function groupByStatus(apps: Application[]): { status: string; apps: Application[] }[] {
   return statusGroupOrder()
     .map((status) => ({
       status,
       apps: apps.filter((a) => a.normStatus === status),
-    }))
-    .filter((group) => group.apps.length > 0);
+    }));
 }
 
 export function countForFilter(
