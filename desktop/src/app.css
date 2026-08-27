@@ -199,6 +199,7 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
 .status-dot-interview, .status-dot-offer { background: var(--color-primary); }
 .status-dot-applied, .status-dot-responded { background: var(--color-accent-teal); }
 .status-dot-evaluated { background: var(--color-accent-magenta); }
+.status-dot-top { background: var(--score-high); }
 .status-dot-skip { background: var(--color-accent-amber); }
 .status-dot-rejected, .status-dot-discarded { background: var(--color-accent-red); }
 .kanban-column-title { font: 700 14px var(--font-sans); flex: 1; }
@@ -209,6 +210,37 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
   padding: 12px 4px;
 }
 .kanban-column-empty { color: var(--color-text-secondary); font-size: 12px; padding: 8px 4px; }
+.kanban-column-header--collapsible { cursor: pointer; }
+.kanban-column-header--collapsible:hover { opacity: 0.7; }
+.kanban-column-nodata {
+  font-style: italic; font-size: 13px;
+  color: var(--color-text-secondary); opacity: 0.5;
+  padding: 12px 4px;
+}
+
+.kanban-empty-group {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-left: auto; padding-left: var(--kanban-column-gap);
+  flex-shrink: 0;
+}
+.kanban-column-collapsed {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+  opacity: 0.6;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.kanban-column-collapsed:hover { opacity: 0.9; }
+.kanban-column-collapsed .kanban-column-title {
+  font: 500 12px var(--font-sans); flex: unset;
+}
+.kanban-column-collapsed .kanban-column-dot { width: 6px; height: 6px; }
+.kanban-column-collapsed .kanban-column-count {
+  font: 500 11px var(--font-mono); color: var(--color-text-secondary);
+}
 
 .kanban-card {
   background: var(--color-canvas);
