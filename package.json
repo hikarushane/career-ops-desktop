@@ -66,7 +66,11 @@
     "build:dashboard": "node build-dashboard.mjs",
     "serve:dashboard": "cd dashboard && go run . --path ..",
     "postinstall": "npx playwright install chromium --with-deps || npx playwright install chromium --with-deps",
-    "manifesto": "node manifesto.mjs"
+    "manifesto": "node manifesto.mjs",
+    "release:prepare": "node scripts/release/prepare.mjs",
+    "release:prepare:ci": "node scripts/release/prepare.mjs --non-interactive --reason upstream-sync",
+    "release:version-check": "node scripts/release/version-consistency.mjs",
+    "hooks:setup": "node scripts/setup-dev-hooks.mjs"
   },
   "keywords": [
     "ai",
