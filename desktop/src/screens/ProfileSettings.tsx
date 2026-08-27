@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ProviderEntry } from '../api';
 import { detectProviders, getPreferredId, setPreferredId } from '../lib/providers';
+import { checkForUpdate, type UpdateState, initialState } from '../lib/updater';
 import AnalysisLanguageField from '../components/AnalysisLanguageField';
 
 type Props = { root: string };
 
-type Tab = 'background' | 'preferences' | 'sources' | 'ai';
+type Tab = 'background' | 'preferences' | 'sources' | 'ai' | 'about';
 
 export default function ProfileSettings({ root: _root }: Props) {
   const [tab, setTab] = useState<Tab>('background');
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [preferredId, setPreferred] = useState<string | null>(null);
+  const [updateCheck, setUpdateCheck] = useState<UpdateState>(initialState());
 
   useEffect(() => {
     detectProviders().then(setProviders);
@@ -27,6 +29,7 @@ export default function ProfileSettings({ root: _root }: Props) {
     { key: 'preferences', label: 'Job Search' },
     { key: 'sources', label: 'Search Sources' },
     { key: 'ai', label: 'AI' },
+    { key: 'about', label: 'About' },
   ];
 
   return (
@@ -90,6 +93,41 @@ export default function ProfileSettings({ root: _root }: Props) {
                   </span>
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {tab === 'about' && (
+          <div>
+            <h2>About</h2>
+            <p>CareerOps Desktop v{__APP_VERSION__}</p>
+            <div className="settings-update-row">
+              <div>
+                <span>Check for Updates</span>
+                {updateCheck.status === 'up_to_date' && (
+                  <div className="settings-update-status">You're up to date.</div>
+                )}
+                {updateCheck.status === 'available' && (
+                  <div className="settings-update-status">
+                    v{updateCheck.availableVersion} available
+                  </div>
+                )}
+                {updateCheck.status === 'error' && (
+                  <div className="settings-update-status" style={{color: 'var(--color-accent-red)'}}>
+                    {updateCheck.error}
+                  </div>
+                )}
+                {updateCheck.status === 'checking' && (
+                  <div className="settings-update-status">Checking…</div>
+                )}
+              </div>
+              <button
+                className="btn-secondary"
+                disabled={updateCheck.status === 'checking'}
+                onClick={() => checkForUpdate(setUpdateCheck, __APP_VERSION__, true)}
+              >
+                Check Now
+              </button>
             </div>
           </div>
         )}

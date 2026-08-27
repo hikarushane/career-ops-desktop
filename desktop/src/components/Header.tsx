@@ -1,10 +1,14 @@
 import { FolderIcon, ReloadIcon } from './icons';
+import UpdateBadge from './UpdateBadge';
+import type { UpdateState } from '../lib/updater';
 
 type Props = {
   title: string;
   root: string;
   onReload: () => void;
   onChangeFolder: () => void;
+  updateState?: UpdateState;
+  onUpdateClick?: () => void;
 };
 
 /**
@@ -13,7 +17,7 @@ type Props = {
  * repurposed as a "workspace block" showing the selected career-ops
  * folder instead of a person — see STITCH-PROMPT.md §4.1.
  */
-export default function Header({ title, root, onReload, onChangeFolder }: Props) {
+export default function Header({ title, root, onReload, onChangeFolder, updateState, onUpdateClick }: Props) {
   const segments = root.split('/').filter(Boolean);
   const folderName = segments[segments.length - 1] || root;
 
@@ -29,6 +33,9 @@ export default function Header({ title, root, onReload, onChangeFolder }: Props)
           <button type="button" className="icon-button" onClick={onChangeFolder} title="Change folder" aria-label="Change folder">
             <FolderIcon />
           </button>
+          {updateState && onUpdateClick && (
+            <UpdateBadge state={updateState} onClick={onUpdateClick} />
+          )}
         </div>
 
         <div className="app-header-divider" />
