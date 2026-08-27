@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isMainModule } from '../../lib/is-main-module.mjs';
 
 export function isProtectedPath(path, protectedPaths) {
   return protectedPaths.some((entry) => entry.endsWith('/')
@@ -19,8 +19,7 @@ export function protectedChanges(root, base, head = 'HEAD') {
   return output.split('\n').filter(Boolean).filter((path) => isProtectedPath(path, config.protected));
 }
 
-const invoked = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (invoked) {
+if (isMainModule(import.meta.url)) {
   const root = resolve(import.meta.dirname, '../..');
   const baseIndex = process.argv.indexOf('--base');
   const headIndex = process.argv.indexOf('--head');

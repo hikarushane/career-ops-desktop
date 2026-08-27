@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isMainModule } from '../../lib/is-main-module.mjs';
 
 export function renderCask(source, { version, url, sha256 }) {
   if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error('Homebrew cask requires a real SHA256');
@@ -15,8 +15,7 @@ export function renderCask(source, { version, url, sha256 }) {
   return rendered;
 }
 
-const invoked = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (invoked) {
+if (isMainModule(import.meta.url)) {
   const value = (name) => {
     const index = process.argv.indexOf(name);
     return index >= 0 ? process.argv[index + 1] : null;
