@@ -1,0 +1,19 @@
+{
+  "_comment": "Paths owned by the fork. Upstream merges must not overwrite these without manual review.",
+  "protected": [
+    "desktop/",
+    ".fork/",
+    "packaging/",
+    "README.md",
+    "docs/readme-translations/",
+    "docs/upstream/",
+    ".github/workflows/desktop-release.yml",
+    ".github/workflows/release-readiness.yml",
+    ".github/workflows/upstream-maintenance.yml",
+    ".github/prompts/upstream-maintenance.md",
+    ".githooks/",
+    "scripts/release/",
+    "scripts/setup-dev-hooks.mjs",
+    "RELEASE_NOTES.md"
+  ]
+}
