@@ -46,7 +46,7 @@ export default function Help({ root }: Props) {
       </div>
       <section className="help-readme">
         <h2>Full guide</h2>
-        {documentError && <p className="language-error">{documentError}</p>}
+        {documentError && <p className="language-error" role="alert">{documentError}</p>}
         {!document && !documentError && <p className="setup-hint">Loading guide…</p>}
         {document && (
           <details>
