@@ -27,6 +27,9 @@
   --color-accent-amber: #d68c1e;
   --color-accent-red: #b20000;
   --color-accent-magenta: #ac2c80;
+  --color-danger: var(--color-accent-red);
+  /* Derived from accent teal for DESIGN.md §7's visible focus treatment. */
+  --color-focus: #0e5f5a;
 
   /* Text-on-fill pairs. Green/teal are DESIGN.md §3.1 Observed values
      (color.text.onPrimaryDark / onTealDark) — measured from the source
@@ -122,6 +125,12 @@ body {
   cursor: pointer; padding: 4px 8px;
 }
 .btn-ghost:hover { color: var(--color-text-primary); }
+button:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
 
 /* --- Setup / Onboarding (STITCH §6.7: full-bleed, max-width 640px) --- */
 .setup-screen {
@@ -178,10 +187,10 @@ body {
   background: var(--color-canvas); color: var(--color-text-primary);
 }
 .action-input-row input:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
-.document-language-picker { display: grid; gap: 6px; margin-top: 14px; }
-.document-language-picker label { display: grid; gap: 5px; font: 500 12px var(--font-sans); }
-.document-language-picker select { width: fit-content; padding: 7px 9px; border: var(--border-divider); border-radius: var(--radius-control); background: var(--color-canvas); color: var(--color-text-primary); }
-.language-change-button { min-height: 0; padding: 0 3px; text-decoration: underline; vertical-align: baseline; }
+.document-language-picker { display: grid; gap: 8px; margin-top: 16px; }
+.document-language-picker label { display: grid; gap: 4px; font: 500 12px var(--font-sans); }
+.document-language-picker select { width: fit-content; padding: 5px 10px; border: var(--border-divider); border-radius: var(--radius-control); background: var(--color-canvas); color: var(--color-text-primary); }
+.language-change-button { min-height: 0; padding: 5px 10px; text-decoration: underline; vertical-align: baseline; }
 
 .home-recent h3 { margin: 0 0 12px; font: 700 14px var(--font-sans); }
 .recent-list { display: flex; flex-direction: column; gap: 4px; }
@@ -246,8 +255,8 @@ body {
 
 .interview-workflow-screen { padding: 20px 32px; }
 .interview-workflow-screen h1 { margin: 8px 0 4px; font: 700 18px var(--font-sans); }
-.workflow-language-picker { display: grid; gap: 5px; max-width: 360px; margin: 16px 0; font: 500 12px var(--font-sans); }
-.workflow-language-picker select { padding: 7px 9px; border: var(--border-divider); border-radius: var(--radius-control); background: var(--color-canvas); color: var(--color-text-primary); }
+.workflow-language-picker { display: grid; gap: 4px; max-width: 360px; margin: 16px 0; font: 500 12px var(--font-sans); }
+.workflow-language-picker select { padding: 5px 10px; border: var(--border-divider); border-radius: var(--radius-control); background: var(--color-canvas); color: var(--color-text-primary); }
 .workflow-language-picker small { color: var(--color-text-secondary); font: 400 12px/1.4 var(--font-sans); }
 
 /* --- Profile (tabs reuse nav pill language: §4.3 30px radius) --- */
@@ -268,12 +277,37 @@ body {
 }
 .profile-content h2 { margin: 0 0 8px; font: 600 16px var(--font-sans); }
 .profile-content code { font: 400 12px var(--font-mono); background: var(--color-surface-subtle); padding: 2px 4px; border-radius: 3px; }
-.analysis-language-field { display: grid; gap: 10px; max-width: 480px; margin-top: 20px; }
+.analysis-language-field { display: grid; gap: 8px; max-width: 480px; margin-top: 20px; }
 .analysis-language-field h2 { margin: 0; }
 .analysis-language-field p { margin: 0; color: var(--color-text-secondary); font: 400 13px/1.5 var(--font-sans); }
-.analysis-language-field label { display: grid; gap: 6px; font: 500 13px var(--font-sans); }
-.analysis-language-field select { padding: 8px 10px; border: var(--border-divider); border-radius: var(--radius-control); background: var(--color-canvas); color: var(--color-text-primary); font: 400 14px var(--font-sans); }
+.analysis-language-field label { display: grid; gap: 4px; font: 500 13px var(--font-sans); }
+.analysis-language-field select { padding: 5px 10px; border: var(--border-divider); border-radius: var(--radius-control); background: var(--color-canvas); color: var(--color-text-primary); font: 400 14px var(--font-sans); }
+.analysis-language-field .btn-primary { padding: 5px 10px; }
 .language-error { color: var(--color-danger); }
+
+@media (max-width: 767px) {
+  .document-language-picker select,
+  .workflow-language-picker select,
+  .analysis-language-field select,
+  .analysis-language-field .btn-primary {
+    min-height: 44px;
+  }
+
+  .help-readme summary {
+    min-height: 44px;
+    padding: 12px 10px;
+  }
+
+  .language-change-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 8px;
+    vertical-align: middle;
+  }
+}
 
 /* --- Help (accordion, Derived — no DESIGN.md precedent) --- */
 .help-screen { padding: 20px 32px; max-width: 640px; }
