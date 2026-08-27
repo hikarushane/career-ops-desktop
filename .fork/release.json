@@ -1,0 +1,6 @@
+{
+  "repository": null,
+  "updateEndpoint": null,
+  "homebrewTap": null,
+  "_comment": "Set repository to 'owner/career-ops' once the fork GitHub repo is created. updateEndpoint and homebrewTap are derived automatically by CI when repository is set."
+}
