@@ -119,9 +119,6 @@ if (!skipHeavyTests) {
   console.log('Release test mode: heavy readiness commands skipped by test harness.');
 }
 
-const marker = buildPreparedMetadata(root, baseCommit);
-writeJson(join(root, 'release-prepared.json'), marker);
-
 const files = [
   'desktop/package.json',
   'desktop/src-tauri/tauri.conf.json',
@@ -130,10 +127,12 @@ const files = [
   'packaging/homebrew/career-ops.rb',
   '.fork/upstream.json',
   'RELEASE_NOTES.md',
-  'release-prepared.json',
 ];
 if (existsSync(packageLockPath)) files.splice(1, 0, 'desktop/package-lock.json');
 git('add', '--', ...files);
+const marker = buildPreparedMetadata(root, baseCommit);
+writeJson(join(root, 'release-prepared.json'), marker);
+git('add', '--', 'release-prepared.json');
 git('diff', '--cached', '--check');
 git('commit', '-m', `chore(release): prepare v${nextVersion}`, '-m', `Reason: ${reason}\nUpstream: ${upstream.lastIntegratedSha}`);
 console.log(`Release v${nextVersion} prepared and committed on ${branch}.`);

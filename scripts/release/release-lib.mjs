@@ -76,15 +76,19 @@ export function releaseNotesSection(root, version) {
 }
 
 export function releaseMetadataHash(root) {
-  const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
+  const tracked = execFileSync('git', ['ls-files', '--stage', '-z'], { cwd: root, encoding: 'utf8' })
     .split('\0')
-    .filter((path) => path && path !== 'release-prepared.json')
-    .sort();
-  const manifest = tracked.map((path) => {
-    const full = join(root, path);
-    if (!existsSync(full)) throw new Error(`tracked release source missing: ${path}`);
-    return `${path}\0${sha256File(full)}`;
-  }).join('\n');
+    .filter(Boolean)
+    .map((entry) => {
+      const match = /^(\d+) ([0-9a-f]+) \d+\t([\s\S]+)$/.exec(entry);
+      if (!match) throw new Error(`could not parse tracked release source: ${entry}`);
+      return { mode: match[1], object: match[2], path: match[3] };
+    })
+    .filter(({ path }) => path !== 'release-prepared.json')
+    .sort((left, right) => left.path.localeCompare(right.path));
+  const manifest = tracked
+    .map(({ mode, object, path }) => `${mode} ${path}\0${object}`)
+    .join('\n');
   return sha256(manifest);
 }
 
@@ -113,6 +117,18 @@ export function validatePreparedMetadata(root) {
     return { ok: false, errors: [`release-prepared.json is invalid JSON: ${error.message}`] };
   }
   const errors = [];
+  try {
+    execFileSync('git', ['diff', '--quiet', '--', '.', ':(exclude)release-prepared.json'], {
+      cwd: root,
+      stdio: 'ignore',
+    });
+    execFileSync('git', ['diff', '--cached', '--quiet', '--', '.', ':(exclude)release-prepared.json'], {
+      cwd: root,
+      stdio: 'ignore',
+    });
+  } catch {
+    errors.push('tracked release sources have uncommitted changes');
+  }
   let expected;
   try {
     expected = buildPreparedMetadata(root, marker.preparedCommit);
