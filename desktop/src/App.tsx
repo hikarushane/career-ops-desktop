@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { doctor, isError, listApplications, type Application, type DoctorResult, type ListResult } from './api';
 import { loadRoot, pickRoot } from './config';
 import { loadContracts } from './lib/contracts';
+import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
+import UpdateModal from './components/UpdateModal';
 import {
   HomeIcon, PipelineIcon, ProgressIcon, InterviewIcon,
   ProfileIcon, HelpIcon,
@@ -35,6 +37,8 @@ export default function App() {
   const [iwMode, setIwMode] = useState<'interview-plan' | 'interview-practice' | 'interview-debrief'>('interview-plan');
   const [iwCompany, setIwCompany] = useState('');
   const [iwRole, setIwRole] = useState('');
+  const [updateState, setUpdateState] = useState<UpdateState>(initialState);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
 
   const refresh = useCallback(async (path: string) => {
     setError(null);
@@ -56,6 +60,11 @@ export default function App() {
         if (p) refresh(p);
       })
       .catch((e) => setError(String(e)));
+
+    const appVersion = __APP_VERSION__;
+    setUpdateState((s) => ({ ...s, currentVersion: appVersion }));
+    startPolling(setUpdateState, appVersion);
+    return () => stopPolling();
   }, [refresh]);
 
   const onPick = useCallback(async () => {
@@ -157,6 +166,8 @@ export default function App() {
         root={root}
         onReload={reload}
         onChangeFolder={onPick}
+        updateState={updateState}
+        onUpdateClick={() => setShowUpdateModal(true)}
       />
       <nav className="nav">
         {NAV.map(({ key, label, Icon }) => (
@@ -167,6 +178,13 @@ export default function App() {
         ))}
       </nav>
       {renderScreen()}
+      {showUpdateModal && (
+        <UpdateModal
+          state={updateState}
+          onUpdate={() => downloadAndInstall(setUpdateState, updateState.currentVersion)}
+          onClose={() => setShowUpdateModal(false)}
+        />
+      )}
     </div>
   );
 }
