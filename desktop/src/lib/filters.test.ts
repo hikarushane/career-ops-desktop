@@ -125,12 +125,24 @@ describe('applyFilterAndSort', () => {
 });
 
 describe('groupByStatus', () => {
-  it('omits empty groups so filtered status results are immediately visible', () => {
+  it('returns all canonical status columns including empty ones', () => {
     const evaluated = applyFilterAndSort(FIXTURE, 'evaluated', 'score', 'grouped', '');
+    const groups = groupByStatus(evaluated);
 
-    expect(groupByStatus(evaluated).map((group) => [group.status, group.apps.length])).toEqual([
-      ['evaluated', 2],
-    ]);
+    expect(groups.find((g) => g.status === 'evaluated')?.apps.length).toBe(2);
+    expect(groups.every((g) => g.status && typeof g.apps.length === 'number')).toBe(true);
+    expect(groups.length).toBeGreaterThanOrEqual(9);
+  });
+
+  it('includes populated groups with correct data', () => {
+    const all = applyFilterAndSort(FIXTURE, 'all', 'score', 'grouped', '');
+    const groups = groupByStatus(all);
+
+    expect(groups.find((g) => g.status === 'interview')?.apps.length).toBe(1);
+    expect(groups.find((g) => g.status === 'offer')?.apps.length).toBe(1);
+    expect(groups.find((g) => g.status === 'applied')?.apps.length).toBe(1);
+    expect(groups.find((g) => g.status === 'evaluated')?.apps.length).toBe(2);
+    expect(groups.find((g) => g.status === 'skip')?.apps.length).toBe(1);
   });
 });
 

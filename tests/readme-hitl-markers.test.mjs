@@ -1,5 +1,5 @@
-// tests/readme-hitl-markers.test.mjs — the fork's two README files (English and
-// zh-TW) must carry the HITL guarantee marker, inside the table row it anchors.
+// tests/readme-hitl-markers.test.mjs — the fork's two README files (zh-TW root
+// and English) must carry the HITL guarantee marker inside the table row.
 
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -9,10 +9,10 @@ console.log('\nREADME HITL markers — the guarantee row keeps its anchor');
 
 const MARKER = '<!-- hitl: absolute guarantee.';
 const readmes = ['README.md'];
-if (existsSync(join(ROOT, 'README.zh-TW.md'))) readmes.push('README.zh-TW.md');
+if (existsSync(join(ROOT, 'README.en.md'))) readmes.push('README.en.md');
 
 if (readmes.length >= 2) pass(`found ${readmes.length} README files (2 expected: en + zh-TW)`);
-else fail(`only ${readmes.length} README file(s) found — README.zh-TW.md missing`);
+else fail(`only ${readmes.length} README file(s) found — README.en.md missing`);
 
 for (const file of readmes) {
   const content = readFileSync(join(ROOT, file), 'utf8');
@@ -28,7 +28,7 @@ for (const file of readmes) {
     pass(`${file}: marker present, inside its table row`);
   }
 
-  if (file === 'README.md') {
+  if (file === 'README.en.md') {
     const mStart = line.indexOf(MARKER);
     const mEnd = line.indexOf('-->', mStart);
     const prose = mEnd === -1 ? null : line.slice(0, mStart) + line.slice(mEnd + '-->'.length);

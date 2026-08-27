@@ -34,6 +34,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [onboarded, setOnboarded] = useState(true);
   const [evalUrl, setEvalUrl] = useState<string | undefined>();
+  const [pipelineSelected, setPipelineSelected] = useState<string | undefined>();
   const [iwMode, setIwMode] = useState<'interview-plan' | 'interview-practice' | 'interview-debrief'>('interview-plan');
   const [iwCompany, setIwCompany] = useState('');
   const [iwRole, setIwRole] = useState('');
@@ -87,6 +88,9 @@ export default function App() {
     if (target === 'evaluate') {
       setEvalUrl(params?.url);
       setScreen('evaluate');
+    } else if (target === 'pipeline') {
+      setPipelineSelected(params?.selected);
+      setScreen('pipeline');
     } else if (target === 'scanner') {
       setScreen('scanner');
     } else {
@@ -141,7 +145,7 @@ export default function App() {
       case 'home':
         return <Home root={root!} data={data!} onNavigate={navigate} />;
       case 'pipeline':
-        return <Pipeline root={root!} data={data!} onReload={reload} />;
+        return <Pipeline root={root!} data={data!} onReload={reload} initialSelected={pipelineSelected} />;
       case 'progress':
         return <Progress data={data!.progress} />;
       case 'evaluate':
@@ -171,7 +175,7 @@ export default function App() {
       />
       <nav className="nav">
         {NAV.map(({ key, label, Icon }) => (
-          <button key={key} aria-current={screen === key} onClick={() => setScreen(key)}>
+          <button key={key} aria-current={screen === key} onClick={() => navigate(key)}>
             <Icon />
             <span>{label}</span>
           </button>

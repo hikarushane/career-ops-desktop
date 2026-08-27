@@ -68,8 +68,9 @@ function languageName(code) {
 export function analysisLanguageOptions(root = process.cwd()) {
   const options = new Set([DEFAULT_ANALYSIS_LANGUAGE]);
 
-  // zh-TW README exists at root — always offer it
-  if (existsSync(join(root, 'README.zh-TW.md'))) options.add('zh-TW');
+  // The Desktop fork keeps Traditional Chinese at README.md and English at
+  // README.en.md. Only advertise zh-TW when that two-language layout exists.
+  if (existsSync(join(root, 'README.md')) && existsSync(join(root, 'README.en.md'))) options.add('zh-TW');
 
   const modesDir = join(root, 'modes');
   if (existsSync(modesDir)) {
@@ -89,21 +90,22 @@ export function resolveHelpReadme(root, language) {
   const requestedLanguage = normalizedLanguage(language) ?? DEFAULT_ANALYSIS_LANGUAGE;
   // Help documentation only supports zh-TW and English fallback.
   if (requestedLanguage.toLowerCase() === 'zh-tw') {
-    const zhTW = join(root, 'README.zh-TW.md');
+    const zhTW = join(root, 'README.md');
     if (existsSync(zhTW)) {
       return {
         language: 'zh-TW',
-        path: 'README.zh-TW.md',
+        path: 'README.md',
         fallback: false,
         markdown: readFileSync(zhTW, 'utf-8'),
       };
     }
   }
-  const english = join(root, 'README.md');
+  const englishName = existsSync(join(root, 'README.en.md')) ? 'README.en.md' : 'README.md';
+  const english = join(root, englishName);
   return {
     language: DEFAULT_ANALYSIS_LANGUAGE,
-    path: 'README.md',
-    fallback: true,
+    path: englishName,
+    fallback: requestedLanguage.toLowerCase() !== 'en',
     markdown: readFileSync(english, 'utf-8'),
   };
 }
