@@ -76,9 +76,13 @@ export function releaseNotesSection(root, version) {
 }
 
 export function releaseMetadataHash(root) {
-  const manifest = RELEASE_INPUTS.map((path) => {
+  const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
+    .split('\0')
+    .filter((path) => path && path !== 'release-prepared.json')
+    .sort();
+  const manifest = tracked.map((path) => {
     const full = join(root, path);
-    if (!existsSync(full)) throw new Error(`release metadata input missing: ${path}`);
+    if (!existsSync(full)) throw new Error(`tracked release source missing: ${path}`);
     return `${path}\0${sha256File(full)}`;
   }).join('\n');
   return sha256(manifest);
