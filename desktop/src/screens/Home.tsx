@@ -59,7 +59,7 @@ export default function Home({ root: _root, data, onNavigate }: Props) {
         <h3>Recent activity</h3>
         <div className="recent-list">
           {data.applications.slice(0, 5).map((a) => (
-            <div key={a.number} className="recent-item" onClick={() => onNavigate('pipeline')}>
+            <div key={a.number} className="recent-item" onClick={() => onNavigate('pipeline', { selected: a.reportNumber })}>
               <span className="recent-company">{a.company}</span>
               <span className="recent-role">{a.role}</span>
               <span className={`status-dot status-${a.normStatus}`} />
