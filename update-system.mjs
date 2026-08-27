@@ -97,6 +97,7 @@ const SYSTEM_PATHS = [
   'scripts/release/',
   'scripts/setup-dev-hooks.mjs',
   'RELEASE_NOTES.md',
+  'release-prepared.json',
   'modes/README.md',
   'modes/_shared.md',
   'modes/_writing.md',
