@@ -126,6 +126,11 @@ export type SidecarError = {
   actualStatus?: string;
 };
 
+export type WorkspaceInspection = {
+  path: string;
+  kind: 'missing' | 'empty' | 'careerops' | 'nonempty-invalid';
+};
+
 export function isError(r: { ok: boolean }): r is SidecarError {
   return r.ok === false;
 }
@@ -226,6 +231,14 @@ export function runTask(
 
 export function cancelTask(taskId: string) {
   return invoke<void>('cancel_task', { taskId });
+}
+
+export function getDefaultWorkspacePath(): Promise<string> {
+  return invoke<string>('default_workspace_path');
+}
+
+export function inspectWorkspace(path: string): Promise<WorkspaceInspection> {
+  return invoke<WorkspaceInspection>('inspect_workspace', { path });
 }
 
 export function contracts() {
