@@ -159,6 +159,7 @@ documents/*
 data/intake-state.json
 
 # Local agent tooling output (regenerable, session-specific)
+.worktrees/
 .recall/
 graphify-out/
 tmp/
