@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect } from 'vitest';
-import { execFileSync } from 'child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
+import { execFileSync, spawnSync } from 'child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { sidecarFilename } from '../../scripts/sidecar-naming.mjs';
@@ -118,10 +118,26 @@ describe('sidecar naming conventions', () => {
 });
 
 describe('packaged workspace seed', () => {
-  it('generates runtime system files from the updater-owned path contract', () => {
-    const output = join(temp('career-ops-seed-'), 'workspace-seed');
+  it('refuses an arbitrary output override before touching it', () => {
+    const output = join(temp('career-ops-seed-refusal-'), 'workspace-seed');
+    mkdirSync(output);
+    writeFileSync(join(output, 'keep.txt'), 'keep\n');
 
-    execFileSync(process.execPath, ['scripts/workspace-seed.mjs', '--output', output], {
+    const result = spawnSync(
+      process.execPath,
+      ['scripts/workspace-seed.mjs', '--output', output],
+      { cwd: DESKTOP, encoding: 'utf8' },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/output|argument|override/i);
+    expect(readFileSync(join(output, 'keep.txt'), 'utf8')).toBe('keep\n');
+  });
+
+  it('generates runtime system files from the updater-owned path contract', () => {
+    const output = join(DESKTOP, 'src-tauri', 'binaries', 'workspace-seed');
+
+    execFileSync(process.execPath, ['scripts/workspace-seed.mjs'], {
       cwd: DESKTOP,
     });
 
@@ -150,8 +166,8 @@ describe('packaged workspace seed', () => {
   });
 
   it('replaces stale generated output deterministically', () => {
-    const output = join(temp('career-ops-seed-'), 'workspace-seed');
-    const command = ['scripts/workspace-seed.mjs', '--output', output];
+    const output = join(DESKTOP, 'src-tauri', 'binaries', 'workspace-seed');
+    const command = ['scripts/workspace-seed.mjs'];
     execFileSync(process.execPath, command, { cwd: DESKTOP });
     const first = seedSnapshot(output);
     writeFileSync(join(output, 'stale.txt'), 'stale\n');

@@ -42,6 +42,14 @@ const USER_DIRECTORIES: &[&str] = &[
     "jds",
 ];
 
+const CAREEROPS_SYSTEM_INVARIANTS: &[&str] = &[
+    "doctor.mjs",
+    "modes/_shared.md",
+    "modes/_profile.template.md",
+    "config/profile.example.yml",
+    "templates/portals.example.yml",
+];
+
 pub fn workspace_path_from_documents_dir(documents_dir: &Path) -> PathBuf {
     documents_dir.join("CareerOps")
 }
@@ -78,7 +86,10 @@ pub fn inspect_workspace_path(workspace: &Path) -> Result<WorkspaceKind, String>
 
         if entries.next().is_none() {
             WorkspaceKind::Empty
-        } else if workspace.join("doctor.mjs").is_file() {
+        } else if CAREEROPS_SYSTEM_INVARIANTS
+            .iter()
+            .all(|path| workspace.join(path).is_file())
+        {
             WorkspaceKind::Careerops
         } else {
             WorkspaceKind::NonemptyInvalid
@@ -139,7 +150,10 @@ pub fn initialize_workspace_from_seed(
         WorkspaceKind::Missing | WorkspaceKind::Empty => {}
     }
 
-    if !seed.join("doctor.mjs").is_file() {
+    if !CAREEROPS_SYSTEM_INVARIANTS
+        .iter()
+        .all(|path| seed.join(path).is_file())
+    {
         return Err(format!(
             "packaged workspace seed is invalid: {}",
             seed.display()
@@ -209,7 +223,47 @@ mod tests {
         fs::write(seed.path().join("doctor.mjs"), "seed doctor\n").unwrap();
         fs::create_dir_all(seed.path().join("modes")).unwrap();
         fs::write(seed.path().join("modes/_shared.md"), "seed mode\n").unwrap();
+        fs::write(
+            seed.path().join("modes/_profile.template.md"),
+            "profile template\n",
+        )
+        .unwrap();
+        fs::create_dir_all(seed.path().join("config")).unwrap();
+        fs::write(
+            seed.path().join("config/profile.example.yml"),
+            "profile: example\n",
+        )
+        .unwrap();
+        fs::create_dir_all(seed.path().join("templates")).unwrap();
+        fs::write(
+            seed.path().join("templates/portals.example.yml"),
+            "companies: []\n",
+        )
+        .unwrap();
         seed
+    }
+
+    fn mark_as_careerops(workspace: &Path, doctor: &str) {
+        fs::write(workspace.join("doctor.mjs"), doctor).unwrap();
+        fs::create_dir_all(workspace.join("modes")).unwrap();
+        fs::write(workspace.join("modes/_shared.md"), "shared rules\n").unwrap();
+        fs::write(
+            workspace.join("modes/_profile.template.md"),
+            "profile template\n",
+        )
+        .unwrap();
+        fs::create_dir_all(workspace.join("config")).unwrap();
+        fs::write(
+            workspace.join("config/profile.example.yml"),
+            "profile: example\n",
+        )
+        .unwrap();
+        fs::create_dir_all(workspace.join("templates")).unwrap();
+        fs::write(
+            workspace.join("templates/portals.example.yml"),
+            "companies: []\n",
+        )
+        .unwrap();
     }
 
     #[test]
@@ -248,13 +302,24 @@ mod tests {
     }
 
     #[test]
-    fn classifies_a_careerops_workspace_from_the_doctor_entrypoint() {
+    fn classifies_a_careerops_workspace_from_canonical_system_scaffolds() {
         let workspace = TempDir::new("valid-inspection");
-        fs::write(workspace.path().join("doctor.mjs"), "export {};\n").unwrap();
+        mark_as_careerops(workspace.path(), "export {};\n");
 
         assert_eq!(
             inspect_workspace_path(workspace.path()).unwrap(),
             WorkspaceKind::Careerops
+        );
+    }
+
+    #[test]
+    fn doctor_filename_alone_does_not_make_an_unrelated_directory_valid() {
+        let workspace = TempDir::new("doctor-only-inspection");
+        fs::write(workspace.path().join("doctor.mjs"), "not CareerOps\n").unwrap();
+
+        assert_eq!(
+            inspect_workspace_path(workspace.path()).unwrap(),
+            WorkspaceKind::NonemptyInvalid
         );
     }
 
@@ -311,7 +376,7 @@ mod tests {
     fn leaves_an_existing_careerops_workspace_untouched() {
         let workspace = TempDir::new("valid-init");
         let seed = seed();
-        fs::write(workspace.path().join("doctor.mjs"), "user doctor\n").unwrap();
+        mark_as_careerops(workspace.path(), "user doctor\n");
         fs::write(workspace.path().join("cv.md"), "user cv\n").unwrap();
 
         let result = initialize_workspace_from_seed(workspace.path(), seed.path()).unwrap();

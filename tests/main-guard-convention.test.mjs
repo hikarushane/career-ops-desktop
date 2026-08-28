@@ -26,7 +26,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isMainModule } from '../lib/is-main-module.mjs';
 
@@ -200,21 +200,30 @@ const COMMENT_LINE = /^\s*(\/\/|\*|\/\*)/;
 
 const SKIP_DIRS = new Set([
   'node_modules', '.git',
-  // Desktop build outputs contain bundled copies of these same source files;
-  // scanning them would report duplicates after a local package preparation.
-  'binaries', 'target',
   // User-layer / generated trees (gitignored, may hold arbitrary user files).
   // batch/ is deliberately NOT here: its tracked scripts (aggregate-tokens.mjs)
   // are entrypoints like any other and stay under enforcement.
   'output', 'data', 'reports', 'jds', 'documents', 'interview-prep',
 ]);
 
+const PATH_SCOPED_SKIP_DIRS = new Set([
+  // Desktop build outputs contain bundled copies of these same source files;
+  // other directories with these generic names remain under enforcement.
+  'desktop/src-tauri/binaries',
+  'desktop/src-tauri/target',
+]);
+
+function shouldSkipDirectory(dir) {
+  const rel = relative(ROOT, dir).split('\\').join('/');
+  return SKIP_DIRS.has(basename(dir)) || PATH_SCOPED_SKIP_DIRS.has(rel);
+}
+
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name.startsWith('.')) continue; // .tmp-* probe dirs; no tracked dotdir ships .mjs
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name)) continue;
+      if (shouldSkipDirectory(full)) continue;
       walk(full, out);
     } else if (entry.name.endsWith('.mjs')) {
       out.push(full);
@@ -222,6 +231,13 @@ function walk(dir, out = []) {
   }
   return out;
 }
+
+test('Desktop build-output exclusions are path-scoped', () => {
+  assert.equal(shouldSkipDirectory(join(ROOT, 'desktop', 'src-tauri', 'binaries')), true);
+  assert.equal(shouldSkipDirectory(join(ROOT, 'desktop', 'src-tauri', 'target')), true);
+  assert.equal(shouldSkipDirectory(join(ROOT, 'tools', 'binaries')), false);
+  assert.equal(shouldSkipDirectory(join(ROOT, 'target')), false);
+});
 
 // Every exemption carries its reason; an unexplained entry is a review smell.
 const EXEMPT = new Map([

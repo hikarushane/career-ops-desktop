@@ -88,17 +88,8 @@ function updaterSystemPaths() {
   return paths;
 }
 
-function assertSafeOutput(output) {
-  const resolved = resolve(output);
-  if ([repoRoot, desktop, join(desktop, 'src-tauri'), join(desktop, 'src-tauri', 'binaries')]
-    .some((unsafe) => resolved === unsafe)) {
-    throw new Error(`refusing unsafe workspace seed output: ${resolved}`);
-  }
-  return resolved;
-}
-
-export function prepareWorkspaceSeed(output = defaultOutput) {
-  const target = assertSafeOutput(output);
+export function prepareWorkspaceSeed() {
+  const target = defaultOutput;
   const staging = join(dirname(target), `.${target.slice(target.lastIndexOf(sep) + 1)}.${process.pid}.tmp`);
   const files = new Map();
   for (const path of updaterSystemPaths()) {
@@ -127,16 +118,10 @@ export function prepareWorkspaceSeed(output = defaultOutput) {
   return { output: target, files: files.size };
 }
 
-function outputArgument(argv) {
-  const index = argv.indexOf('--output');
-  if (index === -1) return defaultOutput;
-  if (!argv[index + 1] || argv[index + 1].startsWith('--')) {
-    throw new Error('--output requires a directory');
-  }
-  return resolve(argv[index + 1]);
-}
-
 if (isMainModule(import.meta.url)) {
-  const result = prepareWorkspaceSeed(outputArgument(process.argv.slice(2)));
+  if (process.argv.length > 2) {
+    throw new Error('workspace seed output is fixed; output overrides and arguments are not supported');
+  }
+  const result = prepareWorkspaceSeed();
   console.log(`workspace seed: ${relative(desktop, result.output)} (${result.files} files)`);
 }
