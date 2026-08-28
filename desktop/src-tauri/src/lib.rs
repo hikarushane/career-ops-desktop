@@ -1,5 +1,6 @@
 mod runner;
 mod sidecar;
+mod workspace;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -31,6 +32,8 @@ pub fn run() {
             sidecar::resolve_job_language,
             runner::run_task,
             runner::cancel_task,
+            workspace::default_workspace_path,
+            workspace::inspect_workspace,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
