@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { IntakeCategoryId } from './lib/intakeCategories';
 
 export type Application = {
   number: number;
@@ -136,6 +137,18 @@ export type WorkspaceInitResult = {
   created: boolean;
 };
 
+export type StageIntakeFile = {
+  sourcePath: string;
+  category: IntakeCategoryId;
+};
+
+export type StagedIntakeFile = {
+  sourcePath: string;
+  destinationPath: string;
+  category: IntakeCategoryId;
+  duplicate: boolean;
+};
+
 export function isError(r: { ok: boolean }): r is SidecarError {
   return r.ok === false;
 }
@@ -248,6 +261,13 @@ export function inspectWorkspace(path: string): Promise<WorkspaceInspection> {
 
 export function initializeWorkspace(path: string): Promise<WorkspaceInitResult> {
   return invoke<WorkspaceInitResult>('initialize_workspace', { path });
+}
+
+export function stageIntakeFiles(
+  root: string,
+  files: StageIntakeFile[],
+): Promise<StagedIntakeFile[]> {
+  return invoke<StagedIntakeFile[]>('stage_intake_files_for_workspace', { root, files });
 }
 
 export function contracts() {

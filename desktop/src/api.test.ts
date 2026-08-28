@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
-import { languageSettings, resolveJobLanguage } from './api';
+import { languageSettings, resolveJobLanguage, stageIntakeFiles } from './api';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 
@@ -31,5 +31,23 @@ describe('sidecar JSON bridge', () => {
     mockedInvoke.mockResolvedValueOnce('not json');
 
     await expect(languageSettings('fixture-root')).rejects.toThrow('Sidecar returned invalid JSON');
+  });
+
+  it('forwards categorized intake files to the Rust staging command', async () => {
+    mockedInvoke.mockResolvedValueOnce([{
+      sourcePath: '/source/resume.pdf',
+      destinationPath: '/workspace/documents/cv/resume.pdf',
+      category: 'cv',
+      duplicate: false,
+    }]);
+
+    await expect(stageIntakeFiles('/workspace', [{
+      sourcePath: '/source/resume.pdf',
+      category: 'cv',
+    }])).resolves.toHaveLength(1);
+    expect(mockedInvoke).toHaveBeenCalledWith('stage_intake_files_for_workspace', {
+      root: '/workspace',
+      files: [{ sourcePath: '/source/resume.pdf', category: 'cv' }],
+    });
   });
 });
