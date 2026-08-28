@@ -25,6 +25,9 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
+    "resources": {
+      "binaries/workspace-seed/": "workspace-seed/"
+    },
     "externalBin": [
       "binaries/career-data"
     ],

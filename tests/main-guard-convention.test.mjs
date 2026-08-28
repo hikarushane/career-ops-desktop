@@ -200,6 +200,9 @@ const COMMENT_LINE = /^\s*(\/\/|\*|\/\*)/;
 
 const SKIP_DIRS = new Set([
   'node_modules', '.git',
+  // Desktop build outputs contain bundled copies of these same source files;
+  // scanning them would report duplicates after a local package preparation.
+  'binaries', 'target',
   // User-layer / generated trees (gitignored, may hold arbitrary user files).
   // batch/ is deliberately NOT here: its tracked scripts (aggregate-tokens.mjs)
   // are entrypoints like any other and stay under enforcement.

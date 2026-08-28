@@ -2,5 +2,8 @@ node_modules/
 dist/
 .env
 src-tauri/target/
-src-tauri/binaries/
+src-tauri/binaries/*
+!src-tauri/binaries/workspace-seed/
+src-tauri/binaries/workspace-seed/*
+!src-tauri/binaries/workspace-seed/.gitkeep
 src-tauri/gen/

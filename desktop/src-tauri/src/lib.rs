@@ -34,6 +34,7 @@ pub fn run() {
             runner::cancel_task,
             workspace::default_workspace_path,
             workspace::inspect_workspace,
+            workspace::initialize_workspace,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

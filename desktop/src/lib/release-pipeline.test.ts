@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'fs';
+import { afterEach, describe, it, expect } from 'vitest';
+import { execFileSync } from 'child_process';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { sidecarFilename } from '../../scripts/sidecar-naming.mjs';
 import { updaterPlatformFromTriple } from '../../../scripts/release/artifacts.mjs';
@@ -9,6 +11,27 @@ import { validateReleaseConfiguration } from '../../../scripts/release/release-l
 
 const ROOT = resolve(__dirname, '../../..');
 const DESKTOP = join(ROOT, 'desktop');
+const temporary: string[] = [];
+
+afterEach(() => {
+  for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
+});
+
+function temp(prefix: string) {
+  const path = mkdtempSync(join(tmpdir(), prefix));
+  temporary.push(path);
+  return path;
+}
+
+function seedSnapshot(root: string, directory = ''): string[] {
+  const snapshot: string[] = [];
+  for (const entry of readdirSync(join(root, directory), { withFileTypes: true })) {
+    const relative = join(directory, entry.name);
+    if (entry.isDirectory()) snapshot.push(...seedSnapshot(root, relative));
+    if (entry.isFile()) snapshot.push(`${relative}\0${readFileSync(join(root, relative)).toString('base64')}`);
+  }
+  return snapshot.sort();
+}
 
 function readJson(p: string) { return JSON.parse(readFileSync(p, 'utf8')); }
 
@@ -91,6 +114,60 @@ describe('sidecar naming conventions', () => {
 
   it('always gives Windows sidecars the executable suffix', () => {
     expect(sidecarFilename('aarch64-pc-windows-msvc', 'win32')).toMatch(/\.exe$/);
+  });
+});
+
+describe('packaged workspace seed', () => {
+  it('generates runtime system files from the updater-owned path contract', () => {
+    const output = join(temp('career-ops-seed-'), 'workspace-seed');
+
+    execFileSync(process.execPath, ['scripts/workspace-seed.mjs', '--output', output], {
+      cwd: DESKTOP,
+    });
+
+    for (const path of [
+      'doctor.mjs',
+      'modes/intake.md',
+      'modes/oferta.md',
+      'scan.mjs',
+      'modes/batch.md',
+      'modes/interview.md',
+      'generate-pdf.mjs',
+      'templates/cv-template.html',
+      'documents/README.md',
+      'config/profile.example.yml',
+    ]) expect(existsSync(join(output, path))).toBe(true);
+
+    for (const path of [
+      'cv.md',
+      'config/profile.yml',
+      'modes/_profile.md',
+      'portals.yml',
+      'data/.gitkeep',
+      'desktop/package.json',
+      '.github/workflows/test.yml',
+    ]) expect(existsSync(join(output, path))).toBe(false);
+  });
+
+  it('replaces stale generated output deterministically', () => {
+    const output = join(temp('career-ops-seed-'), 'workspace-seed');
+    const command = ['scripts/workspace-seed.mjs', '--output', output];
+    execFileSync(process.execPath, command, { cwd: DESKTOP });
+    const first = seedSnapshot(output);
+    writeFileSync(join(output, 'stale.txt'), 'stale\n');
+
+    execFileSync(process.execPath, command, { cwd: DESKTOP });
+
+    expect(existsSync(join(output, 'stale.txt'))).toBe(false);
+    expect(seedSnapshot(output)).toEqual(first);
+  });
+
+  it('bundles the generated directory under the runtime workspace-seed path', () => {
+    const conf = readJson(join(DESKTOP, 'src-tauri', 'tauri.conf.json'));
+
+    expect(conf.bundle?.resources).toEqual({
+      'binaries/workspace-seed/': 'workspace-seed/',
+    });
   });
 });
 
