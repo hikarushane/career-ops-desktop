@@ -1,12 +1,42 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getDefaultWorkspacePath, initializeWorkspace, inspectWorkspace } from '../api';
 import { saveWorkspacePath } from '../lib/workspace';
+import * as workspaceConfig from '../config';
 import { chooseWorkspace, createDefaultWorkspace } from '../config';
+import App from '../App';
+import Header from '../components/Header';
 import WorkspaceSetup from './WorkspaceSetup';
 
+const hooks = vi.hoisted(() => {
+  let state: unknown[] = [];
+  let cursor = 0;
+
+  return {
+    reset(initial: unknown[] = []) {
+      state = initial;
+      cursor = 0;
+    },
+    beginRender() {
+      cursor = 0;
+    },
+    useState(initial: unknown) {
+      const index = cursor++;
+      if (index === state.length) state.push(initial);
+      return [state[index], (value: unknown) => { state[index] = value; }];
+    },
+  };
+});
+
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react')>();
+  return {
+    ...actual,
+    useCallback: <T,>(callback: T) => callback,
+    useEffect: () => {},
+    useState: hooks.useState,
+  };
+});
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
 vi.mock('../api', () => ({
   getDefaultWorkspacePath: vi.fn(),
@@ -23,14 +53,89 @@ const mockedSaveWorkspacePath = vi.mocked(saveWorkspacePath);
 
 afterEach(() => {
   vi.resetAllMocks();
+  hooks.reset();
 });
+
+type ElementNode = {
+  type?: unknown;
+  props?: {
+    children?: unknown;
+    disabled?: boolean;
+    onClick?: () => void | Promise<void>;
+    onChangeFolder?: () => void | Promise<void>;
+    role?: string;
+  };
+};
+
+function renderComponent(component: () => ElementNode) {
+  hooks.beginRender();
+  return component();
+}
+
+function findElement(node: unknown, predicate: (element: ElementNode) => boolean): ElementNode | undefined {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findElement(child, predicate);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof node !== 'object' || node === null) return undefined;
+
+  const element = node as ElementNode;
+  if (predicate(element)) return element;
+  return findElement(element.props?.children, predicate);
+}
+
+function button(tree: ElementNode, label: string) {
+  const target = findElement(
+    tree,
+    (element) => element.type === 'button' && element.props?.children === label,
+  );
+  if (!target) throw new Error(`Could not find ${label} button`);
+  return target;
+}
 
 describe('WorkspaceSetup', () => {
   it('renders the first-launch workspace actions when no workspace is saved', () => {
-    const markup = renderToStaticMarkup(createElement(WorkspaceSetup, { onReady: vi.fn() }));
+    const tree = renderComponent(() => WorkspaceSetup({ onReady: vi.fn() }));
 
-    expect(markup).toContain('Create workspace');
-    expect(markup).toContain('Choose another location');
+    expect(button(tree, 'Create workspace')).toBeDefined();
+    expect(button(tree, 'Choose another location')).toBeDefined();
+  });
+
+  it('creates the default workspace and awaits activation', async () => {
+    let finishActivation: () => void;
+    const activation = new Promise<void>((resolve) => { finishActivation = resolve; });
+    const onReady = vi.fn().mockReturnValue(activation);
+    vi.spyOn(workspaceConfig, 'createDefaultWorkspace').mockResolvedValue('/Users/Alice/Documents/CareerOps');
+    const tree = renderComponent(() => WorkspaceSetup({ onReady }));
+
+    const creating = button(tree, 'Create workspace').props?.onClick?.();
+    await Promise.resolve();
+
+    expect(onReady).toHaveBeenCalledWith('/Users/Alice/Documents/CareerOps');
+    expect(button(renderComponent(() => WorkspaceSetup({ onReady })), 'Create workspace').props?.disabled).toBe(true);
+    finishActivation!();
+    await creating;
+    expect(button(renderComponent(() => WorkspaceSetup({ onReady })), 'Create workspace').props?.disabled).toBe(false);
+  });
+
+  it('renders a chooser validation error and does not activate', async () => {
+    const onReady = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(workspaceConfig, 'chooseWorkspace').mockRejectedValue(new Error(
+      'This folder already contains files and is not a CareerOps workspace. Choose an empty folder or an existing CareerOps workspace.',
+    ));
+    const initial = renderComponent(() => WorkspaceSetup({ onReady }));
+
+    await button(initial, 'Choose another location').props?.onClick?.();
+    const updated = renderComponent(() => WorkspaceSetup({ onReady }));
+    const alert = findElement(updated, (element) => element.props?.role === 'alert');
+
+    expect(alert?.props?.children).toBe(
+      'This folder already contains files and is not a CareerOps workspace. Choose an empty folder or an existing CareerOps workspace.',
+    );
+    expect(onReady).not.toHaveBeenCalled();
   });
 
   it('creates, saves, and returns the default workspace', async () => {
@@ -80,5 +185,31 @@ describe('WorkspaceSetup', () => {
       'This folder already contains files and is not a CareerOps workspace. Choose an empty folder or an existing CareerOps workspace.',
     );
     expect(mockedSaveWorkspacePath).not.toHaveBeenCalled();
+  });
+
+  it('keeps the active app visible when its workspace chooser rejects', async () => {
+    vi.spyOn(workspaceConfig, 'chooseWorkspace').mockRejectedValue(new Error(
+      'This folder already contains files and is not a CareerOps workspace. Choose an empty folder or an existing CareerOps workspace.',
+    ));
+    hooks.reset([
+      '/Users/Alice/CareerOps',
+      true,
+      { ok: true, careerOpsPath: '/Users/Alice/CareerOps', trackerPath: null, missing: [], ready: true },
+      null,
+      null,
+      { applications: [], metrics: {}, progress: {} },
+      'home', true, undefined, undefined, 'interview-plan', '', '', {}, false,
+    ]);
+    const initial = renderComponent(() => App());
+    const header = findElement(initial, (element) => element.type === Header);
+
+    await header?.props?.onChangeFolder?.();
+    const updated = renderComponent(() => App());
+
+    expect(findElement(updated, (element) => element.type === Header)).toBeDefined();
+    const alert = findElement(updated, (element) => element.props?.role === 'alert');
+    expect(findElement(alert, (element) => element.type === 'p')?.props?.children).toBe(
+      'This folder already contains files and is not a CareerOps workspace. Choose an empty folder or an existing CareerOps workspace.',
+    );
   });
 });
