@@ -5,6 +5,7 @@ import { mkdirSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sidecarFilename } from './sidecar-naming.mjs';
+import { prepareWorkspaceSeed } from './workspace-seed.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const desktop = resolve(here, '..');
@@ -25,6 +26,9 @@ const triple = hostTriple();
 const filename = sidecarFilename(triple);
 const staged = join(outDir, `.${filename}.${process.pid}.tmp`);
 const target = join(outDir, filename);
+
+const seed = prepareWorkspaceSeed();
+console.log(`workspace seed: ${seed.output} (${seed.files} files)`);
 
 mkdirSync(outDir, { recursive: true });
 execFileSync('go', ['build', '-o', staged, './cmd/career-data'], {
