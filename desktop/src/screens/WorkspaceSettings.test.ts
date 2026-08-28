@@ -156,7 +156,20 @@ describe('WorkspaceSettings', () => {
     await button(tree, 'Change Location').props?.onClick?.();
 
     expect(mockedInitializeWorkspace).not.toHaveBeenCalledWith(currentPath);
-    expect(mockedSaveWorkspacePath).toHaveBeenCalledWith('/new/path');
+    expect(mockedSaveWorkspacePath).not.toHaveBeenCalled();
     expect(onWorkspaceChanged).toHaveBeenCalledWith('/new/path');
+  });
+
+  it('does not persist a selection when App activation fails', async () => {
+    const onWorkspaceChanged = vi.fn().mockRejectedValue(new Error('Activation failed'));
+    mockedOpen.mockResolvedValue('/new/path');
+    mockedInspectWorkspace.mockResolvedValue({ path: '/new/path', kind: 'careerops' });
+    const initial = renderComponent(() => WorkspaceSettings({ path: currentPath, onWorkspaceChanged }));
+
+    await button(initial, 'Change Location').props?.onClick?.();
+    const updated = renderComponent(() => WorkspaceSettings({ path: currentPath, onWorkspaceChanged }));
+
+    expect(mockedSaveWorkspacePath).not.toHaveBeenCalled();
+    expect(findElement(updated, (element) => element.props?.role === 'alert')?.props?.children).toBe('Activation failed');
   });
 });

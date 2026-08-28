@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { doctor, isError, listApplications, type Application, type DoctorResult, type ListResult } from './api';
-import { chooseWorkspace, loadRoot, saveRoot } from './config';
+import { loadRoot, pickWorkspace, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
@@ -95,7 +95,7 @@ export default function App() {
   const onPick = useCallback(async () => {
     setWorkspaceError(null);
     try {
-      const picked = await chooseWorkspace();
+      const picked = await pickWorkspace();
       if (picked) await onWorkspaceReady(picked);
     } catch (reason) {
       setWorkspaceError(reason instanceof Error ? reason.message : String(reason));

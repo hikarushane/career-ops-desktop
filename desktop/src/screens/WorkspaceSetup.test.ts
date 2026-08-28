@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { open } from '@tauri-apps/plugin-dialog';
-import { getDefaultWorkspacePath, initializeWorkspace, inspectWorkspace } from '../api';
+import { doctor, getDefaultWorkspacePath, initializeWorkspace, inspectWorkspace, listApplications } from '../api';
 import { saveWorkspacePath } from '../lib/workspace';
 import * as workspaceConfig from '../config';
-import { chooseWorkspace, createDefaultWorkspace } from '../config';
+import { chooseWorkspace, createDefaultWorkspace, pickWorkspace } from '../config';
 import App from '../App';
 import Header from '../components/Header';
+import ProfileSettings from './ProfileSettings';
 import WorkspaceSetup from './WorkspaceSetup';
 
 const hooks = vi.hoisted(() => {
@@ -39,16 +40,21 @@ vi.mock('react', async (importOriginal) => {
 });
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
 vi.mock('../api', () => ({
+  doctor: vi.fn(),
   getDefaultWorkspacePath: vi.fn(),
   initializeWorkspace: vi.fn(),
   inspectWorkspace: vi.fn(),
+  isError: (result: { ok: boolean }) => result.ok === false,
+  listApplications: vi.fn(),
 }));
 vi.mock('../lib/workspace', () => ({ saveWorkspacePath: vi.fn() }));
 
 const mockedOpen = vi.mocked(open);
+const mockedDoctor = vi.mocked(doctor);
 const mockedDefaultWorkspacePath = vi.mocked(getDefaultWorkspacePath);
 const mockedInitializeWorkspace = vi.mocked(initializeWorkspace);
 const mockedInspectWorkspace = vi.mocked(inspectWorkspace);
+const mockedListApplications = vi.mocked(listApplications);
 const mockedSaveWorkspacePath = vi.mocked(saveWorkspacePath);
 
 afterEach(() => {
@@ -63,6 +69,7 @@ type ElementNode = {
     disabled?: boolean;
     onClick?: () => void | Promise<void>;
     onChangeFolder?: () => void | Promise<void>;
+    onWorkspaceChanged?: (path: string) => Promise<void>;
     role?: string;
   };
 };
@@ -164,6 +171,15 @@ describe('WorkspaceSetup', () => {
     expect(mockedSaveWorkspacePath).toHaveBeenCalledWith('/Users/Alice/CareerOps');
   });
 
+  it('returns a validated workspace from the shared picker without saving it', async () => {
+    mockedOpen.mockResolvedValue('/Users/Alice/CareerOps');
+    mockedInspectWorkspace.mockResolvedValue({ path: '/Users/Alice/CareerOps', kind: 'careerops' });
+
+    await expect(pickWorkspace()).resolves.toBe('/Users/Alice/CareerOps');
+
+    expect(mockedSaveWorkspacePath).not.toHaveBeenCalled();
+  });
+
   it.each(['empty', 'missing'] as const)(
     'initializes and activates a selected %s directory',
     async (kind) => {
@@ -188,7 +204,7 @@ describe('WorkspaceSetup', () => {
   });
 
   it('keeps the active app visible when its workspace chooser rejects', async () => {
-    vi.spyOn(workspaceConfig, 'chooseWorkspace').mockRejectedValue(new Error(
+    vi.spyOn(workspaceConfig, 'pickWorkspace').mockRejectedValue(new Error(
       'This folder already contains files and is not a CareerOps workspace. Choose an empty folder or an existing CareerOps workspace.',
     ));
     hooks.reset([
@@ -211,5 +227,44 @@ describe('WorkspaceSetup', () => {
     expect(findElement(alert, (element) => element.type === 'p')?.props?.children).toBe(
       'This folder already contains files and is not a CareerOps workspace. Choose an empty folder or an existing CareerOps workspace.',
     );
+  });
+
+  it('persists a settings workspace only when App receives the selected path', async () => {
+    const nextPath = '/new/path';
+    mockedDoctor.mockResolvedValue({
+      ok: true,
+      careerOpsPath: nextPath,
+      trackerPath: null,
+      missing: [],
+      ready: true,
+    });
+    mockedListApplications.mockResolvedValue({
+      ok: true,
+      applications: [],
+      metrics: { Total: 0, ByStatus: {}, AvgScore: 0, TopScore: 0, WithPDF: 0, Actionable: 0 },
+      progress: {
+        FunnelStages: [], ScoreBuckets: [], WeeklyActivity: [], ResponseRate: 0, InterviewRate: 0,
+        OfferRate: 0, AvgScore: 0, TopScore: 0, TotalOffers: 0, ActiveApps: 0,
+      },
+    });
+    hooks.reset([
+      '/current/path',
+      true,
+      { ok: true, careerOpsPath: '/current/path', trackerPath: null, missing: [], ready: true },
+      null,
+      null,
+      { applications: [], metrics: {}, progress: {} },
+      'profile', true, undefined, undefined, 'interview-plan', '', '', {}, false,
+    ]);
+    const tree = renderComponent(() => App());
+    const settings = findElement(tree, (element) => element.type === ProfileSettings);
+
+    expect(mockedSaveWorkspacePath).not.toHaveBeenCalled();
+    await settings?.props?.onWorkspaceChanged?.(nextPath);
+
+    expect(mockedSaveWorkspacePath).toHaveBeenCalledTimes(1);
+    expect(mockedSaveWorkspacePath).toHaveBeenCalledWith(nextPath);
+    expect(mockedDoctor).toHaveBeenCalledWith(nextPath);
+    expect(mockedListApplications).toHaveBeenCalledWith(nextPath);
   });
 });

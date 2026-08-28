@@ -23,7 +23,7 @@ export async function createDefaultWorkspace(): Promise<string> {
   return workspace.path;
 }
 
-export async function chooseWorkspace(): Promise<string | null> {
+export async function pickWorkspace(): Promise<string | null> {
   const picked = await open({
     directory: true,
     multiple: false,
@@ -41,6 +41,12 @@ export async function chooseWorkspace(): Promise<string | null> {
   const path = inspection.kind === 'careerops'
     ? inspection.path
     : (await initializeWorkspace(inspection.path)).path;
+  return path;
+}
+
+export async function chooseWorkspace(): Promise<string | null> {
+  const path = await pickWorkspace();
+  if (!path) return null;
   await saveRoot(path);
   return path;
 }
