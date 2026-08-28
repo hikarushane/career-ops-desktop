@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { chooseWorkspace } from '../config';
+import { pickWorkspace } from '../config';
 import { openWorkspaceFolder } from '../lib/workspace';
 
 export type WorkspaceSettingsProps = {
@@ -24,7 +24,7 @@ export default function WorkspaceSettings({ path, onWorkspaceChanged }: Workspac
     setError(null);
     setChanging(true);
     try {
-      const nextPath = await chooseWorkspace();
+      const nextPath = await pickWorkspace();
       if (nextPath) await onWorkspaceChanged(nextPath);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
