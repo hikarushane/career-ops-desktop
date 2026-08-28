@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { doctor, isError, listApplications, type Application, type DoctorResult, type ListResult } from './api';
-import { loadRoot, pickRoot } from './config';
+import { chooseWorkspace, loadRoot } from './config';
 import { loadContracts } from './lib/contracts';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
@@ -10,6 +10,7 @@ import {
   ProfileIcon, HelpIcon,
 } from './components/icons';
 import EmptyState from './screens/EmptyState';
+import WorkspaceSetup from './screens/WorkspaceSetup';
 import Onboarding from './screens/Onboarding';
 import Home from './screens/Home';
 import Pipeline from './screens/Pipeline';
@@ -28,6 +29,7 @@ type Screen =
 
 export default function App() {
   const [root, setRoot] = useState<string | null>(null);
+  const [rootLoaded, setRootLoaded] = useState(false);
   const [probe, setProbe] = useState<DoctorResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ListResult | null>(null);
@@ -60,7 +62,8 @@ export default function App() {
         setRoot(p);
         if (p) refresh(p);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(String(e)))
+      .finally(() => setRootLoaded(true));
 
     const appVersion = __APP_VERSION__;
     setUpdateState((s) => ({ ...s, currentVersion: appVersion }));
@@ -68,12 +71,19 @@ export default function App() {
     return () => stopPolling();
   }, [refresh]);
 
-  const onPick = useCallback(async () => {
-    const picked = await pickRoot();
-    if (!picked) return;
-    setRoot(picked);
-    await refresh(picked);
+  const onWorkspaceReady = useCallback(async (path: string) => {
+    setRoot(path);
+    await refresh(path);
   }, [refresh]);
+
+  const onPick = useCallback(async () => {
+    try {
+      const picked = await chooseWorkspace();
+      if (picked) await onWorkspaceReady(picked);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [onWorkspaceReady]);
 
   const reload = useCallback(async () => {
     if (!root) return;
@@ -117,8 +127,16 @@ export default function App() {
     );
   }
 
-  if (!root || !probe) {
-    return <EmptyState root={root} missing={probe?.missing ?? []} onPick={onPick} />;
+  if (!rootLoaded) {
+    return <main className="state-screen"><p className="state-loading">Loading…</p></main>;
+  }
+
+  if (!root) {
+    return <WorkspaceSetup onReady={onWorkspaceReady} />;
+  }
+
+  if (!probe) {
+    return <main className="state-screen"><p className="state-loading">Loading…</p></main>;
   }
 
   if (!onboarded) {
