@@ -293,6 +293,10 @@ summary:focus-visible {
 }
 .profile-content h2 { margin: 0 0 8px; font: 600 16px var(--font-sans); }
 .profile-content code { font: 400 12px var(--font-mono); background: var(--color-surface-subtle); padding: 2px 4px; border-radius: 3px; }
+.workspace-settings { display: grid; gap: 12px; max-width: 640px; }
+.workspace-settings .workspace-path-preview { width: fit-content; }
+.workspace-settings-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.workspace-settings-error { margin: 0; color: var(--color-accent-red); font: 400 12px/1.4 var(--font-sans); }
 .analysis-language-field { display: grid; gap: 8px; max-width: 480px; margin-top: 20px; }
 .analysis-language-field h2 { margin: 0; }
 .analysis-language-field p { margin: 0; color: var(--color-text-secondary); font: 400 13px/1.5 var(--font-sans); }

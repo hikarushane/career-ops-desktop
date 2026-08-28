@@ -1,16 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { load } from '@tauri-apps/plugin-store';
-import { loadWorkspacePath } from './workspace';
+import { openPath } from '@tauri-apps/plugin-opener';
+import { loadWorkspacePath, openWorkspaceFolder } from './workspace';
 
 vi.mock('@tauri-apps/plugin-store', () => ({ load: vi.fn() }));
+vi.mock('@tauri-apps/plugin-opener', () => ({ openPath: vi.fn() }));
 
 const mockedLoad = vi.mocked(load);
+const mockedOpenPath = vi.mocked(openPath);
 
 afterEach(() => {
   mockedLoad.mockReset();
+  mockedOpenPath.mockReset();
 });
 
 describe('workspace settings', () => {
+  it('opens a workspace folder with the Tauri opener', async () => {
+    await openWorkspaceFolder('/current/path');
+
+    expect(mockedOpenPath).toHaveBeenCalledWith('/current/path');
+  });
+
   it('uses workspacePath when present', async () => {
     const store = {
       get: vi.fn()

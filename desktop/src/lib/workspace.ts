@@ -1,4 +1,5 @@
 import { load } from '@tauri-apps/plugin-store';
+import { openPath } from '@tauri-apps/plugin-opener';
 
 const STORE_FILE = 'settings.json';
 const WORKSPACE_KEY = 'workspacePath';
@@ -27,4 +28,8 @@ export async function saveWorkspacePath(path: string): Promise<void> {
   const store = await load(STORE_FILE, { autoSave: true });
   await store.set(WORKSPACE_KEY, path);
   await store.save();
+}
+
+export async function openWorkspaceFolder(path: string): Promise<void> {
+  await openPath(path);
 }

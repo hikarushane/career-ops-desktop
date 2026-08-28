@@ -3,12 +3,16 @@ import type { ProviderEntry } from '../api';
 import { detectProviders, getPreferredId, setPreferredId } from '../lib/providers';
 import { checkForUpdate, type UpdateState, initialState } from '../lib/updater';
 import AnalysisLanguageField from '../components/AnalysisLanguageField';
+import WorkspaceSettings from './WorkspaceSettings';
 
-type Props = { root: string };
+type Props = {
+  root: string;
+  onWorkspaceChanged: (path: string) => Promise<void>;
+};
 
-type Tab = 'background' | 'preferences' | 'sources' | 'ai' | 'about';
+type Tab = 'background' | 'preferences' | 'sources' | 'workspace' | 'ai' | 'about';
 
-export default function ProfileSettings({ root: _root }: Props) {
+export default function ProfileSettings({ root: _root, onWorkspaceChanged }: Props) {
   const [tab, setTab] = useState<Tab>('background');
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [preferredId, setPreferred] = useState<string | null>(null);
@@ -28,6 +32,7 @@ export default function ProfileSettings({ root: _root }: Props) {
     { key: 'background', label: 'My Background' },
     { key: 'preferences', label: 'Job Search' },
     { key: 'sources', label: 'Search Sources' },
+    { key: 'workspace', label: 'Workspace' },
     { key: 'ai', label: 'AI' },
     { key: 'about', label: 'About' },
   ];
@@ -74,6 +79,10 @@ export default function ProfileSettings({ root: _root }: Props) {
             <h2>Search Sources</h2>
             <p>Companies and job boards to scan, stored in <code>portals.yml</code>.</p>
           </div>
+        )}
+
+        {tab === 'workspace' && (
+          <WorkspaceSettings path={_root} onWorkspaceChanged={onWorkspaceChanged} />
         )}
 
         {tab === 'ai' && (
