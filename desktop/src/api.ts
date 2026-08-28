@@ -131,6 +131,11 @@ export type WorkspaceInspection = {
   kind: 'missing' | 'empty' | 'careerops' | 'nonempty-invalid';
 };
 
+export type WorkspaceInitResult = {
+  path: string;
+  created: boolean;
+};
+
 export function isError(r: { ok: boolean }): r is SidecarError {
   return r.ok === false;
 }
@@ -239,6 +244,10 @@ export function getDefaultWorkspacePath(): Promise<string> {
 
 export function inspectWorkspace(path: string): Promise<WorkspaceInspection> {
   return invoke<WorkspaceInspection>('inspect_workspace', { path });
+}
+
+export function initializeWorkspace(path: string): Promise<WorkspaceInitResult> {
+  return invoke<WorkspaceInitResult>('initialize_workspace', { path });
 }
 
 export function contracts() {

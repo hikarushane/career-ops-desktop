@@ -1,5 +1,5 @@
 type Props = {
-  root: string | null;
+  root: string;
   missing: string[];
   onPick: () => void;
 };
@@ -21,7 +21,7 @@ export default function EmptyState({ root, missing, onPick }: Props) {
       <h1 className="state-title" style={{ marginTop: 0 }}>career-ops is not set up yet</h1>
 
       <p style={{ color: 'var(--color-text-secondary)' }}>
-        {root ? <>Looking in <code style={{ fontFamily: 'var(--font-mono)' }}>{root}</code>.</> : 'No career-ops folder selected.'}
+        Looking in <code style={{ fontFamily: 'var(--font-mono)' }}>{root}</code>.
       </p>
 
       <ul style={{ listStyle: 'none', padding: 0 }}>
@@ -48,7 +48,7 @@ export default function EmptyState({ root, missing, onPick }: Props) {
       </p>
 
       <button className="btn-primary" onClick={onPick}>
-        {root ? 'Choose a different folder' : 'Choose your career-ops folder'}
+        Choose another location
       </button>
     </main>
   );

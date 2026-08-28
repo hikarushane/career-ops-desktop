@@ -147,6 +147,21 @@ summary:focus-visible {
 .setup-actions { display: flex; gap: 12px; margin-top: 12px; }
 .import-btn { display: inline-flex; align-items: center; gap: 8px; }
 .import-result { margin-top: 12px; }
+.workspace-path-preview {
+  max-width: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
+  font: 500 12px/1.4 var(--font-mono);
+}
+.workspace-setup-error {
+  max-width: 420px;
+  margin: 0;
+  color: var(--color-accent-red);
+  font: 400 12px/1.4 var(--font-sans);
+}
 
 /* --- Provider cards --- */
 .provider-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 400px; }
