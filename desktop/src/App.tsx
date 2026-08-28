@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { doctor, isError, listApplications, type Application, type DoctorResult, type ListResult } from './api';
-import { chooseWorkspace, loadRoot } from './config';
+import { chooseWorkspace, loadRoot, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
@@ -50,18 +50,29 @@ export default function App() {
       const r = await doctor(path);
       if (isError(r)) { setError(r.message); return; }
       setProbe(r);
-      if (r.missing.length > 0) setOnboarded(false);
+      setOnboarded(r.missing.length === 0);
+      return r;
     } catch (e) {
       setError(String(e));
+      return null;
     }
   }, []);
+
+  const reload = useCallback(async (path = root) => {
+    if (!path) return;
+    const r = await listApplications(path);
+    if (isError(r)) { setError(r.message); return; }
+    setData(r);
+  }, [root]);
 
   useEffect(() => {
     loadContracts().catch(() => {});
     loadRoot()
-      .then((p) => {
+      .then(async (p) => {
         setRoot(p);
-        if (p) refresh(p);
+        if (!p) return;
+        const workspace = await refresh(p);
+        if (workspace?.ready) await reload(p);
       })
       .catch((e) => setError(String(e)))
       .finally(() => setRootLoaded(true));
@@ -73,9 +84,13 @@ export default function App() {
   }, [refresh]);
 
   const onWorkspaceReady = useCallback(async (path: string) => {
+    await saveRoot(path);
     setRoot(path);
-    await refresh(path);
-  }, [refresh]);
+    setData(null);
+    setProbe(null);
+    const workspace = await refresh(path);
+    if (workspace?.ready) await reload(path);
+  }, [refresh, reload]);
 
   const onPick = useCallback(async () => {
     setWorkspaceError(null);
@@ -86,15 +101,6 @@ export default function App() {
       setWorkspaceError(reason instanceof Error ? reason.message : String(reason));
     }
   }, [onWorkspaceReady]);
-
-  const reload = useCallback(async () => {
-    if (!root) return;
-    const r = await listApplications(root);
-    if (isError(r)) { setError(r.message); return; }
-    setData(r);
-  }, [root]);
-
-  useEffect(() => { if (probe?.ready) reload(); }, [probe, reload]);
 
   const navigate = useCallback((target: string, params?: Record<string, string>) => {
     if (target === 'evaluate') {
@@ -177,7 +183,7 @@ export default function App() {
       case 'interview-workflow':
         return <InterviewWorkflow root={root!} mode={iwMode} company={iwCompany} role={iwRole} onBack={() => setScreen('interview')} />;
       case 'profile':
-        return <ProfileSettings root={root!} />;
+        return <ProfileSettings root={root!} onWorkspaceChanged={onWorkspaceReady} />;
       case 'help':
         return <Help root={root!} />;
     }
