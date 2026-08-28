@@ -370,6 +370,14 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
   border: var(--border-divider); border-radius: var(--radius-control);
   padding: 4px 12px; cursor: pointer; font: 600 13px var(--font-sans);
 }
+.workspace-chooser-alert {
+  position: fixed;
+  top: calc(var(--header-height) + 16px);
+  right: 32px;
+  z-index: 20;
+  width: min(480px, calc(100vw - 64px));
+  box-shadow: var(--shadow-panel);
+}
 
 /* ---------- Progress screen (DESIGN.md has no chart precedent — Derived) ---------- */
 

@@ -32,6 +32,7 @@ export default function App() {
   const [rootLoaded, setRootLoaded] = useState(false);
   const [probe, setProbe] = useState<DoctorResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [data, setData] = useState<ListResult | null>(null);
   const [screen, setScreen] = useState<Screen>('home');
   const [onboarded, setOnboarded] = useState(true);
@@ -77,11 +78,12 @@ export default function App() {
   }, [refresh]);
 
   const onPick = useCallback(async () => {
+    setWorkspaceError(null);
     try {
       const picked = await chooseWorkspace();
       if (picked) await onWorkspaceReady(picked);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setWorkspaceError(reason instanceof Error ? reason.message : String(reason));
     }
   }, [onWorkspaceReady]);
 
@@ -199,6 +201,12 @@ export default function App() {
           </button>
         ))}
       </nav>
+      {workspaceError && (
+        <div className="banner workspace-chooser-alert" role="alert">
+          <p>{workspaceError}</p>
+          <button type="button" onClick={() => setWorkspaceError(null)}>Dismiss</button>
+        </div>
+      )}
       {renderScreen()}
       {showUpdateModal && (
         <UpdateModal
