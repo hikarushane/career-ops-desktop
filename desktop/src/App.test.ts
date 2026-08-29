@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
+const mocks = vi.hoisted(() => ({
+  doctor: vi.fn(),
+  listApplications: vi.fn(),
+  prepareOnboardingWorkspace: vi.fn(),
+}));
+
 const hooks = vi.hoisted(() => {
   let state: unknown[] = [];
   let cursor = 0;
@@ -29,10 +35,22 @@ vi.mock('react', async (importOriginal) => {
     useState: hooks.useState,
   };
 });
+vi.mock('./api', () => ({
+  doctor: mocks.doctor,
+  isError: (value: { ok: boolean }) => !value.ok,
+  listApplications: mocks.listApplications,
+  prepareOnboardingWorkspace: mocks.prepareOnboardingWorkspace,
+}));
 
-afterEach(() => hooks.reset([]));
+afterEach(() => {
+  hooks.reset([]);
+  vi.resetAllMocks();
+});
 
-type ElementNode = { type?: unknown };
+type ElementNode = {
+  type?: unknown;
+  props?: { onComplete?: () => void | Promise<void> };
+};
 
 const data = {
   applications: [],
@@ -43,10 +61,10 @@ const data = {
   },
 };
 
-function render(probe: { missing: string[]; ready: boolean }) {
+function render(probe: { missing: string[]; ready: boolean }, onboarded = probe.missing.length === 0) {
   hooks.reset([
     '/workspace', true, { ok: true, careerOpsPath: '/workspace', trackerPath: null, ...probe },
-    null, null, data, 'home', probe.missing.length === 0, undefined, undefined,
+    null, null, null, 'home', onboarded, undefined, undefined,
     'interview-plan', '', '', {}, false,
   ]);
   hooks.beginRender();
@@ -60,9 +78,34 @@ describe('workspace onboarding routing', () => {
     expect((tree.type as { name?: string })?.name).not.toBe('Onboarding');
   });
 
-  it('shows onboarding for an existing workspace missing profile prerequisites', () => {
-    const tree = render({ missing: ['config/profile.yml'], ready: false });
+  it('shows onboarding when an existing tracker lacks a profile prerequisite', () => {
+    const tree = render({ missing: ['config/profile.yml'], ready: true }, false);
 
     expect((tree.type as { name?: string })?.name).toBe('Onboarding');
+  });
+
+  it('refreshes from the Ready callback before entering the app', async () => {
+    mocks.prepareOnboardingWorkspace.mockResolvedValue(undefined);
+    mocks.doctor.mockResolvedValue({
+      ok: true,
+      careerOpsPath: '/workspace',
+      trackerPath: '/workspace/data/applications.md',
+      missing: [],
+      ready: true,
+    });
+    mocks.listApplications.mockResolvedValue({ ok: true, ...data });
+    const initial = render({ missing: ['cv.md', 'config/profile.yml'], ready: true }, false);
+
+    expect((initial.type as { name?: string })?.name).toBe('Onboarding');
+    await initial.props?.onComplete?.();
+
+    expect(mocks.prepareOnboardingWorkspace).toHaveBeenCalledWith('/workspace');
+    expect(mocks.doctor).toHaveBeenCalledWith('/workspace');
+
+    const completed = (() => {
+      hooks.beginRender();
+      return App() as ElementNode;
+    })();
+    expect(completed.type).toBe('div');
   });
 });

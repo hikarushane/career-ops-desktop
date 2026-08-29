@@ -37,6 +37,7 @@ pub fn run() {
             workspace::default_workspace_path,
             workspace::inspect_workspace,
             workspace::initialize_workspace,
+            workspace::prepare_onboarding_workspace,
             workspace::stage_intake_files_for_workspace,
         ])
         .run(tauri::generate_context!())

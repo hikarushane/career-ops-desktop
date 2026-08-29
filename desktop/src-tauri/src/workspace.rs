@@ -1,6 +1,6 @@
 use std::ffi::OsString;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
@@ -289,6 +289,9 @@ const CAREEROPS_SYSTEM_INVARIANTS: &[&str] = &[
     "templates/portals.example.yml",
 ];
 
+const EMPTY_CV_SCAFFOLD: &str = "# Curriculum Vitae\n\n## Summary\n\n## Experience\n\n## Education\n\n## Skills\n";
+const APPLICATIONS_TRACKER_SCAFFOLD: &str = "# Applications Tracker\n\n| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n|---|------|---------|------|-------|--------|-----|--------|-------|\n";
+
 pub fn workspace_path_from_documents_dir(documents_dir: &Path) -> PathBuf {
     documents_dir.join("CareerOps")
 }
@@ -410,6 +413,97 @@ pub fn initialize_workspace_from_seed(
         path,
         created: true,
     })
+}
+
+fn file_contents(directory: &Dir, filename: &str) -> Result<Vec<u8>, String> {
+    let metadata = directory
+        .symlink_metadata(filename)
+        .map_err(|error| format!("cannot inspect onboarding scaffold: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("onboarding scaffold must be a regular file".to_owned());
+    }
+
+    let mut file = open_file_nofollow(directory, std::ffi::OsStr::new(filename))
+        .map_err(|error| format!("cannot read onboarding scaffold: {error}"))?;
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents)
+        .map_err(|error| format!("cannot read onboarding scaffold: {error}"))?;
+    Ok(contents)
+}
+
+fn write_file_if_missing(directory: &Dir, filename: &str, contents: &[u8]) -> Result<(), String> {
+    match directory.symlink_metadata(filename) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return Err("onboarding destination must not be a symlink".to_owned());
+        }
+        Ok(metadata) if metadata.is_file() => return Ok(()),
+        Ok(_) => return Err("onboarding destination must be a regular file".to_owned()),
+        Err(error) if error.kind() != io::ErrorKind::NotFound => {
+            return Err(format!("cannot inspect onboarding destination: {error}"));
+        }
+        Err(_) => {}
+    }
+
+    let mut options = CapOpenOptions::new();
+    options
+        .write(true)
+        .create_new(true)
+        .follow(FollowSymlinks::No);
+    match directory.open_with(filename, &options) {
+        Ok(mut file) => file
+            .write_all(contents)
+            .map_err(|error| format!("cannot write onboarding scaffold: {error}")),
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            let metadata = directory
+                .symlink_metadata(filename)
+                .map_err(|error| format!("cannot inspect onboarding destination: {error}"))?;
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                return Err("onboarding destination must be a regular file".to_owned());
+            }
+            Ok(())
+        }
+        Err(error) => Err(format!("cannot create onboarding scaffold: {error}")),
+    }
+}
+
+fn copy_file_if_missing(
+    source_directory: &Dir,
+    source_filename: &str,
+    destination_directory: &Dir,
+    destination_filename: &str,
+) -> Result<(), String> {
+    let contents = file_contents(source_directory, source_filename)?;
+    write_file_if_missing(destination_directory, destination_filename, &contents)
+}
+
+pub fn prepare_onboarding_workspace_at(workspace: &Path) -> Result<(), String> {
+    if inspect_workspace_path(workspace)? != WorkspaceKind::Careerops {
+        return Err("target is not a CareerOps workspace".to_owned());
+    }
+
+    let workspace = Dir::open_ambient_dir(workspace, ambient_authority())
+        .map_err(|error| format!("cannot open workspace directory: {error}"))?;
+    let config = open_or_create_directory(&workspace, "config")?;
+    let modes = open_or_create_directory(&workspace, "modes")?;
+    let templates = workspace
+        .open_dir_nofollow("templates")
+        .map_err(|error| format!("cannot open onboarding templates: {error}"))?;
+    let data = open_or_create_directory(&workspace, "data")?;
+
+    write_file_if_missing(&workspace, "cv.md", EMPTY_CV_SCAFFOLD.as_bytes())?;
+    copy_file_if_missing(&config, "profile.example.yml", &config, "profile.yml")?;
+    copy_file_if_missing(&modes, "_profile.template.md", &modes, "_profile.md")?;
+    copy_file_if_missing(&templates, "portals.example.yml", &workspace, "portals.yml")?;
+    write_file_if_missing(
+        &data,
+        "applications.md",
+        APPLICATIONS_TRACKER_SCAFFOLD.as_bytes(),
+    )
+}
+
+#[tauri::command]
+pub fn prepare_onboarding_workspace(root: String) -> Result<(), String> {
+    prepare_onboarding_workspace_at(Path::new(&root))
 }
 
 #[tauri::command]
@@ -628,6 +722,54 @@ mod tests {
         assert_eq!(
             fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
             "user cv\n"
+        );
+    }
+
+    #[test]
+    fn prepares_missing_onboarding_scaffolds_without_overwriting_user_files() {
+        let workspace = TempDir::new("prepare-onboarding");
+        mark_as_careerops(workspace.path(), "export {};\n");
+        fs::write(workspace.path().join("cv.md"), "user CV\n").unwrap();
+
+        prepare_onboarding_workspace_at(workspace.path()).unwrap();
+
+        assert_eq!(fs::read_to_string(workspace.path().join("cv.md")).unwrap(), "user CV\n");
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("config/profile.yml")).unwrap(),
+            "profile: example\n"
+        );
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("modes/_profile.md")).unwrap(),
+            "profile template\n"
+        );
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("portals.yml")).unwrap(),
+            "companies: []\n"
+        );
+        assert!(fs::read_to_string(workspace.path().join("data/applications.md"))
+            .unwrap()
+            .starts_with("# Applications Tracker\n"));
+
+        fs::write(workspace.path().join("config/profile.yml"), "language: en\n").unwrap();
+        fs::write(workspace.path().join("portals.yml"), "companies: user\n").unwrap();
+        fs::write(
+            workspace.path().join("data/applications.md"),
+            "# User tracker\n",
+        )
+        .unwrap();
+        prepare_onboarding_workspace_at(workspace.path()).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("config/profile.yml")).unwrap(),
+            "language: en\n"
+        );
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("portals.yml")).unwrap(),
+            "companies: user\n"
+        );
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("data/applications.md")).unwrap(),
+            "# User tracker\n"
         );
     }
 

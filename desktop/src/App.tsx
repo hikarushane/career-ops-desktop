@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { doctor, isError, listApplications, type Application, type DoctorResult, type ListResult } from './api';
+import {
+  doctor, isError, listApplications, prepareOnboardingWorkspace,
+  type Application, type DoctorResult, type ListResult,
+} from './api';
 import { loadRoot, pickWorkspace, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
@@ -102,6 +105,17 @@ export default function App() {
     }
   }, [onWorkspaceReady]);
 
+  const completeOnboarding = useCallback(async () => {
+    if (!root) return;
+    try {
+      await prepareOnboardingWorkspace(root);
+      const workspace = await refresh(root);
+      if (workspace?.ready && workspace.missing.length === 0) await reload(root);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [refresh, reload, root]);
+
   const navigate = useCallback((target: string, params?: Record<string, string>) => {
     if (target === 'evaluate') {
       setEvalUrl(params?.url);
@@ -148,7 +162,7 @@ export default function App() {
   }
 
   if (!onboarded) {
-    return <Onboarding root={root} onComplete={() => { setOnboarded(true); reload(); }} />;
+    return <Onboarding root={root} onComplete={completeOnboarding} />;
   }
 
   if (!probe.ready) {
