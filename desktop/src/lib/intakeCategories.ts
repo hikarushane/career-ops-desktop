@@ -36,7 +36,7 @@ export function suggestIntakeCategory(filename: string): IntakeCategoryId | null
   if (name.includes('resume') || /(?:^|[^a-z0-9])cv(?:[^a-z0-9]|$)/.test(name)) return 'cv';
   if (name.includes('reference') || name.includes('recommendation')) return 'references';
   if (name.includes('employment') || name.includes('performance-review')) return 'work';
-  if (name.includes('research') || name.includes('thesis') || name.includes('paper') || name.includes('publication')) return 'research';
+  if (name.includes('research') || name.includes('thesis') || name.includes('publication')) return 'research';
   if (name.includes('transcript') || name.includes('diploma') || name.includes('degree')) return 'diplomas';
   if (name.includes('certificate') || name.includes('certification')) return 'certificates';
   if (name.includes('portfolio')) return 'portfolio';

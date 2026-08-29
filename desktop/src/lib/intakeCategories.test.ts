@@ -45,6 +45,7 @@ describe('suggestIntakeCategory', () => {
 
   it('leaves generic files and loose letter names for the user to categorize', () => {
     expect(suggestIntakeCategory('notes.pdf')).toBeNull();
+    expect(suggestIntakeCategory('wallpaper.pdf')).toBeNull();
     expect(suggestIntakeCategory('cover-letter.pdf')).toBeNull();
   });
 });
