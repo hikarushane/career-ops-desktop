@@ -27,7 +27,6 @@ pub fn run() {
             sidecar::read_report,
             sidecar::set_status,
             sidecar::language_settings,
-            sidecar::set_analysis_language,
             sidecar::help_document,
             sidecar::resolve_job_language,
             runner::run_task,
@@ -38,6 +37,7 @@ pub fn run() {
             workspace::inspect_workspace,
             workspace::initialize_workspace,
             workspace::prepare_onboarding_workspace,
+            workspace::set_analysis_language,
             workspace::stage_intake_files_for_workspace,
         ])
         .run(tauri::generate_context!())

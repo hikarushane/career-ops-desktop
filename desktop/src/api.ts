@@ -340,8 +340,8 @@ export function languageSettings(root: string) {
   return invokeLanguageSidecar<LanguageSettings>('language_settings', { path: root });
 }
 
-export function setAnalysisLanguage(root: string, language: string) {
-  return invokeLanguageSidecar<LanguageSettings>('set_analysis_language', { path: root, language });
+export function setAnalysisLanguage(root: string, language: string): Promise<void> {
+  return invoke<void>('set_analysis_language', { path: root, language });
 }
 
 export function helpDocument(root: string, language: string) {

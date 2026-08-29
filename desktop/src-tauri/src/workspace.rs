@@ -499,6 +499,200 @@ fn regular_file_exists(directory: &Dir, filename: &str) -> Result<bool, String> 
     }
 }
 
+#[derive(Clone, Copy)]
+struct TextLine {
+    start: usize,
+    content_end: usize,
+    end: usize,
+}
+
+fn text_lines(source: &str) -> Vec<TextLine> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+    while start < source.len() {
+        let end = source[start..]
+            .find('\n')
+            .map(|offset| start + offset + 1)
+            .unwrap_or(source.len());
+        let content_end = if end > start && source.as_bytes()[end - 1] == b'\n' {
+            if end > start + 1 && source.as_bytes()[end - 2] == b'\r' {
+                end - 2
+            } else {
+                end - 1
+            }
+        } else {
+            end
+        };
+        lines.push(TextLine {
+            start,
+            content_end,
+            end,
+        });
+        start = end;
+    }
+    lines
+}
+
+fn valid_analysis_language(language: &str) -> bool {
+    let mut parts = language.split('-');
+    let Some(primary) = parts.next() else {
+        return false;
+    };
+    if !(2..=3).contains(&primary.len()) || !primary.bytes().all(|byte| byte.is_ascii_alphabetic())
+    {
+        return false;
+    }
+    parts.all(|part| {
+        (2..=8).contains(&part.len()) && part.bytes().all(|byte| byte.is_ascii_alphanumeric())
+    })
+}
+
+fn line_starts_with_indented_key(line: &str, key: &str) -> Option<usize> {
+    let indent = line
+        .as_bytes()
+        .iter()
+        .take_while(|byte| matches!(byte, b' ' | b'\t'))
+        .count();
+    line[indent..].starts_with(key).then_some(indent)
+}
+
+fn replace_language_line(source: &str, line: TextLine, indent: usize, language: &str) -> String {
+    let mut updated = String::with_capacity(source.len() + language.len());
+    updated.push_str(&source[..line.start]);
+    updated.push_str(&source[line.start..line.start + indent]);
+    updated.push_str("analysis: ");
+    updated.push_str(language);
+    updated.push_str(&source[line.content_end..]);
+    updated
+}
+
+fn set_analysis_language_in_profile(source: &str, language: &str) -> String {
+    let lines = text_lines(source);
+    let Some(header_index) = lines
+        .iter()
+        .position(|line| source[line.start..line.content_end].starts_with("language:"))
+    else {
+        let separator = if !source.is_empty() && !source.ends_with('\n') {
+            "\n"
+        } else {
+            ""
+        };
+        return format!("{source}{separator}\nlanguage:\n  analysis: {language}\n");
+    };
+
+    let mut block_end = header_index + 1;
+    while block_end < lines.len() {
+        let line = &source[lines[block_end].start..lines[block_end].content_end];
+        if line.is_empty() || line.starts_with([' ', '\t']) {
+            block_end += 1;
+        } else {
+            break;
+        }
+    }
+
+    for line in &lines[header_index + 1..block_end] {
+        let content = &source[line.start..line.content_end];
+        if let Some(indent) = line_starts_with_indented_key(content, "analysis:") {
+            return replace_language_line(source, *line, indent, language);
+        }
+    }
+    for line in &lines[header_index + 1..block_end] {
+        let content = &source[line.start..line.content_end];
+        if let Some(indent) = line_starts_with_indented_key(content, "output:") {
+            return replace_language_line(source, *line, indent, language);
+        }
+    }
+
+    let header = lines[header_index];
+    let newline = if header.end > header.content_end {
+        &source[header.content_end..header.end]
+    } else {
+        "\n"
+    };
+    let mut updated = String::with_capacity(source.len() + language.len() + newline.len() + 12);
+    updated.push_str(&source[..header.end]);
+    updated.push_str(newline);
+    updated.push_str("  analysis: ");
+    updated.push_str(language);
+    updated.push('\n');
+    updated.push_str(&source[header.end..]);
+    updated
+}
+
+fn read_file_or_empty(directory: &Dir, filename: &str) -> Result<String, String> {
+    match directory.symlink_metadata(filename) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            Err("analysis language profile must not be a symlink".to_owned())
+        }
+        Ok(metadata) if !metadata.is_file() => {
+            Err("analysis language profile must be a regular file".to_owned())
+        }
+        Ok(_) => {
+            let mut file = open_file_nofollow(directory, std::ffi::OsStr::new(filename))
+                .map_err(|error| format!("cannot read analysis language profile: {error}"))?;
+            let mut contents = String::new();
+            file.read_to_string(&mut contents)
+                .map_err(|error| format!("cannot read analysis language profile: {error}"))?;
+            Ok(contents)
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(String::new()),
+        Err(error) => Err(format!("cannot inspect analysis language profile: {error}")),
+    }
+}
+
+fn write_profile_contents(directory: &Dir, contents: &str) -> Result<(), String> {
+    let mut options = CapOpenOptions::new();
+    match directory.symlink_metadata("profile.yml") {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return Err("analysis language profile must not be a symlink".to_owned());
+        }
+        Ok(metadata) if !metadata.is_file() => {
+            return Err("analysis language profile must be a regular file".to_owned());
+        }
+        Ok(_) => {
+            options
+                .write(true)
+                .truncate(true)
+                .follow(FollowSymlinks::No);
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            options
+                .write(true)
+                .create_new(true)
+                .follow(FollowSymlinks::No);
+        }
+        Err(error) => return Err(format!("cannot inspect analysis language profile: {error}")),
+    }
+    let mut file = directory
+        .open_with("profile.yml", &options)
+        .map_err(|error| format!("cannot write analysis language profile: {error}"))?;
+    file.write_all(contents.as_bytes())
+        .map_err(|error| format!("cannot write analysis language profile: {error}"))
+}
+
+pub fn set_analysis_language_at(workspace: &Path, language: &str) -> Result<(), String> {
+    let language = language.trim();
+    if !valid_analysis_language(language) {
+        return Err("analysis language must be an ISO language tag".to_owned());
+    }
+    if inspect_workspace_path(workspace)? != WorkspaceKind::Careerops {
+        return Err("target is not a CareerOps workspace".to_owned());
+    }
+    let workspace = Dir::open_ambient_dir(workspace, ambient_authority())
+        .map_err(|error| format!("cannot open workspace directory: {error}"))?;
+    let config = open_or_create_directory(&workspace, "config")?;
+    let source = read_file_or_empty(&config, "profile.yml")?;
+    write_profile_contents(
+        &config,
+        &set_analysis_language_in_profile(&source, language),
+    )
+}
+
+#[tauri::command]
+pub fn set_analysis_language(path: String, language: String) -> Result<(), String> {
+    set_analysis_language_at(Path::new(&path), &language)
+}
+
 pub fn prepare_onboarding_workspace_at(workspace: &Path) -> Result<(), String> {
     if inspect_workspace_path(workspace)? != WorkspaceKind::Careerops {
         return Err("target is not a CareerOps workspace".to_owned());
@@ -833,6 +1027,84 @@ mod tests {
             "# Legacy tracker\n"
         );
         assert!(!workspace.path().join("data/applications.md").exists());
+    }
+
+    #[test]
+    fn updates_only_the_analysis_language_and_migrates_legacy_output() {
+        let workspace = TempDir::new("analysis-language");
+        mark_as_careerops(workspace.path(), "export {};\n");
+        fs::write(
+            workspace.path().join("config/profile.yml"),
+            "candidate:\n  full_name: \"User\"\nlanguage:\n  output: de\nspend_tier: standard\n",
+        )
+        .unwrap();
+
+        set_analysis_language_at(workspace.path(), " fr ").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("config/profile.yml")).unwrap(),
+            "candidate:\n  full_name: \"User\"\nlanguage:\n  analysis: fr\nspend_tier: standard\n"
+        );
+    }
+
+    #[test]
+    fn preserves_legacy_language_header_insertion_semantics() {
+        assert_eq!(
+            set_analysis_language_in_profile("language:\nspend_tier: standard\n", "fr"),
+            "language:\n\n  analysis: fr\nspend_tier: standard\n"
+        );
+        assert_eq!(
+            set_analysis_language_in_profile("language:\r\nspend_tier: standard\r\n", "fr"),
+            "language:\r\n\r\n  analysis: fr\nspend_tier: standard\r\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_a_symlinked_profile_before_analysis_language_write() {
+        let workspace = TempDir::new("analysis-language-profile-symlink");
+        let external = TempDir::new("analysis-language-profile-external");
+        mark_as_careerops(workspace.path(), "export {};\n");
+        let external_profile = external.path().join("profile.yml");
+        fs::write(&external_profile, "language:\n  analysis: de\n").unwrap();
+        std::os::unix::fs::symlink(
+            &external_profile,
+            workspace.path().join("config/profile.yml"),
+        )
+        .unwrap();
+
+        let error = set_analysis_language_at(workspace.path(), "fr").unwrap_err();
+
+        assert!(error.contains("symlink"));
+        assert_eq!(
+            fs::read_to_string(external_profile).unwrap(),
+            "language:\n  analysis: de\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_a_symlinked_config_directory_before_analysis_language_write() {
+        let workspace = TempDir::new("analysis-language-config-symlink");
+        let external = TempDir::new("analysis-language-config-external");
+        mark_as_careerops(workspace.path(), "export {};\n");
+        fs::copy(
+            workspace.path().join("config/profile.example.yml"),
+            external.path().join("profile.example.yml"),
+        )
+        .unwrap();
+        fs::remove_dir_all(workspace.path().join("config")).unwrap();
+        let external_profile = external.path().join("profile.yml");
+        fs::write(&external_profile, "language:\n  analysis: de\n").unwrap();
+        std::os::unix::fs::symlink(external.path(), workspace.path().join("config")).unwrap();
+
+        let error = set_analysis_language_at(workspace.path(), "fr").unwrap_err();
+
+        assert!(error.contains("without following links"), "{error}");
+        assert_eq!(
+            fs::read_to_string(external_profile).unwrap(),
+            "language:\n  analysis: de\n"
+        );
     }
 
     #[cfg(unix)]

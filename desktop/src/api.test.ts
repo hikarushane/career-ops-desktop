@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  languageSettings, prepareOnboardingWorkspace, resolveJobLanguage, stageIntakeFiles,
+  languageSettings, prepareOnboardingWorkspace, resolveJobLanguage, setAnalysisLanguage, stageIntakeFiles,
 } from './api';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
@@ -59,6 +59,16 @@ describe('sidecar JSON bridge', () => {
     await expect(prepareOnboardingWorkspace('/workspace')).resolves.toBeUndefined();
     expect(mockedInvoke).toHaveBeenCalledWith('prepare_onboarding_workspace', {
       root: '/workspace',
+    });
+  });
+
+  it('forwards analysis-language writes to the no-follow Rust command', async () => {
+    mockedInvoke.mockResolvedValueOnce(undefined);
+
+    await expect(setAnalysisLanguage('fixture-root', 'fr')).resolves.toBeUndefined();
+    expect(mockedInvoke).toHaveBeenCalledWith('set_analysis_language', {
+      path: 'fixture-root',
+      language: 'fr',
     });
   });
 });

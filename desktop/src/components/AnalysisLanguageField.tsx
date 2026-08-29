@@ -32,9 +32,7 @@ export default function AnalysisLanguageField({ root, onSaved }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const settings = await setAnalysisLanguage(root, language);
-      setOptions(settings.options);
-      setLanguage(settings.analysisLanguage);
+      await setAnalysisLanguage(root, language);
       onSaved?.();
     } catch (reason) {
       setError(String(reason));
