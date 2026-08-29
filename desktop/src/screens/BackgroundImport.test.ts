@@ -83,4 +83,22 @@ describe('BackgroundImport', () => {
 
     expect(onComplete).toHaveBeenCalledWith({ staged });
   });
+
+  it('reports unavailable PDF extraction while keeping the PDF staged', () => {
+    const staged = [{
+      sourcePath: '/source/cv.pdf',
+      destinationPath: 'documents/cv/cv.pdf',
+      category: 'cv' as const,
+      duplicate: false,
+    }];
+    hooks.reset([[], false, false, staged, null]);
+    hooks.beginRender();
+
+    const tree = BackgroundImport({ root: '/workspace', onComplete: vi.fn() }) as ElementNode;
+    const copy = textContent(tree);
+
+    expect(copy).toContain('PDF text extraction is unavailable in this build');
+    expect(copy).toContain('still staged');
+    expect(copy).not.toMatch(/brew|Homebrew|poppler/i);
+  });
 });

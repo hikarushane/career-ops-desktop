@@ -97,7 +97,7 @@ export default function ReportPane({ root, app }: Props) {
       {app.reportPath && missing && (
         <div style={{ color: 'var(--color-accent-amber)' }}>
           The tracker links <code style={{ fontFamily: 'var(--font-mono)' }}>{app.reportPath}</code>, but that file is missing.
-          Run <code style={{ fontFamily: 'var(--font-mono)' }}>node verify-pipeline.mjs</code> to check for other broken links.
+          Check the report path in your active workspace and retry after restoring any missing report file.
         </div>
       )}
       {report && (

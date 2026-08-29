@@ -64,6 +64,32 @@ const intake = await import(pathToFileURL(join(ROOT, 'intake.mjs')).href);
 
 // ── CLI round-trip on an isolated temp documents/ ────────────────────────
 {
+  const desktopPdfTmp = mkdtempSync(join(tmpdir(), 'intake-desktop-pdf-'));
+  const desktopPdfDocs = join(desktopPdfTmp, 'documents');
+  mkdirSync(join(desktopPdfDocs, 'cv'), { recursive: true });
+  writeFileSync(join(desktopPdfDocs, 'cv', 'resume.pdf'), '%PDF-staged-evidence');
+  const desktopPdfEnv = {
+    ...process.env,
+    CAREER_OPS_DOCUMENTS_DIR: desktopPdfDocs,
+    CAREER_OPS_INTAKE_STATE: join(desktopPdfTmp, 'intake-state.json'),
+    CAREEROPS_DESKTOP_PDF_EXTRACTION: 'unavailable',
+  };
+  try {
+    const desktopScan = JSON.parse(run(NODE, ['intake.mjs'], { env: desktopPdfEnv }) || 'null');
+    const desktopPdf = desktopScan?.sources.find((source) => source.path === 'cv/resume.pdf');
+    const desktopDetail = `${desktopScan?.pdfHint || ''} ${desktopPdf?.reason || ''}`;
+    if (desktopPdf?.status === 'skipped'
+      && /PDF text extraction is unavailable in this build/i.test(desktopDetail)
+      && /staged/i.test(desktopDetail)
+      && !/brew|Homebrew|poppler/i.test(desktopDetail)) {
+      pass('Desktop PDF intake reports build capability without a package-manager prompt');
+    } else {
+      fail(`Desktop PDF capability message is inaccurate: ${JSON.stringify({ pdf: desktopPdf, hint: desktopScan?.pdfHint })}`);
+    }
+  } finally {
+    rmSync(desktopPdfTmp, { recursive: true, force: true });
+  }
+
   const tmp = mkdtempSync(join(tmpdir(), 'intake-test-'));
   const docsDir = join(tmp, 'documents');
   const stateFile = join(tmp, 'intake-state.json');

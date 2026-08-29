@@ -71,6 +71,17 @@ const PDF_INSTALL_HINT =
   'No PDF text extractor found. Optional: install poppler for PDF intake '
   + '(brew install poppler / apt install poppler-utils) — .md/.txt/.tex '
   + 'sources work without it.';
+const DESKTOP_PDF_UNAVAILABLE_HINT =
+  'PDF text extraction is unavailable in this build. The PDF remains staged; '
+  + 'add a .md, .txt, or .tex copy to include its text in profile intake.';
+
+function pdfExtractionCapability() {
+  if (process.env.CAREEROPS_DESKTOP_PDF_EXTRACTION === 'unavailable') {
+    return { extractor: null, hint: DESKTOP_PDF_UNAVAILABLE_HINT };
+  }
+  const extractor = detectPdfExtractor();
+  return { extractor, hint: PDF_INSTALL_HINT };
+}
 
 /** Classify a source file by extension. Pure. */
 export function classifySource(relPath) {
@@ -254,7 +265,7 @@ function toRelPath(abs) {
 }
 
 function extractAll() {
-  const extractor = detectPdfExtractor();
+  const { extractor, hint: pdfHint } = pdfExtractionCapability();
   const { files, unreadable } = listSourceFiles();
   const sources = files.map((abs) => {
     // Normalise to forward slashes: this path is the key in intake-state.json
@@ -273,7 +284,7 @@ function extractAll() {
         text = readFileSync(abs, 'utf-8');
         base.extractor = 'direct';
       } else {
-        if (!extractor) return { ...base, status: 'skipped', reason: PDF_INSTALL_HINT };
+        if (!extractor) return { ...base, status: 'skipped', reason: pdfHint };
         text = extractor.extract(abs);
         base.extractor = extractor.name;
       }
@@ -301,7 +312,7 @@ function extractAll() {
   return {
     documentsDir: DOCS_DIR,
     pdfExtractor: extractor ? extractor.name : null,
-    ...(extractor ? {} : { pdfHint: PDF_INSTALL_HINT }),
+    ...(extractor ? {} : { pdfHint }),
     sources: computeDelta(loadState(), sources),
   };
 }
@@ -340,7 +351,7 @@ function commitState(result, only = []) {
 
 function printSummary(result) {
   console.log(`documents/: ${result.documentsDir}`);
-  console.log(`PDF extractor: ${result.pdfExtractor || 'none — ' + PDF_INSTALL_HINT}`);
+  console.log(`PDF extractor: ${result.pdfExtractor || 'none — ' + result.pdfHint}`);
   if (!result.sources.length) {
     console.log('No sources found. Drop files into documents/cv, linkedin/, diplomas/, references/.');
     return;
@@ -438,8 +449,8 @@ function main() {
     try {
       if (cls.kind === 'direct') text = readFileSync(abs, 'utf-8');
       else if (cls.kind === 'pdf') {
-        const extractor = detectPdfExtractor();
-        if (!extractor) { console.error(PDF_INSTALL_HINT); process.exit(1); }
+        const { extractor, hint } = pdfExtractionCapability();
+        if (!extractor) { console.error(hint); process.exit(1); }
         text = extractor.extract(abs);
       } else { console.error(`Unsupported source: ${cls.reason}`); process.exit(1); }
     } catch (err) {

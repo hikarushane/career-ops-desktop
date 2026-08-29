@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect } from 'vitest';
 import { execFileSync, spawnSync } from 'child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join, resolve } from 'path';
+import { isAbsolute, join, normalize, resolve } from 'path';
 import { sidecarFilename } from '../../scripts/sidecar-naming.mjs';
 import { updaterPlatformFromTriple } from '../../../scripts/release/artifacts.mjs';
 import { renderCask } from '../../../scripts/release/homebrew.mjs';
@@ -181,9 +181,67 @@ describe('packaged workspace seed', () => {
   it('bundles the generated directory under the runtime workspace-seed path', () => {
     const conf = readJson(join(DESKTOP, 'src-tauri', 'tauri.conf.json'));
 
-    expect(conf.bundle?.resources).toEqual({
+    expect(conf.bundle?.resources?.['binaries/workspace-seed/']).toBe('workspace-seed/');
+  });
+});
+
+describe('installed runtime package inputs', () => {
+  it('packages the workspace seed, deterministic sidecar, and managed JavaScript runtime', () => {
+    const conf = readJson(join(DESKTOP, 'src-tauri', 'tauri.conf.json'));
+
+    expect(conf.bundle?.resources).toMatchObject({
       'binaries/workspace-seed/': 'workspace-seed/',
+      'binaries/node-LICENSE': 'licenses/Node.js-LICENSE.txt',
     });
+    expect(conf.bundle?.externalBin).toEqual(expect.arrayContaining([
+      'binaries/career-data',
+      'binaries/careerops-node',
+    ]));
+  });
+
+  it('uses only package-local relative inputs, never source-checkout paths', () => {
+    const conf = readJson(join(DESKTOP, 'src-tauri', 'tauri.conf.json'));
+    const inputs = [
+      ...Object.keys(conf.bundle?.resources ?? {}),
+      ...(conf.bundle?.externalBin ?? []),
+    ];
+
+    for (const input of inputs) {
+      expect(isAbsolute(input), input).toBe(false);
+      expect(normalize(input).split(/[\\/]/), input).not.toContain('..');
+      expect(input, input).not.toMatch(/(?:^|[\\/])(?:Users|home|private|tmp)[\\/]/i);
+    }
+  });
+
+  it('stages the managed runtime from the release build runtime, not a developer tool path', () => {
+    const build = readFileSync(join(DESKTOP, 'scripts', 'build-sidecar.mjs'), 'utf8');
+
+    expect(build).toContain('process.execPath');
+    expect(build).toContain('careerops-node');
+    expect(build).not.toMatch(/(?:\/opt\/homebrew|\/usr\/local|[A-Za-z]:\\\\Program Files)/);
+  });
+});
+
+describe('reviewed intake release isolation', () => {
+  it('uses the packaged macOS sandbox and does not ship an unproven Linux sandbox', () => {
+    const conf = readJson(join(DESKTOP, 'src-tauri', 'tauri.conf.json'));
+    const runner = readFileSync(join(DESKTOP, 'src-tauri', 'src', 'runner.rs'), 'utf8');
+
+    expect(runner).toContain('Command::new("/usr/bin/sandbox-exec")');
+    expect(runner).toContain('because it does not include a supported isolation runtime');
+    expect(conf.bundle?.externalBin ?? []).not.toEqual(expect.arrayContaining([
+      'bwrap',
+      'binaries/bwrap',
+    ]));
+    expect(runner).not.toMatch(/install (?:bubblewrap|bwrap)/i);
+  });
+
+  it('keeps unsupported packaged platforms fail-closed with no files changed', () => {
+    const runner = readFileSync(join(DESKTOP, 'src-tauri', 'src', 'runner.rs'), 'utf8');
+
+    expect(runner).toContain('#[cfg(not(any(target_os = "macos", target_os = "linux")))]');
+    expect(runner).toContain('Err(INTAKE_ISOLATION_UNAVAILABLE.to_owned())');
+    expect(runner).toContain('No files were changed; retry only after updating');
   });
 });
 
