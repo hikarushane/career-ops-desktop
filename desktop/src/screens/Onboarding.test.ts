@@ -31,8 +31,16 @@ type ElementNode = {
   type?: unknown;
   props?: {
     onComplete?: () => void;
+    children?: unknown;
   };
 };
+
+function textContent(node: unknown): string {
+  if (Array.isArray(node)) return node.map(textContent).join(' ');
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (typeof node !== 'object' || node === null) return '';
+  return textContent((node as ElementNode).props?.children);
+}
 
 function render() {
   hooks.beginRender();
@@ -48,5 +56,15 @@ describe('onboarding reviewed intake step', () => {
     const next = render();
 
     expect((next.type as { name?: string })?.name).toBe('IntakeReview');
+  });
+
+  it('reaches Ready when the intake review is skipped with zero approvals', () => {
+    hooks.reset(['intake']);
+    const intake = render();
+
+    intake.props?.onComplete?.();
+    const ready = render();
+
+    expect(textContent(ready)).toContain("You're all set");
   });
 });

@@ -2,6 +2,8 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   runTask as invokeRunTask,
   cancelTask as invokeCancelTask,
+  bindIntakeProposal as invokeBindIntakeProposal,
+  discardIntakeSession as invokeDiscardIntakeSession,
   type TaskType,
   type TaskOutputEvent,
   type TaskFinishedEvent,
@@ -33,7 +35,7 @@ function isProposalItem(value: unknown, sourcePaths: Set<string>): value is Inta
   if (typeof value.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.id)) return false;
   if (typeof value.targetFile !== 'string' || !TARGET_FILES.has(value.targetFile)) return false;
   if (typeof value.field !== 'string' || value.field.length === 0) return false;
-  if (typeof value.proposedValue !== 'string') return false;
+  if (typeof value.proposedValue !== 'string' || value.proposedValue.length === 0) return false;
   if (!Array.isArray(value.sources) || value.sources.length === 0) return false;
   if (!value.sources.every((source) => isSafeSourcePath(source) && sourcePaths.has(source))) return false;
   if (value.conflict !== undefined) {
@@ -41,6 +43,7 @@ function isProposalItem(value: unknown, sourcePaths: Set<string>): value is Inta
     if (typeof value.conflict.existingValue !== 'string' || typeof value.conflict.proposedValue !== 'string') {
       return false;
     }
+    if (value.conflict.proposedValue !== value.proposedValue) return false;
   }
   return true;
 }
@@ -76,6 +79,7 @@ export function parseIntakeProposal(output: string): IntakeProposal {
 }
 
 export type TaskCallbacks = {
+  onStarted?: (taskId: string, intakeSessionId?: string) => void;
   onOutput?: (stream: 'stdout' | 'stderr', data: string) => void;
   onFinished?: (exitCode: number | null, success: boolean) => void;
 };
@@ -86,7 +90,7 @@ export async function runTask(
   path: string,
   callbacks?: TaskCallbacks,
   languageContext?: LanguageContext,
-): Promise<{ taskId: string; unlisten: () => void }> {
+): Promise<{ taskId: string; intakeSessionId?: string; unlisten: () => void }> {
   const provider = await getPreferredProvider();
   if (!provider) throw new Error('No AI provider available. Install Claude Code or another supported CLI.');
 
@@ -94,6 +98,7 @@ export async function runTask(
   const pendingOutput: TaskOutputEvent[] = [];
   const pendingFinished: TaskFinishedEvent[] = [];
   let taskId: string | null = null;
+  let intakeSessionId: string | undefined;
 
   function unlisten() {
     for (const listener of unlisteners) listener();
@@ -133,6 +138,8 @@ export async function runTask(
   try {
     const started = await invokeRunTask(taskType, provider.id, args, path, languageContext);
     taskId = started.task_id;
+    intakeSessionId = started.intake_session_id;
+    callbacks?.onStarted?.(taskId, intakeSessionId);
   } catch (reason) {
     unlisten();
     throw reason;
@@ -141,28 +148,45 @@ export async function runTask(
   for (const payload of pendingOutput) handleOutput(payload);
   for (const payload of pendingFinished) handleFinished(payload);
 
-  return { taskId, unlisten };
+  return { taskId, intakeSessionId, unlisten };
 }
 
 export async function cancelTask(taskId: string): Promise<void> {
   await invokeCancelTask(taskId);
 }
 
-export async function previewIntakeProposal(root: string): Promise<IntakeProposal> {
-  return new Promise<IntakeProposal>((resolve, reject) => {
+export async function discardIntakePreview(intakeSessionId: string): Promise<void> {
+  await invokeDiscardIntakeSession(intakeSessionId);
+}
+
+export type IntakePreviewSession = {
+  proposal: IntakeProposal;
+  intakeSessionId: string;
+};
+
+export async function previewIntakeProposal(root: string): Promise<IntakePreviewSession> {
+  return new Promise<IntakePreviewSession>((resolve, reject) => {
     const stdout: string[] = [];
+    let intakeSessionId: string | undefined;
     void runTask('intake-preview', {}, root, {
+      onStarted: (_taskId, sessionId) => {
+        intakeSessionId = sessionId;
+      },
       onOutput: (stream, data) => {
         if (stream === 'stdout') stdout.push(data);
       },
-      onFinished: (_exitCode, success) => {
+      onFinished: async (_exitCode, success) => {
         if (!success) {
           reject(new Error('The intake preview could not be completed. Try again.'));
           return;
         }
         try {
-          resolve(parseIntakeProposal(stdout.join('\n')));
+          if (!intakeSessionId) throw new Error(INTAKE_PROTOCOL_ERROR);
+          const proposal = parseIntakeProposal(stdout.join('\n'));
+          await invokeBindIntakeProposal(intakeSessionId, proposal);
+          resolve({ proposal, intakeSessionId });
         } catch (reason) {
+          if (intakeSessionId) void invokeDiscardIntakeSession(intakeSessionId).catch(() => {});
           reject(reason);
         }
       },
@@ -172,26 +196,15 @@ export async function previewIntakeProposal(root: string): Promise<IntakeProposa
 
 export async function applyIntakeProposal(
   root: string,
-  proposal: IntakeProposal,
+  intakeSessionId: string,
   approvedIds: string[],
-): Promise<{ applied: boolean; mergedSourcePaths: string[] }> {
-  if (approvedIds.length === 0) return { applied: false, mergedSourcePaths: [] };
-
-  const approved = new Set(approvedIds);
-  const selectedItems = proposal.items.filter((item) => approved.has(item.id));
-  const mergedSourcePaths = proposal.sourcePaths.filter((source) => (
-    selectedItems.some((item) => item.sources.includes(source))
-  ));
-  const selectedProposal: IntakeProposal = {
-    items: selectedItems,
-    sourcePaths: mergedSourcePaths,
-  };
+): Promise<{ applied: boolean }> {
+  if (approvedIds.length === 0) return { applied: false };
 
   await new Promise<void>((resolve, reject) => {
     void runTask('intake-apply', {
-      approvedProposalIds: JSON.stringify(selectedItems.map((item) => item.id)),
-      selectedProposal: JSON.stringify(selectedProposal),
-      mergedSourcePaths: JSON.stringify(mergedSourcePaths),
+      intakeSessionId,
+      approvedProposalIds: JSON.stringify(approvedIds),
     }, root, {
       onFinished: (_exitCode, success) => {
         if (success) resolve();
@@ -200,5 +213,5 @@ export async function applyIntakeProposal(
     }).catch(reject);
   });
 
-  return { applied: true, mergedSourcePaths };
+  return { applied: true };
 }

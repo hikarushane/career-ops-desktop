@@ -27,6 +27,8 @@ tauri-plugin-dialog = "2.7.2"
 tauri-plugin-store = "2.4.4"
 cap-std = "4.0.3"
 cap-fs-ext = "4.0.3"
+sha2 = "0.10"
+tempfile = "3"
 
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
 tauri-plugin-updater = "2"
