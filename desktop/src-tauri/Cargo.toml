@@ -25,8 +25,9 @@ serde_json = "1"
 tauri-plugin-shell = "2.3.5"
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-store = "2.4.4"
+cap-std = "4.0.3"
+cap-fs-ext = "4.0.3"
 
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
-

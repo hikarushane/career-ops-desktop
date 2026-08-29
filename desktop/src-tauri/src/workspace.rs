@@ -1,8 +1,11 @@
 use std::ffi::OsString;
-use std::fs::{self, OpenOptions};
-use std::io::{self, BufReader, Read};
+use std::fs;
+use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 
+use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
+use cap_std::ambient_authority;
+use cap_std::fs::{Dir, File as CapFile, OpenOptions as CapOpenOptions};
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
@@ -74,37 +77,35 @@ fn intake_category_folder(category: &str) -> Result<&'static str, String> {
     }
 }
 
-fn canonical_category_directory(workspace: &Path, category: &str) -> Result<PathBuf, String> {
-    let workspace = fs::canonicalize(workspace)
-        .map_err(|error| format!("cannot resolve workspace: {error}"))?;
-    if !workspace.is_dir() {
-        return Err(format!(
-            "workspace is not a directory: {}",
-            workspace.display()
-        ));
+fn open_or_create_directory(parent: &Dir, name: &str) -> Result<Dir, String> {
+    match parent.open_dir_nofollow(name) {
+        Ok(directory) => Ok(directory),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            match parent.create_dir(name) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(format!("cannot create intake directory: {error}")),
+            }
+            parent.open_dir_nofollow(name).map_err(|error| {
+                format!("cannot open intake directory without following links: {error}")
+            })
+        }
+        Err(error) => Err(format!(
+            "cannot open intake directory without following links: {error}"
+        )),
     }
+}
 
-    let documents = workspace.join("documents");
-    fs::create_dir_all(&documents)
-        .map_err(|error| format!("cannot create intake documents directory: {error}"))?;
-    if fs::canonicalize(&documents)
-        .map_err(|error| format!("cannot resolve intake documents directory: {error}"))?
-        != documents
-    {
-        return Err("intake documents directory must not resolve outside the workspace".to_owned());
-    }
+fn open_category_directory_in_workspace(workspace: &Dir, category: &str) -> Result<Dir, String> {
+    let documents = open_or_create_directory(workspace, "documents")?;
+    open_or_create_directory(&documents, category)
+}
 
-    let category_directory = documents.join(category);
-    fs::create_dir_all(&category_directory)
-        .map_err(|error| format!("cannot create intake category directory: {error}"))?;
-    if fs::canonicalize(&category_directory)
-        .map_err(|error| format!("cannot resolve intake category directory: {error}"))?
-        != category_directory
-    {
-        return Err("intake category directory must not resolve outside the workspace".to_owned());
-    }
-
-    Ok(category_directory)
+#[cfg(test)]
+fn open_category_directory(workspace: &Path, category: &str) -> Result<Dir, String> {
+    let workspace = Dir::open_ambient_dir(workspace, ambient_authority())
+        .map_err(|error| format!("cannot open workspace directory: {error}"))?;
+    open_category_directory_in_workspace(&workspace, category)
 }
 
 fn source_basename(source: &Path) -> Result<OsString, String> {
@@ -119,30 +120,17 @@ fn source_basename(source: &Path) -> Result<OsString, String> {
     Ok(basename.to_os_string())
 }
 
-fn files_equal(left: &Path, right: &Path) -> Result<bool, String> {
-    let left_metadata =
-        fs::metadata(left).map_err(|error| format!("cannot inspect intake source: {error}"))?;
-    let right_metadata = fs::metadata(right)
-        .map_err(|error| format!("cannot inspect staged intake file: {error}"))?;
-    if left_metadata.len() != right_metadata.len() {
-        return Ok(false);
-    }
-
-    let mut left = BufReader::new(
-        fs::File::open(left).map_err(|error| format!("cannot read intake source: {error}"))?,
-    );
-    let mut right = BufReader::new(
-        fs::File::open(right)
-            .map_err(|error| format!("cannot read staged intake file: {error}"))?,
-    );
+fn files_equal(source: &Path, destination: &mut CapFile) -> Result<bool, String> {
+    let mut source =
+        fs::File::open(source).map_err(|error| format!("cannot read intake source: {error}"))?;
     let mut left_buffer = [0; 8192];
     let mut right_buffer = [0; 8192];
 
     loop {
-        let left_read = left
+        let left_read = source
             .read(&mut left_buffer)
             .map_err(|error| format!("cannot read intake source: {error}"))?;
-        let right_read = right
+        let right_read = destination
             .read(&mut right_buffer)
             .map_err(|error| format!("cannot read staged intake file: {error}"))?;
         if left_read != right_read || left_buffer[..left_read] != right_buffer[..right_read] {
@@ -165,26 +153,99 @@ fn suffixed_basename(basename: &std::ffi::OsStr, suffix: usize) -> OsString {
     candidate
 }
 
-fn copy_file_exclusive(source: &Path, destination: &Path) -> io::Result<()> {
+fn open_file_nofollow(directory: &Dir, filename: &std::ffi::OsStr) -> io::Result<CapFile> {
+    let mut options = CapOpenOptions::new();
+    options.read(true).follow(FollowSymlinks::No);
+    directory.open_with(filename, &options)
+}
+
+fn copy_file_exclusive(
+    source: &Path,
+    directory: &Dir,
+    filename: &std::ffi::OsStr,
+) -> io::Result<()> {
     let mut source_file = fs::File::open(source)?;
-    let mut destination_file = OpenOptions::new()
+    let mut options = CapOpenOptions::new();
+    options
         .write(true)
         .create_new(true)
-        .open(destination)?;
+        .follow(FollowSymlinks::No);
+    let mut destination_file = directory.open_with(filename, &options)?;
 
     if let Err(error) = io::copy(&mut source_file, &mut destination_file) {
         drop(destination_file);
-        fs::remove_file(destination).ok();
+        directory.remove_file(filename).ok();
         return Err(error);
     }
 
     Ok(())
 }
 
+fn stage_file_in_category(
+    source_path: &str,
+    source: &Path,
+    category: &str,
+    directory: &Dir,
+    destination_directory: &Path,
+) -> Result<StagedIntakeFile, String> {
+    let basename = source_basename(source)?;
+    let mut suffix = 1;
+
+    loop {
+        let candidate_name = if suffix == 1 {
+            basename.clone()
+        } else {
+            suffixed_basename(&basename, suffix)
+        };
+        match directory.symlink_metadata(&candidate_name) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err("staged intake destination must not be a symlink".to_owned());
+            }
+            Ok(metadata) if metadata.is_file() => {
+                let mut destination = open_file_nofollow(directory, &candidate_name)
+                    .map_err(|error| format!("cannot read staged intake file: {error}"))?;
+                if files_equal(source, &mut destination)? {
+                    return Ok(StagedIntakeFile {
+                        source_path: source_path.to_owned(),
+                        destination_path: destination_directory
+                            .join(&candidate_name)
+                            .to_string_lossy()
+                            .into_owned(),
+                        category: category.to_owned(),
+                        duplicate: true,
+                    });
+                }
+                suffix += 1;
+            }
+            Ok(_) => suffix += 1,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                match copy_file_exclusive(source, directory, &candidate_name) {
+                    Ok(()) => {
+                        return Ok(StagedIntakeFile {
+                            source_path: source_path.to_owned(),
+                            destination_path: destination_directory
+                                .join(&candidate_name)
+                                .to_string_lossy()
+                                .into_owned(),
+                            category: category.to_owned(),
+                            duplicate: false,
+                        });
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => suffix += 1,
+                    Err(error) => return Err(format!("cannot stage intake file: {error}")),
+                }
+            }
+            Err(error) => return Err(format!("cannot inspect staged intake destination: {error}")),
+        }
+    }
+}
+
 pub fn stage_intake_files(
     workspace: &Path,
     files: &[StageIntakeFile],
 ) -> Result<Vec<StagedIntakeFile>, String> {
+    let workspace_directory = Dir::open_ambient_dir(workspace, ambient_authority())
+        .map_err(|error| format!("cannot open workspace directory: {error}"))?;
     let mut staged = Vec::with_capacity(files.len());
 
     for file in files {
@@ -197,60 +258,16 @@ pub fn stage_intake_files(
             return Err(format!("intake source is not a file: {}", source.display()));
         }
 
-        let category_directory = canonical_category_directory(workspace, category)?;
-        let basename = source_basename(source)?;
-        let mut suffix = 1;
-
-        loop {
-            let candidate_name = if suffix == 1 {
-                basename.clone()
-            } else {
-                suffixed_basename(&basename, suffix)
-            };
-            let destination = category_directory.join(candidate_name);
-            if !destination.starts_with(&category_directory)
-                || destination.parent() != Some(category_directory.as_path())
-            {
-                return Err("intake destination would escape its category directory".to_owned());
-            }
-
-            match fs::symlink_metadata(&destination) {
-                Ok(metadata) if metadata.file_type().is_symlink() => {
-                    return Err("staged intake destination must not be a symlink".to_owned());
-                }
-                Ok(metadata) if metadata.is_file() => {
-                    if files_equal(source, &destination)? {
-                        staged.push(StagedIntakeFile {
-                            source_path: file.source_path.clone(),
-                            destination_path: destination.to_string_lossy().into_owned(),
-                            category: category.to_owned(),
-                            duplicate: true,
-                        });
-                        break;
-                    }
-                    suffix += 1;
-                }
-                Ok(_) => suffix += 1,
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                    match copy_file_exclusive(source, &destination) {
-                        Ok(()) => {
-                            staged.push(StagedIntakeFile {
-                                source_path: file.source_path.clone(),
-                                destination_path: destination.to_string_lossy().into_owned(),
-                                category: category.to_owned(),
-                                duplicate: false,
-                            });
-                            break;
-                        }
-                        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => suffix += 1,
-                        Err(error) => return Err(format!("cannot stage intake file: {error}")),
-                    }
-                }
-                Err(error) => {
-                    return Err(format!("cannot inspect staged intake destination: {error}"))
-                }
-            }
-        }
+        let category_directory =
+            open_category_directory_in_workspace(&workspace_directory, category)?;
+        let destination_directory = workspace.join("documents").join(category);
+        staged.push(stage_file_in_category(
+            &file.source_path,
+            source,
+            category,
+            &category_directory,
+            &destination_directory,
+        )?);
     }
 
     Ok(staged)
@@ -649,10 +666,7 @@ mod tests {
         let destination = workspace.path().join("documents/cv/resume.pdf");
         assert_eq!(staged.len(), 1);
         assert!(!staged[0].duplicate);
-        assert_eq!(
-            PathBuf::from(&staged[0].destination_path),
-            fs::canonicalize(&destination).unwrap()
-        );
+        assert_eq!(PathBuf::from(&staged[0].destination_path), destination);
         assert_eq!(fs::read_to_string(&source).unwrap(), "original CV");
         assert_eq!(fs::read_to_string(destination).unwrap(), "original CV");
     }
@@ -688,7 +702,7 @@ mod tests {
         assert!(staged[0].duplicate);
         assert_eq!(
             PathBuf::from(&staged[0].destination_path),
-            fs::canonicalize(workspace.path().join("documents/diplomas/master.pdf")).unwrap()
+            workspace.path().join("documents/diplomas/master.pdf")
         );
         assert_eq!(fs::read_to_string(second).unwrap(), "same content");
     }
@@ -714,15 +728,63 @@ mod tests {
 
         assert_eq!(
             PathBuf::from(&second_result[0].destination_path),
-            fs::canonicalize(workspace.path().join("documents/diplomas/master-2.pdf")).unwrap()
+            workspace.path().join("documents/diplomas/master-2.pdf")
         );
         assert_eq!(
             PathBuf::from(&third_result[0].destination_path),
-            fs::canonicalize(workspace.path().join("documents/diplomas/master-3.pdf")).unwrap()
+            workspace.path().join("documents/diplomas/master-3.pdf")
         );
         assert_eq!(
             fs::read_to_string(workspace.path().join("documents/diplomas/master.pdf")).unwrap(),
             "first"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn held_category_directory_does_not_follow_a_replacement_symlink() {
+        let workspace = TempDir::new("stage-held-directory");
+        let source_dir = TempDir::new("stage-held-directory-source");
+        let external = TempDir::new("stage-held-directory-external");
+        let source = source_dir.path().join("resume.pdf");
+        fs::write(&source, "original CV").unwrap();
+        let external_resume = external.path().join("resume.pdf");
+        fs::write(&external_resume, "external evidence").unwrap();
+
+        let category_path = workspace.path().join("documents/cv");
+        let category_directory = open_category_directory(workspace.path(), "cv").unwrap();
+        let held_category_path = workspace.path().join("documents/cv-held");
+        fs::rename(&category_path, &held_category_path).unwrap();
+        std::os::unix::fs::symlink(external.path(), &category_path).unwrap();
+
+        let staged = stage_file_in_category(
+            &source.to_string_lossy(),
+            &source,
+            "cv",
+            &category_directory,
+            &category_path,
+        )
+        .unwrap();
+
+        assert_eq!(
+            staged.destination_path,
+            category_path.join("resume.pdf").to_string_lossy()
+        );
+        assert_eq!(
+            fs::read_to_string(held_category_path.join("resume.pdf")).unwrap(),
+            "original CV"
+        );
+        assert_eq!(
+            fs::read_to_string(&external_resume).unwrap(),
+            "external evidence"
+        );
+        assert!(!external.path().join("resume-2.pdf").exists());
+
+        category_directory.remove_file("resume.pdf").unwrap();
+        assert!(!held_category_path.join("resume.pdf").exists());
+        assert_eq!(
+            fs::read_to_string(&external_resume).unwrap(),
+            "external evidence"
         );
     }
 }
