@@ -191,10 +191,47 @@ summary:focus-visible {
 .intake-stage-result p { margin: 0 0 8px; }
 .intake-stage-result p:last-child { margin-bottom: 0; }
 .intake-error { max-width: 560px; margin: 0; color: var(--color-accent-red); font: 500 13px/1.4 var(--font-sans); }
+.intake-review-screen { max-width: 880px; justify-content: flex-start; text-align: left; }
+.intake-review-screen > h1,
+.intake-review-screen > .setup-subtitle { align-self: center; text-align: center; }
+.intake-review-screen > .setup-actions { align-self: center; }
+.intake-review-list {
+  display: grid; gap: 16px; width: 100%; margin: 0; padding: 0; list-style: none;
+}
+.intake-proposal-card {
+  padding: 20px; border-radius: var(--radius-card);
+  background: var(--color-canvas); box-shadow: var(--shadow-panel);
+}
+.intake-proposal-details,
+.intake-conflict dl { display: grid; gap: 12px; margin: 0; }
+.intake-proposal-details > div,
+.intake-conflict dl > div { display: grid; grid-template-columns: 144px minmax(0, 1fr); gap: 12px; }
+.intake-proposal-details dt,
+.intake-conflict dt { color: var(--color-text-secondary); font: 700 13px/1.4 var(--font-sans); }
+.intake-proposal-details dd,
+.intake-conflict dd { margin: 0; overflow-wrap: anywhere; font: 500 13px/1.5 var(--font-sans); }
+.intake-conflict {
+  margin-top: 16px; padding: 16px;
+  border-left: 4px solid var(--color-accent-amber); border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
+}
+.intake-conflict h2 { margin: 0 0 12px; font: 700 14px/1.2 var(--font-sans); }
+.intake-approval {
+  display: flex; align-items: center; gap: 8px; width: fit-content; margin-top: 16px;
+  font: 700 14px/1.2 var(--font-sans); cursor: pointer;
+}
+.intake-approval input { width: 20px; height: 20px; margin: 0; accent-color: var(--color-primary); }
 @media (max-width: 640px) {
   .intake-file-row { grid-template-columns: 1fr auto; }
   .intake-file-row label { grid-column: 1 / -1; }
   .intake-file-row select { max-width: none; width: 100%; }
+  .intake-review-screen { padding: 32px 16px; }
+  .intake-proposal-details > div,
+  .intake-conflict dl > div { grid-template-columns: 1fr; gap: 4px; }
+  .intake-approval { min-height: 44px; }
+  .intake-approval input { width: 24px; height: 24px; }
+  .intake-review-screen .setup-actions { flex-wrap: wrap; }
+  .intake-review-screen .setup-actions button { min-height: 44px; }
 }
 .workspace-path-preview {
   max-width: 100%;

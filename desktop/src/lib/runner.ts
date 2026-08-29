@@ -6,8 +6,74 @@ import {
   type TaskOutputEvent,
   type TaskFinishedEvent,
   type LanguageContext,
+  type IntakeProposal,
+  type IntakeProposalItem,
 } from '../api';
 import { getPreferredProvider } from './providers';
+
+const INTAKE_PROPOSAL_START = '---CAREEROPS_INTAKE_PROPOSAL_START---';
+const INTAKE_PROPOSAL_END = '---CAREEROPS_INTAKE_PROPOSAL_END---';
+const INTAKE_PROTOCOL_ERROR = 'The AI provider returned an invalid intake proposal. Try again.';
+const TARGET_FILES = new Set(['cv.md', 'config/profile.yml', 'modes/_profile.md']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSafeSourcePath(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0 || value.includes('\\') || value.includes('\0')) {
+    return false;
+  }
+  if (value.startsWith('/') || value.startsWith('-')) return false;
+  return value.split('/').every((part) => part !== '' && part !== '.' && part !== '..');
+}
+
+function isProposalItem(value: unknown, sourcePaths: Set<string>): value is IntakeProposalItem {
+  if (!isRecord(value)) return false;
+  if (typeof value.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.id)) return false;
+  if (typeof value.targetFile !== 'string' || !TARGET_FILES.has(value.targetFile)) return false;
+  if (typeof value.field !== 'string' || value.field.length === 0) return false;
+  if (typeof value.proposedValue !== 'string') return false;
+  if (!Array.isArray(value.sources) || value.sources.length === 0) return false;
+  if (!value.sources.every((source) => isSafeSourcePath(source) && sourcePaths.has(source))) return false;
+  if (value.conflict !== undefined) {
+    if (!isRecord(value.conflict)) return false;
+    if (typeof value.conflict.existingValue !== 'string' || typeof value.conflict.proposedValue !== 'string') {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function parseIntakeProposal(output: string): IntakeProposal {
+  const start = output.indexOf(INTAKE_PROPOSAL_START);
+  const end = output.indexOf(INTAKE_PROPOSAL_END, start + INTAKE_PROPOSAL_START.length);
+  if (start === -1 || end === -1) throw new Error(INTAKE_PROTOCOL_ERROR);
+  if (output.indexOf(INTAKE_PROPOSAL_START, start + INTAKE_PROPOSAL_START.length) !== -1) {
+    throw new Error(INTAKE_PROTOCOL_ERROR);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output.slice(start + INTAKE_PROPOSAL_START.length, end).trim());
+  } catch {
+    throw new Error(INTAKE_PROTOCOL_ERROR);
+  }
+
+  if (!isRecord(parsed) || !Array.isArray(parsed.items) || !Array.isArray(parsed.sourcePaths)) {
+    throw new Error(INTAKE_PROTOCOL_ERROR);
+  }
+  if (!parsed.sourcePaths.every(isSafeSourcePath)) throw new Error(INTAKE_PROTOCOL_ERROR);
+  const sourcePaths = new Set(parsed.sourcePaths);
+  if (sourcePaths.size !== parsed.sourcePaths.length) throw new Error(INTAKE_PROTOCOL_ERROR);
+  if (!parsed.items.every((item) => isProposalItem(item, sourcePaths))) {
+    throw new Error(INTAKE_PROTOCOL_ERROR);
+  }
+  const ids = new Set(parsed.items.map((item) => item.id));
+  if (ids.size !== parsed.items.length) throw new Error(INTAKE_PROTOCOL_ERROR);
+
+  return parsed as IntakeProposal;
+}
 
 export type TaskCallbacks = {
   onOutput?: (stream: 'stdout' | 'stderr', data: string) => void;
@@ -24,36 +90,115 @@ export async function runTask(
   const provider = await getPreferredProvider();
   if (!provider) throw new Error('No AI provider available. Install Claude Code or another supported CLI.');
 
-  const { task_id } = await invokeRunTask(taskType, provider.id, args, path, languageContext);
-
   const unlisteners: UnlistenFn[] = [];
+  const pendingOutput: TaskOutputEvent[] = [];
+  const pendingFinished: TaskFinishedEvent[] = [];
+  let taskId: string | null = null;
+
+  function unlisten() {
+    for (const listener of unlisteners) listener();
+  }
+
+  function handleOutput(payload: TaskOutputEvent) {
+    if (taskId === null) {
+      pendingOutput.push(payload);
+    } else if (payload.task_id === taskId) {
+      callbacks?.onOutput?.(payload.stream, payload.data);
+    }
+  }
+
+  function handleFinished(payload: TaskFinishedEvent) {
+    if (taskId === null) {
+      pendingFinished.push(payload);
+    } else if (payload.task_id === taskId) {
+      callbacks?.onFinished?.(payload.exit_code, payload.success);
+      unlisten();
+    }
+  }
 
   if (callbacks?.onOutput) {
-    const cb = callbacks.onOutput;
     const u = await listen<TaskOutputEvent>('task-output', (e) => {
-      if (e.payload.task_id === task_id) cb(e.payload.stream, e.payload.data);
+      handleOutput(e.payload);
     });
     unlisteners.push(u);
   }
 
   if (callbacks?.onFinished) {
-    const cb = callbacks.onFinished;
     const u = await listen<TaskFinishedEvent>('task-finished', (e) => {
-      if (e.payload.task_id === task_id) {
-        cb(e.payload.exit_code, e.payload.success);
-        unlisten();
-      }
+      handleFinished(e.payload);
     });
     unlisteners.push(u);
   }
 
-  function unlisten() {
-    for (const u of unlisteners) u();
+  try {
+    const started = await invokeRunTask(taskType, provider.id, args, path, languageContext);
+    taskId = started.task_id;
+  } catch (reason) {
+    unlisten();
+    throw reason;
   }
 
-  return { taskId: task_id, unlisten };
+  for (const payload of pendingOutput) handleOutput(payload);
+  for (const payload of pendingFinished) handleFinished(payload);
+
+  return { taskId, unlisten };
 }
 
 export async function cancelTask(taskId: string): Promise<void> {
   await invokeCancelTask(taskId);
+}
+
+export async function previewIntakeProposal(root: string): Promise<IntakeProposal> {
+  return new Promise<IntakeProposal>((resolve, reject) => {
+    const stdout: string[] = [];
+    void runTask('intake-preview', {}, root, {
+      onOutput: (stream, data) => {
+        if (stream === 'stdout') stdout.push(data);
+      },
+      onFinished: (_exitCode, success) => {
+        if (!success) {
+          reject(new Error('The intake preview could not be completed. Try again.'));
+          return;
+        }
+        try {
+          resolve(parseIntakeProposal(stdout.join('\n')));
+        } catch (reason) {
+          reject(reason);
+        }
+      },
+    }).catch(reject);
+  });
+}
+
+export async function applyIntakeProposal(
+  root: string,
+  proposal: IntakeProposal,
+  approvedIds: string[],
+): Promise<{ applied: boolean; mergedSourcePaths: string[] }> {
+  if (approvedIds.length === 0) return { applied: false, mergedSourcePaths: [] };
+
+  const approved = new Set(approvedIds);
+  const selectedItems = proposal.items.filter((item) => approved.has(item.id));
+  const mergedSourcePaths = proposal.sourcePaths.filter((source) => (
+    selectedItems.some((item) => item.sources.includes(source))
+  ));
+  const selectedProposal: IntakeProposal = {
+    items: selectedItems,
+    sourcePaths: mergedSourcePaths,
+  };
+
+  await new Promise<void>((resolve, reject) => {
+    void runTask('intake-apply', {
+      approvedProposalIds: JSON.stringify(selectedItems.map((item) => item.id)),
+      selectedProposal: JSON.stringify(selectedProposal),
+      mergedSourcePaths: JSON.stringify(mergedSourcePaths),
+    }, root, {
+      onFinished: (_exitCode, success) => {
+        if (success) resolve();
+        else reject(new Error('The intake changes could not be applied. No sources were recorded; try again.'));
+      },
+    }).catch(reject);
+  });
+
+  return { applied: true, mergedSourcePaths };
 }
