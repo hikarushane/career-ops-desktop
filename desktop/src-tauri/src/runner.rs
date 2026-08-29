@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
+use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
+use cap_std::ambient_authority;
+use cap_std::fs::{Dir, OpenOptions as CapOpenOptions};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager};
@@ -357,6 +360,19 @@ fn build_apply_selection(
         .filter(|item| approved.contains(item.id.as_str()))
         .cloned()
         .collect();
+    for (index, left) in items.iter().enumerate() {
+        for right in items.iter().skip(index + 1) {
+            if left.target_file == right.target_file
+                && (left.proposed_value.contains(&right.proposed_value)
+                    || right.proposed_value.contains(&left.proposed_value))
+            {
+                return Err(format!(
+                    "Approved proposals {} and {} overlap and cannot be independently proven merged.",
+                    left.id, right.id
+                ));
+            }
+        }
+    }
     let commit_source_paths = proposal
         .source_paths
         .iter()
@@ -379,6 +395,109 @@ fn build_apply_selection(
         items,
         commit_source_paths,
     })
+}
+
+struct CanonicalDirectories {
+    root: Dir,
+    config: Dir,
+    modes: Dir,
+}
+
+impl CanonicalDirectories {
+    fn open(workspace: &Path) -> Result<Self, String> {
+        let root = Dir::open_ambient_dir(workspace, ambient_authority())
+            .map_err(|error| format!("cannot open canonical workspace directory: {error}"))?;
+        let config = root.open_dir_nofollow("config").map_err(|error| {
+            format!("cannot open canonical config directory without following links: {error}")
+        })?;
+        let modes = root.open_dir_nofollow("modes").map_err(|error| {
+            format!("cannot open canonical modes directory without following links: {error}")
+        })?;
+        Ok(Self {
+            root,
+            config,
+            modes,
+        })
+    }
+
+    fn validate_parent_entries(&self) -> Result<(), String> {
+        for (name, held) in [("config", &self.config), ("modes", &self.modes)] {
+            let current = self.root.open_dir_nofollow(name).map_err(|error| {
+                format!("canonical {name} directory changed or became a symbolic link: {error}")
+            })?;
+            if !same_directory(held, &current)? {
+                return Err(format!(
+                    "canonical {name} directory changed after intake review; no files were promoted"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn target(&self, relative: &str) -> Result<(&Dir, &'static str), String> {
+        match relative {
+            "cv.md" => Ok((&self.root, "cv.md")),
+            "config/profile.yml" => Ok((&self.config, "profile.yml")),
+            "modes/_profile.md" => Ok((&self.modes, "_profile.md")),
+            _ => Err(format!("not a canonical intake target: {relative}")),
+        }
+    }
+
+    fn read_target(&self, relative: &str) -> Result<Option<Vec<u8>>, String> {
+        let (directory, filename) = self.target(relative)?;
+        match directory.symlink_metadata(filename) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(format!(
+                    "canonical intake target must not be a symbolic link: {relative}"
+                ));
+            }
+            Ok(metadata) if !metadata.is_file() => {
+                return Err(format!(
+                    "canonical intake target must be a regular file: {relative}"
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => {
+                return Err(format!(
+                    "cannot inspect canonical intake target {relative}: {error}"
+                ))
+            }
+        }
+        let mut options = CapOpenOptions::new();
+        options.read(true).follow(FollowSymlinks::No);
+        let mut file = directory.open_with(filename, &options).map_err(|error| {
+            format!(
+                "cannot read canonical intake target without following links {relative}: {error}"
+            )
+        })?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)
+            .map_err(|error| format!("cannot read canonical intake target {relative}: {error}"))?;
+        Ok(Some(bytes))
+    }
+}
+
+#[cfg(unix)]
+fn same_directory(left: &Dir, right: &Dir) -> Result<bool, String> {
+    use cap_std::fs::MetadataExt;
+
+    let left = left
+        .dir_metadata()
+        .map_err(|error| format!("cannot inspect held canonical directory: {error}"))?;
+    let right = right
+        .dir_metadata()
+        .map_err(|error| format!("cannot inspect current canonical directory: {error}"))?;
+    Ok(left.dev() == right.dev() && left.ino() == right.ino())
+}
+
+#[cfg(not(unix))]
+fn same_directory(_left: &Dir, _right: &Dir) -> Result<bool, String> {
+    Ok(true)
+}
+
+fn hash_bytes(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 fn hash_file(path: &Path) -> Result<String, String> {
@@ -442,20 +561,190 @@ fn fingerprint_tree(root: &Path) -> Result<BTreeMap<String, String>, String> {
     Ok(fingerprints)
 }
 
-fn fingerprint_review_inputs(workspace: &Path) -> Result<ReviewFingerprints, String> {
-    let mut documents = BTreeMap::new();
-    collect_fingerprints(
-        &workspace.join("documents"),
-        &workspace.join("documents"),
-        &mut documents,
-    )?;
+fn sorted_directory_entries(directory: &Path) -> Result<Vec<fs::DirEntry>, String> {
+    let mut entries = fs::read_dir(directory)
+        .map_err(|error| {
+            format!(
+                "failed to read intake documents {}: {error}",
+                directory.display()
+            )
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            format!(
+                "failed to read intake documents {}: {error}",
+                directory.display()
+            )
+        })?;
+    entries.sort_by_key(|entry| entry.file_name());
+    Ok(entries)
+}
+
+fn claim_real_document_directories(
+    directory: &Path,
+    claimed: &mut HashSet<PathBuf>,
+) -> Result<(), String> {
+    let real = fs::canonicalize(directory).map_err(|error| {
+        format!(
+            "failed to resolve intake documents {}: {error}",
+            directory.display()
+        )
+    })?;
+    if !claimed.insert(real) {
+        return Ok(());
+    }
+    for entry in sorted_directory_entries(directory)? {
+        if entry.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
+        let file_type = entry.file_type().map_err(|error| {
+            format!(
+                "failed to inspect intake document {}: {error}",
+                entry.path().display()
+            )
+        })?;
+        if file_type.is_dir() {
+            claim_real_document_directories(&entry.path(), claimed)?;
+        }
+    }
+    Ok(())
+}
+
+fn walk_document_sources<F>(root: &Path, mut visit: F) -> Result<(), String>
+where
+    F: FnMut(&str, &[u8]) -> Result<(), String>,
+{
+    if !root.exists() {
+        return Ok(());
+    }
+    if !fs::metadata(root)
+        .map_err(|error| {
+            format!(
+                "failed to inspect documents root {}: {error}",
+                root.display()
+            )
+        })?
+        .is_dir()
+    {
+        return Err("documents root must resolve to a directory".to_owned());
+    }
+
+    let mut real_directories = HashSet::new();
+    claim_real_document_directories(root, &mut real_directories)?;
+    let mut walked = HashSet::new();
+
+    fn walk<F>(
+        root: &Path,
+        directory: &Path,
+        real_directories: &HashSet<PathBuf>,
+        walked: &mut HashSet<PathBuf>,
+        visit: &mut F,
+    ) -> Result<(), String>
+    where
+        F: FnMut(&str, &[u8]) -> Result<(), String>,
+    {
+        let real = fs::canonicalize(directory).map_err(|error| {
+            format!(
+                "failed to resolve intake documents {}: {error}",
+                directory.display()
+            )
+        })?;
+        if !walked.insert(real) {
+            return Ok(());
+        }
+        for entry in sorted_directory_entries(directory)? {
+            let name = entry.file_name();
+            let name_text = name.to_string_lossy();
+            if name_text.starts_with('.')
+                || (directory == root && name_text.as_ref() == "README.md")
+            {
+                continue;
+            }
+            let path = entry.path();
+            let file_type = entry.file_type().map_err(|error| {
+                format!(
+                    "failed to inspect intake document {}: {error}",
+                    path.display()
+                )
+            })?;
+            let (is_directory, is_file) = if file_type.is_symlink() {
+                match fs::metadata(&path) {
+                    Ok(metadata) => (metadata.is_dir(), metadata.is_file()),
+                    Err(_) => continue,
+                }
+            } else {
+                (file_type.is_dir(), file_type.is_file())
+            };
+            if is_directory {
+                if file_type.is_symlink() {
+                    let target = match fs::canonicalize(&path) {
+                        Ok(target) => target,
+                        Err(_) => continue,
+                    };
+                    if real_directories.contains(&target) {
+                        continue;
+                    }
+                }
+                walk(root, &path, real_directories, walked, visit)?;
+            } else if is_file {
+                let relative = path
+                    .strip_prefix(root)
+                    .map_err(|_| "failed to make intake document path relative".to_owned())?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let bytes = fs::read(&path).map_err(|error| {
+                    format!("failed to read intake document {relative}: {error}")
+                })?;
+                visit(&relative, &bytes)?;
+            }
+        }
+        Ok(())
+    }
+
+    walk(root, root, &real_directories, &mut walked, &mut visit)
+}
+
+fn fingerprint_documents(root: &Path) -> Result<BTreeMap<String, String>, String> {
+    let mut fingerprints = BTreeMap::new();
+    walk_document_sources(root, |relative, bytes| {
+        fingerprints.insert(relative.to_owned(), hash_bytes(bytes));
+        Ok(())
+    })?;
+    Ok(fingerprints)
+}
+
+fn copy_document_sources(root: &Path, destination: &Path) -> Result<(), String> {
+    fs::create_dir_all(destination)
+        .map_err(|error| format!("failed to create {}: {error}", destination.display()))?;
+    walk_document_sources(root, |relative, bytes| {
+        let target = destination.join(relative);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
+        }
+        fs::write(&target, bytes)
+            .map_err(|error| format!("failed to copy intake document {relative}: {error}"))
+    })
+}
+
+fn fingerprint_review_inputs_with_canonical(
+    workspace: &Path,
+    canonical: &CanonicalDirectories,
+) -> Result<ReviewFingerprints, String> {
+    let documents = fingerprint_documents(&workspace.join("documents"))?;
     let mut review_inputs = BTreeMap::new();
     for relative in REVIEW_INPUTS {
-        let path = workspace.join(relative);
-        let fingerprint = if path.is_file() {
-            Some(hash_file(&path)?)
+        let fingerprint = if CANONICAL_TARGETS.contains(&relative) {
+            canonical
+                .read_target(relative)?
+                .map(|bytes| hash_bytes(&bytes))
         } else {
-            None
+            let path = workspace.join(relative);
+            if path.is_file() {
+                Some(hash_file(&path)?)
+            } else {
+                None
+            }
         };
         review_inputs.insert(relative.to_owned(), fingerprint);
     }
@@ -465,11 +754,17 @@ fn fingerprint_review_inputs(workspace: &Path) -> Result<ReviewFingerprints, Str
     })
 }
 
-fn verify_review_fingerprints(
+fn fingerprint_review_inputs(workspace: &Path) -> Result<ReviewFingerprints, String> {
+    let canonical = CanonicalDirectories::open(workspace)?;
+    fingerprint_review_inputs_with_canonical(workspace, &canonical)
+}
+
+fn verify_review_fingerprints_with_canonical(
     workspace: &Path,
+    canonical: &CanonicalDirectories,
     reviewed: &ReviewFingerprints,
 ) -> Result<(), String> {
-    let current = fingerprint_review_inputs(workspace)?;
+    let current = fingerprint_review_inputs_with_canonical(workspace, canonical)?;
     if current.documents != reviewed.documents || current.review_inputs != reviewed.review_inputs {
         return Err(
             "Intake evidence or profile inputs changed since preview. Review again before applying."
@@ -477,6 +772,14 @@ fn verify_review_fingerprints(
         );
     }
     Ok(())
+}
+
+fn verify_review_fingerprints(
+    workspace: &Path,
+    reviewed: &ReviewFingerprints,
+) -> Result<(), String> {
+    let canonical = CanonicalDirectories::open(workspace)?;
+    verify_review_fingerprints_with_canonical(workspace, &canonical, reviewed)
 }
 
 fn copy_regular_file(source: &Path, destination: &Path) -> Result<(), String> {
@@ -501,51 +804,36 @@ fn copy_regular_file(source: &Path, destination: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn copy_regular_tree(source: &Path, destination: &Path) -> Result<(), String> {
-    if !source.exists() {
-        fs::create_dir_all(destination)
-            .map_err(|error| format!("failed to create {}: {error}", destination.display()))?;
-        return Ok(());
-    }
-    fs::create_dir_all(destination)
-        .map_err(|error| format!("failed to create {}: {error}", destination.display()))?;
-    let mut entries = fs::read_dir(source)
-        .map_err(|error| format!("failed to read {}: {error}", source.display()))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("failed to read {}: {error}", source.display()))?;
-    entries.sort_by_key(|entry| entry.file_name());
-    for entry in entries {
-        let file_type = entry
-            .file_type()
-            .map_err(|error| format!("failed to inspect {}: {error}", entry.path().display()))?;
-        let target = destination.join(entry.file_name());
-        if file_type.is_symlink() {
-            return Err(format!(
-                "intake isolation refuses symbolic link: {}",
-                entry.path().display()
-            ));
-        }
-        if file_type.is_dir() {
-            copy_regular_tree(&entry.path(), &target)?;
-        } else if file_type.is_file() {
-            copy_regular_file(&entry.path(), &target)?;
-        }
-    }
-    Ok(())
-}
-
 fn create_intake_sandbox(workspace: &Path) -> Result<TempDir, String> {
     let sandbox = TempBuilder::new()
         .prefix("careerops-intake-")
         .tempdir()
         .map_err(|error| format!("failed to create intake sandbox: {error}"))?;
+    let canonical = CanonicalDirectories::open(workspace)?;
     for relative in REVIEW_INPUTS.into_iter().chain(SANDBOX_SUPPORT_FILES) {
-        let source = workspace.join(relative);
-        if source.is_file() {
-            copy_regular_file(&source, &sandbox.path().join(relative))?;
+        let destination = sandbox.path().join(relative);
+        if CANONICAL_TARGETS.contains(&relative) {
+            if let Some(bytes) = canonical.read_target(relative)? {
+                if let Some(parent) = destination.parent() {
+                    fs::create_dir_all(parent).map_err(|error| {
+                        format!(
+                            "failed to create sandbox directory {}: {error}",
+                            parent.display()
+                        )
+                    })?;
+                }
+                fs::write(&destination, bytes).map_err(|error| {
+                    format!("failed to copy canonical target {relative}: {error}")
+                })?;
+            }
+        } else {
+            let source = workspace.join(relative);
+            if source.is_file() {
+                copy_regular_file(&source, &destination)?;
+            }
         }
     }
-    copy_regular_tree(
+    copy_document_sources(
         &workspace.join("documents"),
         &sandbox.path().join("documents"),
     )?;
@@ -560,6 +848,303 @@ fn write_intake_selection_file(
         .map_err(|error| format!("failed to encode intake selection: {error}"))?;
     fs::write(sandbox.join(".careerops-intake-selection.json"), bytes)
         .map_err(|error| format!("failed to write isolated intake selection: {error}"))
+}
+
+fn capture_verified_target_bytes(
+    sandbox: &Path,
+    fingerprints: &BTreeMap<String, String>,
+    changed: &[String],
+) -> Result<BTreeMap<String, Vec<u8>>, String> {
+    let mut captured = BTreeMap::new();
+    for relative in changed {
+        if !CANONICAL_TARGETS.contains(&relative.as_str()) {
+            return Err(format!(
+                "cannot capture non-canonical intake target: {relative}"
+            ));
+        }
+        let bytes = fs::read(sandbox.join(relative)).map_err(|error| {
+            format!("failed to capture verified intake target {relative}: {error}")
+        })?;
+        if fingerprints.get(relative) != Some(&hash_bytes(&bytes)) {
+            return Err(format!(
+                "Verified intake target {relative} changed while it was being captured. No real files were changed."
+            ));
+        }
+        captured.insert(relative.clone(), bytes);
+    }
+    Ok(captured)
+}
+
+trait CanonicalTargetWriter {
+    fn validate_layout(&self) -> Result<(), String> {
+        Ok(())
+    }
+    fn read(&self, relative: &str) -> Result<Option<Vec<u8>>, String>;
+    fn replace(&mut self, relative: &str, contents: &[u8]) -> Result<(), String>;
+    fn remove(&mut self, relative: &str) -> Result<(), String>;
+}
+
+struct CapabilityTargetWriter {
+    directories: CanonicalDirectories,
+}
+
+impl CapabilityTargetWriter {
+    fn open(workspace: &Path) -> Result<Self, String> {
+        Ok(Self {
+            directories: CanonicalDirectories::open(workspace)?,
+        })
+    }
+}
+
+static NEXT_ATOMIC_TARGET: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+impl CanonicalTargetWriter for CapabilityTargetWriter {
+    fn validate_layout(&self) -> Result<(), String> {
+        self.directories.validate_parent_entries()
+    }
+
+    fn read(&self, relative: &str) -> Result<Option<Vec<u8>>, String> {
+        self.directories.read_target(relative)
+    }
+
+    fn replace(&mut self, relative: &str, contents: &[u8]) -> Result<(), String> {
+        let (directory, filename) = self.directories.target(relative)?;
+        let existing_permissions = match directory.symlink_metadata(filename) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(format!(
+                    "canonical intake target became a symbolic link: {relative}"
+                ));
+            }
+            Ok(metadata) if metadata.is_file() => Some(metadata.permissions()),
+            Ok(_) => {
+                return Err(format!(
+                    "canonical intake target is not a regular file: {relative}"
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => {
+                return Err(format!(
+                    "cannot inspect canonical intake target {relative}: {error}"
+                ));
+            }
+        };
+        let temporary = format!(
+            ".careerops-intake-{}-{}",
+            std::process::id(),
+            NEXT_ATOMIC_TARGET.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        );
+        let mut options = CapOpenOptions::new();
+        options
+            .write(true)
+            .create_new(true)
+            .follow(FollowSymlinks::No);
+        let mut staged = directory.open_with(&temporary, &options).map_err(|error| {
+            format!("failed to stage canonical intake target {relative}: {error}")
+        })?;
+        if let Err(error) = staged.write_all(contents).and_then(|_| staged.sync_all()) {
+            drop(staged);
+            directory.remove_file(&temporary).ok();
+            return Err(format!(
+                "failed to stage canonical intake target {relative}: {error}"
+            ));
+        }
+        let target_existed = existing_permissions.is_some();
+        if let Some(permissions) = existing_permissions {
+            if let Err(error) = directory.set_permissions(&temporary, permissions) {
+                drop(staged);
+                directory.remove_file(&temporary).ok();
+                return Err(format!(
+                    "failed to preserve permissions for {relative}: {error}"
+                ));
+            }
+        }
+        drop(staged);
+        match directory.symlink_metadata(filename) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                directory.remove_file(&temporary).ok();
+                return Err(format!(
+                    "canonical intake target became a symbolic link: {relative}"
+                ));
+            }
+            Ok(metadata) if !metadata.is_file() => {
+                directory.remove_file(&temporary).ok();
+                return Err(format!(
+                    "canonical intake target is not a regular file: {relative}"
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && !target_existed => {}
+            Err(error) => {
+                directory.remove_file(&temporary).ok();
+                return Err(format!(
+                    "canonical intake target changed before promotion {relative}: {error}"
+                ));
+            }
+        }
+        if let Err(error) = directory.rename(&temporary, directory, filename) {
+            directory.remove_file(&temporary).ok();
+            return Err(format!("failed to atomically promote {relative}: {error}"));
+        }
+        Ok(())
+    }
+
+    fn remove(&mut self, relative: &str) -> Result<(), String> {
+        let (directory, filename) = self.directories.target(relative)?;
+        match directory.symlink_metadata(filename) {
+            Ok(metadata) if metadata.file_type().is_symlink() => Err(format!(
+                "refusing to remove canonical target symlink: {relative}"
+            )),
+            Ok(metadata) if metadata.is_file() => {
+                directory.remove_file(filename).map_err(|error| {
+                    format!("failed to remove canonical intake target {relative}: {error}")
+                })
+            }
+            Ok(_) => Err(format!(
+                "canonical intake target is not a regular file: {relative}"
+            )),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!(
+                "cannot inspect canonical intake target {relative}: {error}"
+            )),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct TargetBackup {
+    relative: String,
+    contents: Option<Vec<u8>>,
+}
+
+#[derive(Debug)]
+struct PromotionFailure {
+    message: String,
+    recovery_path: Option<PathBuf>,
+}
+
+impl std::fmt::Display for PromotionFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.recovery_path {
+            Some(path) => write!(
+                formatter,
+                "{}. Recovery copies retained at {}. Restore the listed relative paths before retrying.",
+                self.message,
+                path.display()
+            ),
+            None => formatter.write_str(&self.message),
+        }
+    }
+}
+
+fn restore_target_changes<W: CanonicalTargetWriter>(
+    writer: &mut W,
+    backups: &[TargetBackup],
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    for backup in backups.iter().rev() {
+        let result = writer
+            .validate_layout()
+            .and_then(|()| match &backup.contents {
+                Some(contents) => writer.replace(&backup.relative, contents),
+                None => writer.remove(&backup.relative),
+            });
+        if let Err(error) = result {
+            failures.push(format!("{}: {error}", backup.relative));
+        }
+    }
+    failures
+}
+
+fn preserve_recovery_artifacts(backups: &[TargetBackup]) -> Result<PathBuf, String> {
+    let recovery = TempBuilder::new()
+        .prefix("careerops-intake-recovery-")
+        .tempdir()
+        .map_err(|error| format!("failed to create intake recovery directory: {error}"))?;
+    let mut absent = Vec::new();
+    for backup in backups {
+        match &backup.contents {
+            Some(contents) => {
+                let path = recovery.path().join(&backup.relative);
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent).map_err(|error| {
+                        format!("failed to create intake recovery directory: {error}")
+                    })?;
+                }
+                fs::write(&path, contents)
+                    .map_err(|error| format!("failed to retain recovery copy: {error}"))?;
+            }
+            None => absent.push(backup.relative.as_str()),
+        }
+    }
+    let instructions = format!(
+        "# CareerOps intake recovery\n\nRestore each retained file to the same relative path in the CareerOps workspace before retrying.\nOriginally absent targets (remove them if present): {}\n",
+        if absent.is_empty() {
+            "none".to_owned()
+        } else {
+            absent.join(", ")
+        }
+    );
+    fs::write(recovery.path().join("RESTORE.md"), instructions)
+        .map_err(|error| format!("failed to retain recovery instructions: {error}"))?;
+    Ok(recovery.keep())
+}
+
+fn promotion_failure(
+    original: String,
+    backups: &[TargetBackup],
+    rollback_failures: Vec<String>,
+) -> PromotionFailure {
+    if rollback_failures.is_empty() {
+        return PromotionFailure {
+            message: original,
+            recovery_path: None,
+        };
+    }
+    match preserve_recovery_artifacts(backups) {
+        Ok(path) => PromotionFailure {
+            message: format!(
+                "{original}; rollback failed: {}",
+                rollback_failures.join("; ")
+            ),
+            recovery_path: Some(path),
+        },
+        Err(recovery_error) => PromotionFailure {
+            message: format!(
+                "{original}; rollback failed: {}; recovery artifact retention also failed: {recovery_error}",
+                rollback_failures.join("; ")
+            ),
+            recovery_path: None,
+        },
+    }
+}
+
+fn promote_target_changes<W: CanonicalTargetWriter>(
+    writer: &mut W,
+    changes: &BTreeMap<String, Vec<u8>>,
+) -> Result<Vec<TargetBackup>, PromotionFailure> {
+    let mut backups = Vec::new();
+    for (relative, contents) in changes {
+        if let Err(error) = writer.validate_layout() {
+            let rollback_failures = restore_target_changes(writer, &backups);
+            return Err(promotion_failure(error, &backups, rollback_failures));
+        }
+        let backup = match writer.read(relative) {
+            Ok(backup) => backup,
+            Err(error) => {
+                let rollback_failures = restore_target_changes(writer, &backups);
+                return Err(promotion_failure(error, &backups, rollback_failures));
+            }
+        };
+        if let Err(error) = writer.replace(relative, contents) {
+            let rollback_failures = restore_target_changes(writer, &backups);
+            return Err(promotion_failure(error, &backups, rollback_failures));
+        }
+        backups.push(TargetBackup {
+            relative: relative.clone(),
+            contents: backup,
+        });
+    }
+    Ok(backups)
 }
 
 fn atomic_replace(path: &Path, contents: &[u8]) -> Result<(), String> {
@@ -594,19 +1179,6 @@ fn atomic_replace(path: &Path, contents: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-fn restore_files(workspace: &Path, backups: &[(String, Option<Vec<u8>>)]) -> Result<(), String> {
-    for (relative, backup) in backups.iter().rev() {
-        let path = workspace.join(relative);
-        match backup {
-            Some(contents) => atomic_replace(&path, contents)?,
-            None if path.exists() => fs::remove_file(&path)
-                .map_err(|error| format!("failed to roll back {}: {error}", path.display()))?,
-            None => {}
-        }
-    }
-    Ok(())
-}
-
 fn finalize_isolated_apply(
     workspace: &Path,
     sandbox: &Path,
@@ -614,9 +1186,10 @@ fn finalize_isolated_apply(
     reviewed: &ReviewFingerprints,
     selection: &IntakeApplySelection,
 ) -> Result<Vec<String>, String> {
-    verify_review_fingerprints(workspace, reviewed)?;
+    let mut writer = CapabilityTargetWriter::open(workspace)?;
+    verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
     let after = fingerprint_tree(sandbox)?;
-    let changed: Vec<String> = before
+    let mut changed: Vec<String> = before
         .keys()
         .chain(after.keys())
         .cloned()
@@ -624,6 +1197,7 @@ fn finalize_isolated_apply(
         .into_iter()
         .filter(|path| before.get(path) != after.get(path))
         .collect();
+    changed.sort();
     if let Some(path) = changed
         .iter()
         .find(|path| !CANONICAL_TARGETS.contains(&path.as_str()))
@@ -631,6 +1205,14 @@ fn finalize_isolated_apply(
         return Err(format!(
             "The provider changed {path}, outside the intake allowlist. No real files were changed."
         ));
+    }
+
+    let captured = capture_verified_target_bytes(sandbox, &after, &changed)?;
+    let mut original_targets = BTreeMap::new();
+    for item in &selection.items {
+        if !original_targets.contains_key(&item.target_file) {
+            original_targets.insert(item.target_file.clone(), writer.read(&item.target_file)?);
+        }
     }
 
     let mut proven_effects = HashSet::new();
@@ -641,13 +1223,34 @@ fn finalize_isolated_apply(
                 item.id
             ));
         }
-        let before_text = fs::read_to_string(workspace.join(&item.target_file)).unwrap_or_default();
-        let after_text = fs::read_to_string(sandbox.join(&item.target_file)).map_err(|_| {
-            format!(
-                "Proposal {} removed its canonical target; no intake changes were applied.",
-                item.id
-            )
-        })?;
+        let before_text = original_targets
+            .get(&item.target_file)
+            .and_then(Option::as_deref)
+            .map(std::str::from_utf8)
+            .transpose()
+            .map_err(|_| {
+                format!(
+                    "Proposal {} targets a canonical file that is not valid UTF-8; no intake changes were applied.",
+                    item.id
+                )
+            })?
+            .unwrap_or_default();
+        let after_text = captured
+            .get(&item.target_file)
+            .ok_or_else(|| {
+                format!(
+                    "Proposal {} removed its canonical target; no intake changes were applied.",
+                    item.id
+                )
+            })
+            .and_then(|bytes| {
+                std::str::from_utf8(bytes).map_err(|_| {
+                    format!(
+                        "Proposal {} produced a canonical file that is not valid UTF-8; no intake changes were applied.",
+                        item.id
+                    )
+                })
+            })?;
         if before_text.contains(&item.proposed_value)
             || !after_text.contains(&item.proposed_value)
             || !proven_effects.insert((&item.target_file, &item.proposed_value))
@@ -669,26 +1272,27 @@ fn finalize_isolated_apply(
         }
     }
 
-    verify_review_fingerprints(workspace, reviewed)?;
-    let mut backups = Vec::new();
-    for relative in &changed {
-        let destination = workspace.join(relative);
-        let backup = fs::read(&destination).ok();
-        let contents = fs::read(sandbox.join(relative)).map_err(|error| {
-            format!("failed to read verified intake target {relative}: {error}")
-        })?;
-        if let Err(error) = atomic_replace(&destination, &contents) {
-            let _ = restore_files(workspace, &backups);
-            return Err(error);
-        }
-        backups.push((relative.clone(), backup));
-    }
+    verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
+    let backups =
+        promote_target_changes(&mut writer, &captured).map_err(|error| error.to_string())?;
 
     let state_path = workspace.join("data/intake-state.json");
-    let state_backup = fs::read(&state_path).ok();
+    let state_backup = match fs::read(&state_path) {
+        Ok(contents) => Some(contents),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => {
+            let rollback_failures = restore_target_changes(&mut writer, &backups);
+            return Err(promotion_failure(
+                format!("failed to back up {}: {error}", state_path.display()),
+                &backups,
+                rollback_failures,
+            )
+            .to_string());
+        }
+    };
     if !selection.commit_source_paths.is_empty() {
         if let Err(error) = commit_intake_sources(workspace, &selection.commit_source_paths) {
-            let rollback = restore_files(workspace, &backups);
+            let mut failures = restore_target_changes(&mut writer, &backups);
             let state_rollback = match &state_backup {
                 Some(contents) => atomic_replace(&state_path, contents),
                 None if state_path.exists() => {
@@ -701,18 +1305,10 @@ fn finalize_isolated_apply(
                 }
                 None => Ok(()),
             };
-            let mut failures = Vec::new();
-            if let Err(rollback_error) = rollback {
-                failures.push(format!("canonical rollback failed: {rollback_error}"));
-            }
             if let Err(rollback_error) = state_rollback {
                 failures.push(format!("intake-state rollback failed: {rollback_error}"));
             }
-            return Err(if failures.is_empty() {
-                error
-            } else {
-                format!("{error}; {}", failures.join("; "))
-            });
+            return Err(promotion_failure(error, &backups, failures).to_string());
         }
     }
     Ok(selection.commit_source_paths.clone())
@@ -859,6 +1455,60 @@ fn reset_unstarted_intake(state: &RunnerState, execution: &Option<IntakeExecutio
 fn canonical_workspace(path: &str) -> Result<PathBuf, String> {
     fs::canonicalize(path)
         .map_err(|error| format!("failed to resolve CareerOps workspace {path}: {error}"))
+}
+
+#[cfg(unix)]
+fn configure_provider_process_group(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    command.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn configure_provider_process_group(_command: &mut Command) {}
+
+#[cfg(unix)]
+fn provider_process_group_exists(process_group: u32) -> bool {
+    let result = unsafe { libc::killpg(process_group as libc::pid_t, 0) };
+    result == 0 || std::io::Error::last_os_error().kind() == std::io::ErrorKind::PermissionDenied
+}
+
+#[cfg(unix)]
+fn signal_provider_process_group(process_group: u32, signal: libc::c_int) -> Result<(), String> {
+    let result = unsafe { libc::killpg(process_group as libc::pid_t, signal) };
+    if result == 0 || !provider_process_group_exists(process_group) {
+        Ok(())
+    } else {
+        Err(format!(
+            "failed to signal provider process group {process_group}: {}",
+            std::io::Error::last_os_error()
+        ))
+    }
+}
+
+#[cfg(unix)]
+fn terminate_provider_process_group(process_group: u32) -> Result<(), String> {
+    signal_provider_process_group(process_group, libc::SIGTERM)?;
+    for _ in 0..25 {
+        if !provider_process_group_exists(process_group) {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    signal_provider_process_group(process_group, libc::SIGKILL)?;
+    for _ in 0..100 {
+        if !provider_process_group_exists(process_group) {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    Err(format!(
+        "provider process group {process_group} did not terminate; no intake changes were applied"
+    ))
+}
+
+#[cfg(not(unix))]
+fn terminate_provider_process_group(_process_group: u32) -> Result<(), String> {
+    Err(INTAKE_ISOLATION_UNAVAILABLE.to_owned())
 }
 
 #[cfg(any(test, not(any(target_os = "macos", target_os = "linux"))))]
@@ -1185,6 +1835,10 @@ pub fn run_task(
         command.args(&cmd_args).current_dir(&execution_directory);
         command
     };
+    let provider_is_isolated_intake = intake_execution.is_some();
+    if provider_is_isolated_intake {
+        configure_provider_process_group(&mut command);
+    }
     let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1243,14 +1897,21 @@ pub fn run_task(
         let workspace = workspace.clone();
         std::thread::spawn(move || {
             let mut exit_code = child.wait().ok().and_then(|s| s.code());
+            let mut intake_error = if provider_is_isolated_intake {
+                terminate_provider_process_group(pid).err()
+            } else {
+                None
+            };
             if let Some(thread) = stdout_thread {
                 let _ = thread.join();
             }
             if let Some(thread) = stderr_thread {
                 let _ = thread.join();
             }
-            let mut success = exit_code == Some(0);
-            let mut intake_error = None;
+            let mut success = exit_code == Some(0) && intake_error.is_none();
+            if !success && exit_code == Some(0) {
+                exit_code = Some(1);
+            }
             match intake_execution {
                 Some(IntakeExecution::Preview {
                     sandbox: _sandbox,
@@ -1352,7 +2013,7 @@ pub fn cancel_task(state: tauri::State<'_, RunnerState>, task_id: String) -> Res
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap, HashSet};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
@@ -1735,6 +2396,283 @@ mod tests {
         assert!(INTAKE_ISOLATION_UNAVAILABLE.contains("unavailable"));
         assert!(INTAKE_ISOLATION_UNAVAILABLE.contains("No files were changed"));
         assert!(INTAKE_ISOLATION_UNAVAILABLE.contains("retry"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn canonical_target_parent_symlinks_are_rejected_without_touching_their_targets() {
+        for parent in ["config", "modes"] {
+            let workspace = intake_workspace(&format!("canonical-parent-{parent}"));
+            let external = TempDir::new(&format!("canonical-parent-{parent}-external"));
+            let target_name = if parent == "config" {
+                "profile.yml"
+            } else {
+                "_profile.md"
+            };
+            fs::write(external.path().join(target_name), "external original\n").unwrap();
+            fs::remove_dir_all(workspace.path().join(parent)).unwrap();
+            std::os::unix::fs::symlink(external.path(), workspace.path().join(parent)).unwrap();
+
+            let error = create_intake_sandbox(workspace.path())
+                .expect_err("canonical parent links must be rejected");
+
+            assert!(error.contains("canonical") || error.contains("without following"));
+            assert_eq!(
+                fs::read_to_string(external.path().join(target_name)).unwrap(),
+                "external original\n"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn held_canonical_parent_refuses_a_replacement_symlink_before_promotion() {
+        use super::{promote_target_changes, CapabilityTargetWriter};
+
+        let workspace = intake_workspace("canonical-parent-replaced");
+        let external = TempDir::new("canonical-parent-replaced-external");
+        fs::write(external.path().join("profile.yml"), "external original\n").unwrap();
+        let mut writer = CapabilityTargetWriter::open(workspace.path()).unwrap();
+        fs::rename(
+            workspace.path().join("config"),
+            workspace.path().join("config-held"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(external.path(), workspace.path().join("config")).unwrap();
+        let changes = BTreeMap::from([(
+            "config/profile.yml".to_owned(),
+            b"unreviewed replacement\n".to_vec(),
+        )]);
+
+        let error = promote_target_changes(&mut writer, &changes)
+            .expect_err("promotion must revalidate the canonical parent entry");
+
+        assert!(error.message.contains("config") || error.message.contains("link"));
+        assert_eq!(
+            fs::read_to_string(external.path().join("profile.yml")).unwrap(),
+            "external original\n"
+        );
+        assert_ne!(
+            fs::read_to_string(workspace.path().join("config-held/profile.yml")).unwrap(),
+            "unreviewed replacement\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn canonical_target_file_symlinks_are_rejected() {
+        let workspace = intake_workspace("canonical-file-link");
+        let external = TempDir::new("canonical-file-link-external");
+        let external_cv = external.path().join("cv.md");
+        fs::write(&external_cv, "external original\n").unwrap();
+        fs::remove_file(workspace.path().join("cv.md")).unwrap();
+        std::os::unix::fs::symlink(&external_cv, workspace.path().join("cv.md")).unwrap();
+
+        let error = create_intake_sandbox(workspace.path())
+            .expect_err("canonical file links must be rejected");
+
+        assert!(error.contains("canonical") || error.contains("symbolic link"));
+        assert_eq!(
+            fs::read_to_string(external_cv).unwrap(),
+            "external original\n"
+        );
+    }
+
+    #[test]
+    fn overlapping_approved_values_for_one_target_are_not_independently_provable() {
+        let selected = build_apply_selection(
+            &proposal(vec![
+                proposal_item("work-1", "Senior Engineer"),
+                proposal_item("work-2", "Engineer"),
+            ]),
+            &["work-1".to_owned(), "work-2".to_owned()],
+        )
+        .expect_err("substring effects must be rejected conservatively");
+
+        assert!(selected.contains("overlap") || selected.contains("independently proven"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn nested_document_links_are_dereferenced_to_plain_cycle_safe_sandbox_copies() {
+        let workspace = intake_workspace("nested-document-link");
+        let external = TempDir::new("nested-document-link-external");
+        fs::write(external.path().join("linked.md"), "linked evidence\n").unwrap();
+        std::os::unix::fs::symlink(external.path(), external.path().join("loop")).unwrap();
+        std::os::unix::fs::symlink(
+            external.path(),
+            workspace.path().join("documents/work/linked"),
+        )
+        .unwrap();
+
+        let sandbox = create_intake_sandbox(workspace.path()).expect("dereference document link");
+        let copied = sandbox.path().join("documents/work/linked/linked.md");
+
+        assert_eq!(fs::read_to_string(&copied).unwrap(), "linked evidence\n");
+        assert!(!fs::symlink_metadata(&copied)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert!(!sandbox.path().join("documents/work/linked/loop").exists());
+        fs::write(copied, "sandbox mutation\n").unwrap();
+        assert_eq!(
+            fs::read_to_string(external.path().join("linked.md")).unwrap(),
+            "linked evidence\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn documents_root_link_is_dereferenced_without_a_writable_link_back() {
+        let workspace = intake_workspace("documents-root-link");
+        let external = TempDir::new("documents-root-link-external");
+        fs::create_dir_all(external.path().join("cv")).unwrap();
+        fs::write(external.path().join("cv/master.md"), "root-linked CV\n").unwrap();
+        fs::remove_dir_all(workspace.path().join("documents")).unwrap();
+        std::os::unix::fs::symlink(external.path(), workspace.path().join("documents")).unwrap();
+
+        let sandbox = create_intake_sandbox(workspace.path()).expect("dereference documents root");
+        let copied = sandbox.path().join("documents/cv/master.md");
+
+        assert_eq!(fs::read_to_string(&copied).unwrap(), "root-linked CV\n");
+        assert!(!fs::symlink_metadata(sandbox.path().join("documents"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        fs::write(copied, "sandbox mutation\n").unwrap();
+        assert_eq!(
+            fs::read_to_string(external.path().join("cv/master.md")).unwrap(),
+            "root-linked CV\n"
+        );
+    }
+
+    #[test]
+    fn promotion_uses_the_exact_once_verified_bytes_not_a_later_sandbox_reread() {
+        use super::{
+            capture_verified_target_bytes, promote_target_changes, CapabilityTargetWriter,
+        };
+
+        let workspace = intake_workspace("exact-verified-bytes");
+        let sandbox = create_intake_sandbox(workspace.path()).unwrap();
+        fs::write(
+            sandbox.path().join("cv.md"),
+            "# CV\n\nEngineer\n\nSenior Engineer\n",
+        )
+        .unwrap();
+        let after = fingerprint_tree(sandbox.path()).unwrap();
+        let captured =
+            capture_verified_target_bytes(sandbox.path(), &after, &["cv.md".to_owned()]).unwrap();
+
+        fs::write(sandbox.path().join("cv.md"), "LATE BACKGROUND WRITE\n").unwrap();
+        let mut writer = CapabilityTargetWriter::open(workspace.path()).unwrap();
+        promote_target_changes(&mut writer, &captured).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "# CV\n\nEngineer\n\nSenior Engineer\n"
+        );
+    }
+
+    #[test]
+    fn rollback_failure_is_surfaced_and_retains_recovery_artifacts() {
+        use super::{promote_target_changes, CanonicalTargetWriter};
+
+        struct InjectedWriter {
+            files: BTreeMap<String, Option<Vec<u8>>>,
+            call: usize,
+            failing_calls: HashSet<usize>,
+        }
+
+        impl CanonicalTargetWriter for InjectedWriter {
+            fn read(&self, relative: &str) -> Result<Option<Vec<u8>>, String> {
+                Ok(self.files.get(relative).cloned().flatten())
+            }
+
+            fn replace(&mut self, relative: &str, contents: &[u8]) -> Result<(), String> {
+                self.call += 1;
+                if self.failing_calls.contains(&self.call) {
+                    return Err(format!("injected replace failure {}", self.call));
+                }
+                self.files
+                    .insert(relative.to_owned(), Some(contents.to_vec()));
+                Ok(())
+            }
+
+            fn remove(&mut self, relative: &str) -> Result<(), String> {
+                self.call += 1;
+                if self.failing_calls.contains(&self.call) {
+                    return Err(format!("injected remove failure {}", self.call));
+                }
+                self.files.insert(relative.to_owned(), None);
+                Ok(())
+            }
+        }
+
+        let mut writer = InjectedWriter {
+            files: BTreeMap::from([
+                (
+                    "config/profile.yml".to_owned(),
+                    Some(b"old profile\n".to_vec()),
+                ),
+                ("cv.md".to_owned(), Some(b"old cv\n".to_vec())),
+            ]),
+            call: 0,
+            failing_calls: HashSet::from([2, 3]),
+        };
+        let changes = BTreeMap::from([
+            ("config/profile.yml".to_owned(), b"new profile\n".to_vec()),
+            ("cv.md".to_owned(), b"new cv\n".to_vec()),
+        ]);
+
+        let failure = promote_target_changes(&mut writer, &changes)
+            .expect_err("promotion and restoration failure must be surfaced");
+        let surfaced = failure.to_string();
+        let recovery = failure
+            .recovery_path
+            .expect("rollback failure must retain recovery artifacts");
+
+        assert!(failure.message.contains("injected replace failure 2"));
+        assert!(failure.message.contains("rollback failed"));
+        assert!(surfaced.contains(&recovery.display().to_string()));
+        assert!(surfaced.contains("Restore"));
+        assert_eq!(
+            fs::read_to_string(recovery.join("config/profile.yml")).unwrap(),
+            "old profile\n"
+        );
+        assert!(fs::read_to_string(recovery.join("RESTORE.md"))
+            .unwrap()
+            .contains("Restore"));
+        assert_eq!(
+            writer.files["config/profile.yml"],
+            Some(b"new profile\n".to_vec())
+        );
+        fs::remove_dir_all(recovery).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn provider_process_group_is_quiescent_before_background_child_can_mutate() {
+        use super::{configure_provider_process_group, terminate_provider_process_group};
+
+        let sandbox = TempDir::new("background-provider-child");
+        let target = sandbox.path().join("cv.md");
+        fs::write(&target, "verified bytes\n").unwrap();
+        let child_script = "const { appendFileSync } = require('node:fs'); setTimeout(() => appendFileSync(process.argv[1], 'LATE'), 300);";
+        let parent_script = format!(
+            "const child = require('node:child_process').spawn(process.execPath, ['-e', {}, process.argv[1]], {{ stdio: 'ignore' }}); child.unref();",
+            serde_json::to_string(child_script).unwrap()
+        );
+        let mut command = Command::new("node");
+        command.arg("-e").arg(parent_script).arg(&target);
+        configure_provider_process_group(&mut command);
+        let mut provider = command.spawn().unwrap();
+        let process_group = provider.id();
+        assert!(provider.wait().unwrap().success());
+
+        terminate_provider_process_group(process_group).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(450));
+
+        assert_eq!(fs::read_to_string(target).unwrap(), "verified bytes\n");
     }
 
     #[test]
