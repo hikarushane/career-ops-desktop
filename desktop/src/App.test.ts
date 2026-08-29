@@ -108,4 +108,20 @@ describe('workspace onboarding routing', () => {
     })();
     expect(completed.type).toBe('div');
   });
+
+  it('does not enter the shell or reload when the fresh doctor call fails', async () => {
+    mocks.prepareOnboardingWorkspace.mockResolvedValue(undefined);
+    mocks.doctor.mockResolvedValue({
+      ok: false,
+      error: 'doctor-failed',
+      message: 'Fresh workspace validation failed.',
+    });
+    const initial = render({ missing: ['cv.md'], ready: true }, false);
+
+    await initial.props?.onComplete?.();
+
+    expect(mocks.listApplications).not.toHaveBeenCalled();
+    hooks.beginRender();
+    expect((App() as ElementNode).type).toBe('main');
+  });
 });

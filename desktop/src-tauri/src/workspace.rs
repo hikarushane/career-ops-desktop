@@ -289,8 +289,45 @@ const CAREEROPS_SYSTEM_INVARIANTS: &[&str] = &[
     "templates/portals.example.yml",
 ];
 
-const EMPTY_CV_SCAFFOLD: &str = "# Curriculum Vitae\n\n## Summary\n\n## Experience\n\n## Education\n\n## Skills\n";
-const APPLICATIONS_TRACKER_SCAFFOLD: &str = "# Applications Tracker\n\n| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n|---|------|---------|------|-------|--------|-----|--------|-------|\n";
+const EMPTY_CV_SCAFFOLD: &str = concat!(
+    "# Curriculum Vitae\n\n",
+    "## Summary\n\n",
+    "## Experience\n\n",
+    "## Education\n\n",
+    "## Skills\n",
+);
+const NEUTRAL_PROFILE_SCAFFOLD: &str = concat!(
+    "# CareerOps profile\n",
+    "# Add only your confirmed details; empty fields are intentional.\n",
+    "candidate:\n",
+    "  full_name: \"\"\n",
+    "  email: \"\"\n",
+    "target_roles:\n",
+    "  primary: []\n",
+    "  archetypes: []\n",
+    "narrative:\n",
+    "  superpowers: []\n",
+    "  proof_points: []\n",
+    "compensation: {}\n",
+    "location: {}\n",
+    "language:\n",
+    "  analysis: en\n",
+    "spend_tier: standard\n",
+);
+const NEUTRAL_PROFILE_MODE_SCAFFOLD: &str =
+    "# User Profile Context\n\nAdd only your confirmed targeting, narrative, and proof points here.\n";
+const NEUTRAL_PORTALS_SCAFFOLD: &str = concat!(
+    "# CareerOps portal configuration\n",
+    "# Add target roles and companies before scanning.\n",
+    "title_filter:\n",
+    "  positive: []\n",
+    "tracked_companies: []\n",
+);
+const APPLICATIONS_TRACKER_SCAFFOLD: &str = concat!(
+    "# Applications Tracker\n\n",
+    "| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n",
+    "|---|------|---------|------|-------|--------|-----|--------|-------|\n",
+);
 
 pub fn workspace_path_from_documents_dir(documents_dir: &Path) -> PathBuf {
     documents_dir.join("CareerOps")
@@ -415,22 +452,6 @@ pub fn initialize_workspace_from_seed(
     })
 }
 
-fn file_contents(directory: &Dir, filename: &str) -> Result<Vec<u8>, String> {
-    let metadata = directory
-        .symlink_metadata(filename)
-        .map_err(|error| format!("cannot inspect onboarding scaffold: {error}"))?;
-    if metadata.file_type().is_symlink() || !metadata.is_file() {
-        return Err("onboarding scaffold must be a regular file".to_owned());
-    }
-
-    let mut file = open_file_nofollow(directory, std::ffi::OsStr::new(filename))
-        .map_err(|error| format!("cannot read onboarding scaffold: {error}"))?;
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents)
-        .map_err(|error| format!("cannot read onboarding scaffold: {error}"))?;
-    Ok(contents)
-}
-
 fn write_file_if_missing(directory: &Dir, filename: &str, contents: &[u8]) -> Result<(), String> {
     match directory.symlink_metadata(filename) {
         Ok(metadata) if metadata.file_type().is_symlink() => {
@@ -466,14 +487,16 @@ fn write_file_if_missing(directory: &Dir, filename: &str, contents: &[u8]) -> Re
     }
 }
 
-fn copy_file_if_missing(
-    source_directory: &Dir,
-    source_filename: &str,
-    destination_directory: &Dir,
-    destination_filename: &str,
-) -> Result<(), String> {
-    let contents = file_contents(source_directory, source_filename)?;
-    write_file_if_missing(destination_directory, destination_filename, &contents)
+fn regular_file_exists(directory: &Dir, filename: &str) -> Result<bool, String> {
+    match directory.symlink_metadata(filename) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            Err("onboarding destination must not be a symlink".to_owned())
+        }
+        Ok(metadata) if metadata.is_file() => Ok(true),
+        Ok(_) => Err("onboarding destination must be a regular file".to_owned()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(format!("cannot inspect onboarding destination: {error}")),
+    }
 }
 
 pub fn prepare_onboarding_workspace_at(workspace: &Path) -> Result<(), String> {
@@ -485,20 +508,28 @@ pub fn prepare_onboarding_workspace_at(workspace: &Path) -> Result<(), String> {
         .map_err(|error| format!("cannot open workspace directory: {error}"))?;
     let config = open_or_create_directory(&workspace, "config")?;
     let modes = open_or_create_directory(&workspace, "modes")?;
-    let templates = workspace
-        .open_dir_nofollow("templates")
-        .map_err(|error| format!("cannot open onboarding templates: {error}"))?;
-    let data = open_or_create_directory(&workspace, "data")?;
 
     write_file_if_missing(&workspace, "cv.md", EMPTY_CV_SCAFFOLD.as_bytes())?;
-    copy_file_if_missing(&config, "profile.example.yml", &config, "profile.yml")?;
-    copy_file_if_missing(&modes, "_profile.template.md", &modes, "_profile.md")?;
-    copy_file_if_missing(&templates, "portals.example.yml", &workspace, "portals.yml")?;
+    write_file_if_missing(&config, "profile.yml", NEUTRAL_PROFILE_SCAFFOLD.as_bytes())?;
     write_file_if_missing(
-        &data,
-        "applications.md",
-        APPLICATIONS_TRACKER_SCAFFOLD.as_bytes(),
-    )
+        &modes,
+        "_profile.md",
+        NEUTRAL_PROFILE_MODE_SCAFFOLD.as_bytes(),
+    )?;
+    write_file_if_missing(
+        &workspace,
+        "portals.yml",
+        NEUTRAL_PORTALS_SCAFFOLD.as_bytes(),
+    )?;
+    if !regular_file_exists(&workspace, "applications.md")? {
+        let data = open_or_create_directory(&workspace, "data")?;
+        write_file_if_missing(
+            &data,
+            "applications.md",
+            APPLICATIONS_TRACKER_SCAFFOLD.as_bytes(),
+        )?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -733,24 +764,36 @@ mod tests {
 
         prepare_onboarding_workspace_at(workspace.path()).unwrap();
 
-        assert_eq!(fs::read_to_string(workspace.path().join("cv.md")).unwrap(), "user CV\n");
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "user CV\n"
+        );
         assert_eq!(
             fs::read_to_string(workspace.path().join("config/profile.yml")).unwrap(),
-            "profile: example\n"
+            "# CareerOps profile\n# Add only your confirmed details; empty fields are intentional.\ncandidate:\n  full_name: \"\"\n  email: \"\"\ntarget_roles:\n  primary: []\n  archetypes: []\nnarrative:\n  superpowers: []\n  proof_points: []\ncompensation: {}\nlocation: {}\nlanguage:\n  analysis: en\nspend_tier: standard\n"
         );
         assert_eq!(
             fs::read_to_string(workspace.path().join("modes/_profile.md")).unwrap(),
-            "profile template\n"
+            "# User Profile Context\n\nAdd only your confirmed targeting, narrative, and proof points here.\n"
         );
         assert_eq!(
             fs::read_to_string(workspace.path().join("portals.yml")).unwrap(),
-            "companies: []\n"
+            "# CareerOps portal configuration\n# Add target roles and companies before scanning.\ntitle_filter:\n  positive: []\ntracked_companies: []\n"
         );
-        assert!(fs::read_to_string(workspace.path().join("data/applications.md"))
-            .unwrap()
-            .starts_with("# Applications Tracker\n"));
+        let profile = fs::read_to_string(workspace.path().join("config/profile.yml")).unwrap();
+        assert!(!profile.contains("Jane Smith"));
+        assert!(!profile.contains("jane@example.com"));
+        assert!(
+            fs::read_to_string(workspace.path().join("data/applications.md"))
+                .unwrap()
+                .starts_with("# Applications Tracker\n")
+        );
 
-        fs::write(workspace.path().join("config/profile.yml"), "language: en\n").unwrap();
+        fs::write(
+            workspace.path().join("config/profile.yml"),
+            "language: en\n",
+        )
+        .unwrap();
         fs::write(workspace.path().join("portals.yml"), "companies: user\n").unwrap();
         fs::write(
             workspace.path().join("data/applications.md"),
@@ -770,6 +813,48 @@ mod tests {
         assert_eq!(
             fs::read_to_string(workspace.path().join("data/applications.md")).unwrap(),
             "# User tracker\n"
+        );
+    }
+
+    #[test]
+    fn preserves_a_legacy_root_tracker_without_creating_a_data_tracker() {
+        let workspace = TempDir::new("prepare-legacy-tracker");
+        mark_as_careerops(workspace.path(), "export {};\n");
+        fs::write(
+            workspace.path().join("applications.md"),
+            "# Legacy tracker\n",
+        )
+        .unwrap();
+
+        prepare_onboarding_workspace_at(workspace.path()).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("applications.md")).unwrap(),
+            "# Legacy tracker\n"
+        );
+        assert!(!workspace.path().join("data/applications.md").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_a_symlinked_onboarding_destination_without_touching_its_target() {
+        let workspace = TempDir::new("prepare-symlink");
+        let external = TempDir::new("prepare-symlink-external");
+        mark_as_careerops(workspace.path(), "export {};\n");
+        let external_profile = external.path().join("profile.yml");
+        fs::write(&external_profile, "external profile\n").unwrap();
+        std::os::unix::fs::symlink(
+            &external_profile,
+            workspace.path().join("config/profile.yml"),
+        )
+        .unwrap();
+
+        let error = prepare_onboarding_workspace_at(workspace.path()).unwrap_err();
+
+        assert!(error.contains("symlink"));
+        assert_eq!(
+            fs::read_to_string(external_profile).unwrap(),
+            "external profile\n"
         );
     }
 
