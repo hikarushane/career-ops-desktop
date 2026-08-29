@@ -13,7 +13,7 @@ async fn run(app: &tauri::AppHandle, args: Vec<String>) -> Result<String, String
     let command = app
         .shell()
         .sidecar("career-data")
-        .map_err(|e| format!("sidecar not available: {e}. Run `npm run build:sidecar`."))?
+        .map_err(|e| format!("CareerOps data service is unavailable: {e}. Reinstall or update CareerOps Desktop."))?
         .args(args);
 
     let output = command

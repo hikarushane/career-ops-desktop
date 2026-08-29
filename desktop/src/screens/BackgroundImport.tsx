@@ -115,6 +115,7 @@ export default function BackgroundImport({ root, onComplete }: Props) {
   const unresolved = files.some((file) => file.category === null);
   const copiedCount = staged?.filter((file) => !file.duplicate).length ?? 0;
   const duplicateCount = staged?.filter((file) => file.duplicate).length ?? 0;
+  const includesPdf = staged?.some((file) => file.destinationPath.toLowerCase().endsWith('.pdf')) ?? false;
 
   return (
     <div className="setup-screen">
@@ -131,6 +132,11 @@ export default function BackgroundImport({ root, onComplete }: Props) {
         <div className="intake-stage-result" role="status">
           <p>{copiedCount} file{copiedCount === 1 ? '' : 's'} staged for review.</p>
           {duplicateCount > 0 && <p className="setup-hint">{duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} already existed and were left unchanged.</p>}
+          {includesPdf && (
+            <p className="setup-hint">
+              PDF text extraction is unavailable in this build. Your PDF is still staged; add a .md, .txt, or .tex copy for profile extraction.
+            </p>
+          )}
           <p className="setup-hint">Your files were copied only; profile extraction starts after AI setup.</p>
         </div>
       ) : (

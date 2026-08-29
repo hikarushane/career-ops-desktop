@@ -106,7 +106,9 @@ struct IntakeSession {
 
 const INTAKE_PREVIEW_PROMPT: &str = r#"Run one CareerOps intake preview session using the existing modes/intake.md workflow.
 
-Run node intake.mjs first. Read the deterministic scan result, then use node intake.mjs --text <path> for every source whose status is new or changed. Process all sources together in this one session; do not create one task per category.
+Use only the packaged JavaScript runtime named by CAREEROPS_JS_RUNTIME, never node from PATH. Run `$CAREEROPS_JS_RUNTIME` intake.mjs first. Read the deterministic scan result, then use `$CAREEROPS_JS_RUNTIME` intake.mjs --text <path> for every source whose status is new or changed. Process all sources together in this one session; do not create one task per category.
+
+This Desktop build does not bundle PDF text extraction. PDFs remain staged, but their text is unavailable in this build. Do not recommend Homebrew, apt, poppler, or another package-manager install.
 
 Read current cv.md, config/profile.yml, and modes/_profile.md first.
 
@@ -1185,6 +1187,7 @@ fn finalize_isolated_apply(
     before: &BTreeMap<String, String>,
     reviewed: &ReviewFingerprints,
     selection: &IntakeApplySelection,
+    js_runtime: &Path,
 ) -> Result<Vec<String>, String> {
     let mut writer = CapabilityTargetWriter::open(workspace)?;
     verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
@@ -1291,7 +1294,9 @@ fn finalize_isolated_apply(
         }
     };
     if !selection.commit_source_paths.is_empty() {
-        if let Err(error) = commit_intake_sources(workspace, &selection.commit_source_paths) {
+        if let Err(error) =
+            commit_intake_sources(workspace, &selection.commit_source_paths, js_runtime)
+        {
             let mut failures = restore_target_changes(&mut writer, &backups);
             let state_rollback = match &state_backup {
                 Some(contents) => atomic_replace(&state_path, contents),
@@ -1314,7 +1319,11 @@ fn finalize_isolated_apply(
     Ok(selection.commit_source_paths.clone())
 }
 
-fn commit_intake_sources(workspace: &Path, source_paths: &[String]) -> Result<(), String> {
+fn commit_intake_sources(
+    workspace: &Path,
+    source_paths: &[String],
+    js_runtime: &Path,
+) -> Result<(), String> {
     if source_paths.is_empty()
         || source_paths
             .iter()
@@ -1323,13 +1332,16 @@ fn commit_intake_sources(workspace: &Path, source_paths: &[String]) -> Result<()
         return Err("refusing to commit empty or unsafe intake source paths".to_owned());
     }
 
-    let output = Command::new("node")
+    let output = Command::new(js_runtime)
         .arg("intake.mjs")
         .arg("--commit")
         .args(source_paths)
         .current_dir(workspace)
+        .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable")
         .output()
-        .map_err(|error| format!("failed to record merged intake sources: {error}"))?;
+        .map_err(|error| {
+            format!("packaged CareerOps JavaScript runtime failed to record merged intake sources: {error}")
+        })?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         return Err(if detail.is_empty() {
@@ -1432,6 +1444,7 @@ enum IntakeExecution {
         before: BTreeMap<String, String>,
         reviewed: ReviewFingerprints,
         selection: IntakeApplySelection,
+        js_runtime: PathBuf,
         apply_lock: Arc<Mutex<()>>,
     },
 }
@@ -1455,6 +1468,31 @@ fn reset_unstarted_intake(state: &RunnerState, execution: &Option<IntakeExecutio
 fn canonical_workspace(path: &str) -> Result<PathBuf, String> {
     fs::canonicalize(path)
         .map_err(|error| format!("failed to resolve CareerOps workspace {path}: {error}"))
+}
+
+fn packaged_runtime_path_for_executable(executable: &Path) -> PathBuf {
+    executable
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(if cfg!(windows) {
+            "careerops-node.exe"
+        } else {
+            "careerops-node"
+        })
+}
+
+fn packaged_js_runtime() -> Result<PathBuf, String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("cannot locate the installed CareerOps application: {error}"))?;
+    let runtime = packaged_runtime_path_for_executable(&executable);
+    if runtime.is_file() {
+        Ok(runtime)
+    } else {
+        Err(format!(
+            "The packaged CareerOps JavaScript runtime is unavailable at {}. No files were changed; reinstall or update CareerOps Desktop.",
+            runtime.display()
+        ))
+    }
 }
 
 #[cfg(unix)]
@@ -1512,7 +1550,7 @@ fn terminate_provider_process_group(_process_group: u32) -> Result<(), String> {
 }
 
 #[cfg(any(test, not(any(target_os = "macos", target_os = "linux"))))]
-const INTAKE_ISOLATION_UNAVAILABLE: &str = "Secure intake provider isolation is unavailable on this operating system. No files were changed; retry after installing a supported CareerOps provider runtime.";
+const INTAKE_ISOLATION_UNAVAILABLE: &str = "Secure reviewed intake is unavailable in this CareerOps Desktop package on this operating system. No files were changed; retry only after updating to a build with supported provider isolation.";
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn provider_writable_paths(provider_id: &str) -> Vec<PathBuf> {
@@ -1545,6 +1583,7 @@ fn isolated_provider_command(
     args: &[String],
     sandbox: &Path,
     protected_workspace: &Path,
+    js_runtime: &Path,
 ) -> Result<Command, String> {
     fn escaped(path: &Path) -> String {
         path.to_string_lossy()
@@ -1571,7 +1610,9 @@ fn isolated_provider_command(
         .env("PWD", sandbox)
         .env("TMPDIR", sandbox)
         .env("TMP", sandbox)
-        .env("TEMP", sandbox);
+        .env("TEMP", sandbox)
+        .env("CAREEROPS_JS_RUNTIME", js_runtime)
+        .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable");
     Ok(command)
 }
 
@@ -1581,6 +1622,7 @@ fn isolated_provider_command(
     args: &[String],
     sandbox: &Path,
     protected_workspace: &Path,
+    js_runtime: &Path,
 ) -> Result<Command, String> {
     let bwrap = std::env::var_os("PATH")
         .into_iter()
@@ -1588,7 +1630,7 @@ fn isolated_provider_command(
         .map(|directory| directory.join("bwrap"))
         .find(|candidate| candidate.is_file())
         .ok_or_else(|| {
-            "Secure intake isolation requires bubblewrap (bwrap) on Linux. No files were changed; install bubblewrap and try again."
+            "Secure reviewed intake is unavailable in this Linux package because it does not include a supported isolation runtime. No files were changed."
                 .to_owned()
         })?;
     let mut command = Command::new(bwrap);
@@ -1620,7 +1662,9 @@ fn isolated_provider_command(
         .env("PWD", "/careerops-intake")
         .env("TMPDIR", "/tmp")
         .env("TMP", "/tmp")
-        .env("TEMP", "/tmp");
+        .env("TEMP", "/tmp")
+        .env("CAREEROPS_JS_RUNTIME", js_runtime)
+        .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable");
     Ok(command)
 }
 
@@ -1630,6 +1674,7 @@ fn isolated_provider_command(
     _args: &[String],
     _sandbox: &Path,
     _protected_workspace: &Path,
+    _js_runtime: &Path,
 ) -> Result<Command, String> {
     Err(INTAKE_ISOLATION_UNAVAILABLE.to_owned())
 }
@@ -1714,6 +1759,9 @@ pub fn run_task(
     cmd_args.push(prompt);
 
     let workspace = canonical_workspace(&input.path)?;
+    let js_runtime = matches!(input.task_type.as_str(), "intake-preview" | "intake-apply")
+        .then(packaged_js_runtime)
+        .transpose()?;
     let mut intake_execution = None;
     let execution_directory = match input.task_type.as_str() {
         "intake-preview" => {
@@ -1810,6 +1858,9 @@ pub fn run_task(
                 before,
                 reviewed,
                 selection,
+                js_runtime: js_runtime
+                    .clone()
+                    .expect("intake tasks resolve their packaged runtime"),
                 apply_lock: state.intake_apply_lock.clone(),
             });
             directory
@@ -1823,6 +1874,9 @@ pub fn run_task(
             &cmd_args,
             &execution_directory,
             &workspace,
+            js_runtime
+                .as_deref()
+                .expect("isolated intake has a packaged runtime"),
         ) {
             Ok(command) => command,
             Err(error) => {
@@ -1933,6 +1987,7 @@ pub fn run_task(
                     before,
                     reviewed,
                     selection,
+                    js_runtime,
                     apply_lock,
                 }) => {
                     if success {
@@ -1944,6 +1999,7 @@ pub fn run_task(
                                     &before,
                                     &reviewed,
                                     &selection,
+                                    &js_runtime,
                                 ) {
                                     success = false;
                                     exit_code = Some(1);
@@ -2022,8 +2078,9 @@ mod tests {
     use super::{
         build_apply_selection, build_prompt, create_intake_sandbox, finalize_isolated_apply,
         fingerprint_review_inputs, fingerprint_tree, get_task_def, language_context_instruction,
-        verify_review_fingerprints, write_intake_selection_file, IntakeConflict, IntakeProposal,
-        IntakeProposalItem, LanguageContext, INTAKE_APPLY_PROMPT, INTAKE_ISOLATION_UNAVAILABLE,
+        packaged_runtime_path_for_executable, verify_review_fingerprints,
+        write_intake_selection_file, IntakeConflict, IntakeProposal, IntakeProposalItem,
+        LanguageContext, INTAKE_APPLY_PROMPT, INTAKE_ISOLATION_UNAVAILABLE,
     };
 
     struct TempDir(PathBuf);
@@ -2134,6 +2191,26 @@ mod tests {
         );
         assert!(prompt.contains("Do not write any canonical profile file in preview mode."));
         assert!(prompt.contains("Report conflicts instead of resolving them silently."));
+        assert!(prompt.contains("CAREEROPS_JS_RUNTIME"));
+        assert!(!prompt.contains("Run node intake.mjs"));
+        assert!(!prompt.contains("brew install"));
+    }
+
+    #[test]
+    fn packaged_runtime_resolves_beside_the_installed_application() {
+        let executable = if cfg!(windows) {
+            Path::new("C:/Program Files/CareerOps/CareerOps.exe")
+        } else {
+            Path::new("/Applications/CareerOps.app/Contents/MacOS/CareerOps")
+        };
+        let expected = executable.parent().unwrap().join(if cfg!(windows) {
+            "careerops-node.exe"
+        } else {
+            "careerops-node"
+        });
+
+        assert_eq!(packaged_runtime_path_for_executable(executable), expected);
+        assert!(!expected.to_string_lossy().contains("src-tauri/binaries"));
     }
 
     #[test]
@@ -2205,6 +2282,7 @@ mod tests {
             &before,
             &reviewed,
             &selected,
+            Path::new("node"),
         )
         .expect_err("out-of-allowlist write must fail");
 
@@ -2241,6 +2319,7 @@ mod tests {
             &before,
             &reviewed,
             &selected,
+            Path::new("node"),
         )
         .expect_err("partial apply must fail");
 
@@ -2274,6 +2353,7 @@ mod tests {
             &before,
             &reviewed,
             &selected,
+            Path::new("node"),
         )
         .expect_err("no-op apply must fail");
 
@@ -2396,6 +2476,8 @@ mod tests {
         assert!(INTAKE_ISOLATION_UNAVAILABLE.contains("unavailable"));
         assert!(INTAKE_ISOLATION_UNAVAILABLE.contains("No files were changed"));
         assert!(INTAKE_ISOLATION_UNAVAILABLE.contains("retry"));
+        assert!(INTAKE_ISOLATION_UNAVAILABLE.contains("package"));
+        assert!(!INTAKE_ISOLATION_UNAVAILABLE.contains("install"));
     }
 
     #[cfg(unix)]
@@ -2697,6 +2779,7 @@ mod tests {
             &before,
             &reviewed,
             &selected,
+            Path::new("node"),
         )
         .expect("verified apply");
 
@@ -2735,8 +2818,14 @@ mod tests {
                 .to_string_lossy()
                 .into_owned(),
         ];
-        let mut command =
-            isolated_provider_command("node", &args, sandbox.path(), workspace.path()).unwrap();
+        let mut command = isolated_provider_command(
+            "node",
+            &args,
+            sandbox.path(),
+            workspace.path(),
+            Path::new("node"),
+        )
+        .unwrap();
         let status = command
             .stdout(Stdio::null())
             .stderr(Stdio::null())

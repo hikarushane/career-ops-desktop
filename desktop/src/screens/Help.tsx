@@ -10,7 +10,7 @@ const SECTIONS: { key: Section; title: string; body: string }[] = [
   { key: 'ai-does', title: 'What AI does', body: 'AI analyses job postings against your background, generates tailored CVs, prepares interview answers, and drafts cover letters. It reads your profile but never submits applications.' },
   { key: 'ai-doesnt', title: 'What AI does NOT do', body: 'AI never auto-submits applications, sends emails, clicks submit buttons, or shares your data externally. You always confirm before any action goes out.' },
   { key: 'privacy', title: 'Privacy', body: 'All your data stays on your machine in plain files. Nothing is uploaded to any server except what you explicitly send to the AI provider for analysis.' },
-  { key: 'troubleshoot', title: 'Troubleshooting', body: 'If the sidecar fails to start, run "npm run build:sidecar" from the desktop directory. If an AI provider shows Error state, reinstall it or check authentication.' },
+  { key: 'troubleshoot', title: 'Troubleshooting', body: 'If the CareerOps data service fails to start, reinstall or update CareerOps Desktop. If an AI provider shows Error state, reinstall it or check authentication.' },
   { key: 'advanced', title: 'Advanced', body: 'Power users can edit cv.md, config/profile.yml, modes/_profile.md, and portals.yml directly. The CLI modes (scan, pdf, batch, etc.) are available in any supported coding CLI.' },
 ];
 
