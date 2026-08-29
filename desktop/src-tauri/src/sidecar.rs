@@ -104,25 +104,6 @@ pub async fn language_settings(app: tauri::AppHandle, path: String) -> Result<St
 }
 
 #[tauri::command]
-pub async fn set_analysis_language(
-    app: tauri::AppHandle,
-    path: String,
-    language: String,
-) -> Result<String, String> {
-    run(
-        &app,
-        vec![
-            "set-analysis-language".into(),
-            "--path".into(),
-            path,
-            "--language".into(),
-            language,
-        ],
-    )
-    .await
-}
-
-#[tauri::command]
 pub async fn help_document(
     app: tauri::AppHandle,
     path: String,
