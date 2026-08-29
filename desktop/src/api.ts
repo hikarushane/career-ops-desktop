@@ -291,6 +291,10 @@ export function initializeWorkspace(path: string): Promise<WorkspaceInitResult> 
   return invoke<WorkspaceInitResult>('initialize_workspace', { path });
 }
 
+export function prepareOnboardingWorkspace(root: string): Promise<void> {
+  return invoke<void>('prepare_onboarding_workspace', { root });
+}
+
 export function stageIntakeFiles(
   root: string,
   files: StageIntakeFile[],

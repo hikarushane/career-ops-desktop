@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
-import { languageSettings, resolveJobLanguage, stageIntakeFiles } from './api';
+import {
+  languageSettings, prepareOnboardingWorkspace, resolveJobLanguage, stageIntakeFiles,
+} from './api';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 
@@ -48,6 +50,15 @@ describe('sidecar JSON bridge', () => {
     expect(mockedInvoke).toHaveBeenCalledWith('stage_intake_files_for_workspace', {
       root: '/workspace',
       files: [{ sourcePath: '/source/resume.pdf', category: 'cv' }],
+    });
+  });
+
+  it('forwards explicit onboarding completion to the Rust scaffolder', async () => {
+    mockedInvoke.mockResolvedValueOnce(undefined);
+
+    await expect(prepareOnboardingWorkspace('/workspace')).resolves.toBeUndefined();
+    expect(mockedInvoke).toHaveBeenCalledWith('prepare_onboarding_workspace', {
+      root: '/workspace',
     });
   });
 });
