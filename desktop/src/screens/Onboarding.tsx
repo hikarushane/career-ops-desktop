@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import AiSetup from './AiSetup';
 import BackgroundImport from './BackgroundImport';
+import IntakeReview from './IntakeReview';
 import AnalysisLanguageField from '../components/AnalysisLanguageField';
 
 type Props = { root: string; onComplete: () => void };
 
-type Step = 'welcome' | 'import' | 'language' | 'ai' | 'ready';
+type Step = 'welcome' | 'import' | 'language' | 'ai' | 'intake' | 'ready';
 
 export default function Onboarding({ root, onComplete }: Props) {
   const [step, setStep] = useState<Step>('welcome');
@@ -36,7 +37,11 @@ export default function Onboarding({ root, onComplete }: Props) {
   }
 
   if (step === 'ai') {
-    return <AiSetup onComplete={() => setStep('ready')} />;
+    return <AiSetup onComplete={() => setStep('intake')} />;
+  }
+
+  if (step === 'intake') {
+    return <IntakeReview root={root} onBack={() => setStep('ai')} onComplete={() => setStep('ready')} />;
   }
 
   return (

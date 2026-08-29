@@ -149,6 +149,23 @@ export type StagedIntakeFile = {
   duplicate: boolean;
 };
 
+export type IntakeProposalItem = {
+  id: string;
+  targetFile: 'cv.md' | 'config/profile.yml' | 'modes/_profile.md';
+  field: string;
+  proposedValue: string;
+  sources: string[];
+  conflict?: {
+    existingValue: string;
+    proposedValue: string;
+  };
+};
+
+export type IntakeProposal = {
+  items: IntakeProposalItem[];
+  sourcePaths: string[];
+};
+
 export function isError(r: { ok: boolean }): r is SidecarError {
   return r.ok === false;
 }
@@ -185,7 +202,9 @@ export type TaskType =
   | 'interview-prep'
   | 'interview-plan'
   | 'interview-practice'
-  | 'interview-debrief';
+  | 'interview-debrief'
+  | 'intake-preview'
+  | 'intake-apply';
 
 export type TaskStarted = {
   task_id: string;

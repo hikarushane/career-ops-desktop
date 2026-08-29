@@ -122,9 +122,9 @@ export default function BackgroundImport({ root, onComplete }: Props) {
 
       {staged ? (
         <div className="intake-stage-result" role="status">
-          <p>{copiedCount} file{copiedCount === 1 ? '' : 's'} staged for a later intake session.</p>
+          <p>{copiedCount} file{copiedCount === 1 ? '' : 's'} staged for review.</p>
           {duplicateCount > 0 && <p className="setup-hint">{duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} already existed and were left unchanged.</p>}
-          <p className="setup-hint">Your files were copied only; profile extraction has not run yet.</p>
+          <p className="setup-hint">Your files were copied only; profile extraction starts after AI setup.</p>
         </div>
       ) : (
         <>
