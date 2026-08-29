@@ -5,7 +5,14 @@ import { stageIntakeFiles, type StagedIntakeFile } from '../api';
 import { INTAKE_CATEGORIES, suggestIntakeCategory, type IntakeCategoryId } from '../lib/intakeCategories';
 import { ImportIcon } from '../components/icons';
 
-type Props = { root: string; onComplete: () => void };
+export type BackgroundImportResult = {
+  staged: StagedIntakeFile[];
+};
+
+type Props = {
+  root: string;
+  onComplete: (result: BackgroundImportResult) => void;
+};
 
 type SelectedFile = {
   sourcePath: string;
@@ -85,7 +92,7 @@ export default function BackgroundImport({ root, onComplete }: Props) {
 
   const continueImport = useCallback(async () => {
     if (files.length === 0) {
-      onComplete();
+      onComplete({ staged: [] });
       return;
     }
     if (files.some((file) => file.category === null)) return;
@@ -173,7 +180,7 @@ export default function BackgroundImport({ root, onComplete }: Props) {
       <div className="setup-actions">
         <button
           className="btn-primary"
-          onClick={staged ? onComplete : continueImport}
+          onClick={staged ? () => onComplete({ staged }) : continueImport}
           disabled={!staged && (staging || (files.length > 0 && unresolved))}
         >
           {staged ? 'Continue setup' : staging ? 'Staging...' : files.length > 0 ? 'Continue' : 'Skip for now'}
