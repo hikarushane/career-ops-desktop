@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IntakeProposal } from '../api';
-import { applyIntakeProposal, previewIntakeProposal } from '../lib/runner';
+import { applyIntakeProposal, discardIntakePreview, previewIntakeProposal } from '../lib/runner';
 import IntakeReview from './IntakeReview';
 
 const hooks = vi.hoisted(() => {
@@ -32,15 +32,18 @@ vi.mock('react', async (importOriginal) => {
     ...actual,
     useCallback: <T,>(callback: T) => callback,
     useEffect: () => {},
+    useRef: <T,>(initial: T) => ({ current: initial }),
     useState: hooks.useState,
   };
 });
 vi.mock('../lib/runner', () => ({
   applyIntakeProposal: vi.fn(),
+  discardIntakePreview: vi.fn(),
   previewIntakeProposal: vi.fn(),
 }));
 
 const mockedApply = vi.mocked(applyIntakeProposal);
+const mockedDiscard = vi.mocked(discardIntakePreview);
 const mockedPreview = vi.mocked(previewIntakeProposal);
 
 const proposal: IntakeProposal = {
@@ -70,8 +73,9 @@ const proposal: IntakeProposal = {
 beforeEach(() => {
   vi.resetAllMocks();
   hooks.reset();
-  mockedPreview.mockResolvedValue(proposal);
-  mockedApply.mockResolvedValue({ applied: true, mergedSourcePaths: [] });
+  mockedPreview.mockResolvedValue({ proposal, intakeSessionId: 'intake-1' });
+  mockedApply.mockResolvedValue({ applied: true });
+  mockedDiscard.mockResolvedValue(undefined);
 });
 
 type ElementNode = {
@@ -87,7 +91,7 @@ type ElementNode = {
 };
 
 function render(approved: string[] = [], onComplete = vi.fn()) {
-  hooks.reset([proposal, new Set(approved), false, false, null]);
+  hooks.reset([{ proposal, intakeSessionId: 'intake-1' }, new Set(approved), false, false, null]);
   hooks.beginRender();
   return {
     tree: IntakeReview({ root: '/workspace', onBack: vi.fn(), onComplete }) as ElementNode,
@@ -135,6 +139,7 @@ describe('IntakeReview', () => {
     expect(button(tree, 'Approve all')).toBeDefined();
     expect(button(tree, 'Apply selected changes')).toBeDefined();
     expect(button(tree, 'Back')).toBeDefined();
+    expect(button(tree, 'Skip for now')).toBeDefined();
   });
 
   it('keeps apply disabled and inert when zero items are approved', async () => {
@@ -152,7 +157,18 @@ describe('IntakeReview', () => {
 
     await button(tree, 'Apply selected changes').props?.onClick?.();
 
-    expect(mockedApply).toHaveBeenCalledWith('/workspace', proposal, ['research-1']);
+    expect(mockedApply).toHaveBeenCalledWith('/workspace', 'intake-1', ['research-1']);
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
+
+  it('lets the user reject every proposal and finish without apply or commit', async () => {
+    const onComplete = vi.fn();
+    const { tree } = render([], onComplete);
+
+    await button(tree, 'Skip for now').props?.onClick?.();
+
+    expect(mockedApply).not.toHaveBeenCalled();
+    expect(mockedDiscard).toHaveBeenCalledWith('intake-1');
     expect(onComplete).toHaveBeenCalledOnce();
   });
 

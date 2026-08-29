@@ -208,6 +208,7 @@ export type TaskType =
 
 export type TaskStarted = {
   task_id: string;
+  intake_session_id?: string;
 };
 
 export type TaskOutputEvent = {
@@ -268,6 +269,14 @@ export function runTask(
 
 export function cancelTask(taskId: string) {
   return invoke<void>('cancel_task', { taskId });
+}
+
+export function bindIntakeProposal(intakeSessionId: string, proposal: IntakeProposal) {
+  return invoke<void>('bind_intake_proposal', { intakeSessionId, proposal });
+}
+
+export function discardIntakeSession(intakeSessionId: string) {
+  return invoke<void>('discard_intake_session', { intakeSessionId });
 }
 
 export function getDefaultWorkspacePath(): Promise<string> {

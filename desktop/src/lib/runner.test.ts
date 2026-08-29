@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => {
   return {
     invokeRunTask: vi.fn(),
     invokeCancelTask: vi.fn(),
+    bindIntakeProposal: vi.fn(),
+    discardIntakeSession: vi.fn(),
     getPreferredProvider: vi.fn(),
     listeners,
     listen: vi.fn(async (event: string, callback: (event: { payload: unknown }) => void) => {
@@ -22,6 +24,8 @@ vi.mock('../api', async (importOriginal) => {
     ...actual,
     runTask: mocks.invokeRunTask,
     cancelTask: mocks.invokeCancelTask,
+    bindIntakeProposal: mocks.bindIntakeProposal,
+    discardIntakeSession: mocks.discardIntakeSession,
   };
 });
 vi.mock('@tauri-apps/api/event', () => ({ listen: mocks.listen }));
@@ -34,39 +38,24 @@ const parseIntakeProposal = (runner as unknown as {
 const applyIntakeProposal = (runner as unknown as {
   applyIntakeProposal: (
     root: string,
-    proposal: IntakeProposal,
+    intakeSessionId: string,
     approvedIds: string[],
-  ) => Promise<{ applied: boolean; mergedSourcePaths: string[] }>;
+  ) => Promise<{ applied: boolean }>;
 }).applyIntakeProposal;
 
 const previewIntakeProposal = (runner as unknown as {
-  previewIntakeProposal: (root: string) => Promise<IntakeProposal>;
+  previewIntakeProposal: (root: string) => Promise<{
+    proposal: IntakeProposal;
+    intakeSessionId: string;
+  }>;
 }).previewIntakeProposal;
-
-const proposal: IntakeProposal = {
-  items: [
-    {
-      id: 'work-1',
-      targetFile: 'cv.md',
-      field: 'Experience',
-      proposedValue: 'Led a migration',
-      sources: ['work/review.txt'],
-    },
-    {
-      id: 'research-1',
-      targetFile: 'modes/_profile.md',
-      field: 'Domain expertise',
-      proposedValue: 'Applied causal inference',
-      sources: ['research/paper.md'],
-    },
-  ],
-  sourcePaths: ['work/review.txt', 'research/paper.md'],
-};
 
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.listeners.clear();
-  mocks.invokeRunTask.mockResolvedValue({ task_id: 'task-1' });
+  mocks.invokeRunTask.mockResolvedValue({ task_id: 'task-1', intake_session_id: 'intake-1' });
+  mocks.bindIntakeProposal.mockResolvedValue(undefined);
+  mocks.discardIntakeSession.mockResolvedValue(undefined);
   mocks.getPreferredProvider.mockResolvedValue({
     id: 'claude',
     displayName: 'Claude Code',
@@ -128,50 +117,45 @@ describe('intake proposal protocol', () => {
 
     expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
   });
+
+  it('rejects a conflict whose proposed value disagrees with the item', () => {
+    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
+{"items":[{"id":"bad-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"conflict":{"existingValue":"Engineer","proposedValue":"Principal Engineer"}}],"sourcePaths":["work/review.txt"]}
+---CAREEROPS_INTAKE_PROPOSAL_END---`;
+
+    expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
+  });
 });
 
 describe('reviewed intake apply gate', () => {
   it('does not invoke intake-apply when zero proposals are approved', async () => {
-    await expect(applyIntakeProposal('/workspace', proposal, [])).resolves.toEqual({
+    await expect(applyIntakeProposal('/workspace', 'intake-1', [])).resolves.toEqual({
       applied: false,
-      mergedSourcePaths: [],
     });
 
     expect(mocks.invokeRunTask).not.toHaveBeenCalled();
   });
 
-  it('supplies only selected proposal IDs and items to intake-apply', async () => {
-    const applying = applyIntakeProposal('/workspace', proposal, ['research-1']);
+  it('supplies only the bound session and selected proposal IDs to intake-apply', async () => {
+    const applying = applyIntakeProposal('/workspace', 'intake-1', ['research-1']);
 
     await vi.waitFor(() => expect(mocks.invokeRunTask).toHaveBeenCalledOnce());
     const input = mocks.invokeRunTask.mock.calls[0][2] as Record<string, string>;
     expect(JSON.parse(input.approvedProposalIds)).toEqual(['research-1']);
-    expect(JSON.parse(input.selectedProposal).items.map((item: { id: string }) => item.id)).toEqual(['research-1']);
+    expect(input.intakeSessionId).toBe('intake-1');
+    expect(input).not.toHaveProperty('selectedProposal');
+    expect(input).not.toHaveProperty('mergedSourcePaths');
 
     await finishTask();
     await applying;
   });
 
-  it('does not supply a declined source for intake-state commit', async () => {
-    const applying = applyIntakeProposal('/workspace', proposal, ['work-1']);
-
-    await vi.waitFor(() => expect(mocks.invokeRunTask).toHaveBeenCalledOnce());
-    const input = mocks.invokeRunTask.mock.calls[0][2] as Record<string, string>;
-    expect(JSON.parse(input.mergedSourcePaths)).toEqual(['work/review.txt']);
-
-    await finishTask();
-    await applying;
-  });
-
-  it('reports only merged source paths after a successful apply', async () => {
-    const applying = applyIntakeProposal('/workspace', proposal, ['research-1']);
+  it('reports success only after the trusted apply task succeeds', async () => {
+    const applying = applyIntakeProposal('/workspace', 'intake-1', ['research-1']);
 
     await finishTask();
 
-    await expect(applying).resolves.toEqual({
-      applied: true,
-      mergedSourcePaths: ['research/paper.md'],
-    });
+    await expect(applying).resolves.toEqual({ applied: true });
   });
 });
 
@@ -193,10 +177,14 @@ describe('intake preview session', () => {
       mocks.listeners.get('task-finished')?.({
         payload: { task_id: 'task-1', exit_code: 0, success: true } satisfies TaskFinishedEvent,
       });
-      return { task_id: 'task-1' };
+      return { task_id: 'task-1', intake_session_id: 'intake-1' };
     });
 
-    await expect(previewIntakeProposal('/workspace')).resolves.toEqual({ items: [], sourcePaths: [] });
+    await expect(previewIntakeProposal('/workspace')).resolves.toEqual({
+      proposal: { items: [], sourcePaths: [] },
+      intakeSessionId: 'intake-1',
+    });
+    expect(mocks.bindIntakeProposal).toHaveBeenCalledWith('intake-1', { items: [], sourcePaths: [] });
   });
 
   it('runs one intake-preview task and returns its validated proposal', async () => {
@@ -206,9 +194,13 @@ describe('intake preview session', () => {
 ---CAREEROPS_INTAKE_PROPOSAL_END---`);
     await finishTask();
 
-    await expect(previewing).resolves.toEqual({ items: [], sourcePaths: [] });
+    await expect(previewing).resolves.toEqual({
+      proposal: { items: [], sourcePaths: [] },
+      intakeSessionId: 'intake-1',
+    });
     expect(mocks.invokeRunTask).toHaveBeenCalledOnce();
     expect(mocks.invokeRunTask.mock.calls[0][0]).toBe('intake-preview');
+    expect(mocks.bindIntakeProposal).toHaveBeenCalledWith('intake-1', { items: [], sourcePaths: [] });
   });
 
   it('keeps malformed output retryable instead of invoking apply', async () => {
@@ -218,5 +210,6 @@ describe('intake preview session', () => {
 
     await expect(previewing).rejects.toThrow(/try again/i);
     expect(mocks.invokeRunTask).toHaveBeenCalledOnce();
+    expect(mocks.discardIntakeSession).toHaveBeenCalledWith('intake-1');
   });
 });

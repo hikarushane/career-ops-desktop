@@ -31,6 +31,8 @@ pub fn run() {
             sidecar::help_document,
             sidecar::resolve_job_language,
             runner::run_task,
+            runner::bind_intake_proposal,
+            runner::discard_intake_session,
             runner::cancel_task,
             workspace::default_workspace_path,
             workspace::inspect_workspace,

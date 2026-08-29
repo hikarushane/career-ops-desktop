@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { IntakeProposal } from '../api';
-import { applyIntakeProposal, previewIntakeProposal } from '../lib/runner';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  applyIntakeProposal,
+  discardIntakePreview,
+  previewIntakeProposal,
+  type IntakePreviewSession,
+} from '../lib/runner';
 
 type Props = { root: string; onBack: () => void; onComplete: () => void };
 
@@ -9,21 +13,22 @@ function errorMessage(reason: unknown, fallback: string): string {
 }
 
 export default function IntakeReview({ root, onBack, onComplete }: Props) {
-  const [proposal, setProposal] = useState<IntakeProposal | null>(null);
+  const [session, setSession] = useState<IntakePreviewSession | null>(null);
   const [approved, setApproved] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const previewStarted = useRef(false);
 
   const loadPreview = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const next = await previewIntakeProposal(root);
-      setProposal(next);
+      setSession(next);
       setApproved(new Set());
     } catch (reason) {
-      setProposal(null);
+      setSession(null);
       setError(errorMessage(reason, 'The intake preview could not be completed. Try again.'));
     } finally {
       setLoading(false);
@@ -31,6 +36,8 @@ export default function IntakeReview({ root, onBack, onComplete }: Props) {
   }, [root]);
 
   useEffect(() => {
+    if (previewStarted.current) return;
+    previewStarted.current = true;
     void loadPreview();
   }, [loadPreview]);
 
@@ -44,12 +51,12 @@ export default function IntakeReview({ root, onBack, onComplete }: Props) {
   }, []);
 
   const approveAll = useCallback(() => {
-    if (proposal) setApproved(new Set(proposal.items.map((item) => item.id)));
-  }, [proposal]);
+    if (session) setApproved(new Set(session.proposal.items.map((item) => item.id)));
+  }, [session]);
 
   const applySelected = useCallback(async () => {
-    if (!proposal || approved.size === 0 || applying) return;
-    const approvedIds = proposal.items
+    if (!session || approved.size === 0 || applying) return;
+    const approvedIds = session.proposal.items
       .filter((item) => approved.has(item.id))
       .map((item) => item.id);
     if (approvedIds.length === 0) return;
@@ -57,14 +64,38 @@ export default function IntakeReview({ root, onBack, onComplete }: Props) {
     setApplying(true);
     setError(null);
     try {
-      await applyIntakeProposal(root, proposal, approvedIds);
+      await applyIntakeProposal(root, session.intakeSessionId, approvedIds);
       onComplete();
     } catch (reason) {
       setError(errorMessage(reason, 'The selected changes could not be applied. Try again.'));
     } finally {
       setApplying(false);
     }
-  }, [applying, approved, onComplete, proposal, root]);
+  }, [applying, approved, onComplete, root, session]);
+
+  const skipForNow = useCallback(async () => {
+    if (!session || applying) return;
+    setError(null);
+    try {
+      await discardIntakePreview(session.intakeSessionId);
+      onComplete();
+    } catch (reason) {
+      setError(errorMessage(reason, 'The intake session could not be closed. Try again.'));
+    }
+  }, [applying, onComplete, session]);
+
+  const goBack = useCallback(async () => {
+    if (!session || applying) return;
+    setError(null);
+    try {
+      await discardIntakePreview(session.intakeSessionId);
+      onBack();
+    } catch (reason) {
+      setError(errorMessage(reason, 'The intake session could not be closed. Try again.'));
+    }
+  }, [applying, onBack, session]);
+
+  const proposal = session?.proposal ?? null;
 
   if (loading) {
     return (
@@ -94,8 +125,8 @@ export default function IntakeReview({ root, onBack, onComplete }: Props) {
         <h1>Review your background</h1>
         <p className="setup-subtitle">No new profile changes were proposed.</p>
         <div className="setup-actions">
-          <button className="btn-ghost" onClick={onBack}>Back</button>
-          <button className="btn-primary" onClick={onComplete}>Continue setup</button>
+          <button className="btn-ghost" onClick={goBack}>Back</button>
+          <button className="btn-primary" onClick={skipForNow}>Continue setup</button>
         </div>
       </div>
     );
@@ -144,7 +175,8 @@ export default function IntakeReview({ root, onBack, onComplete }: Props) {
 
       {error && <p className="intake-error" role="alert">{error}</p>}
       <div className="setup-actions">
-        <button className="btn-ghost" onClick={onBack} disabled={applying}>Back</button>
+        <button className="btn-ghost" onClick={goBack} disabled={applying}>Back</button>
+        <button className="btn-ghost" onClick={skipForNow} disabled={applying}>Skip for now</button>
         <button className="btn-secondary" onClick={approveAll} disabled={applying}>Approve all</button>
         <button
           className="btn-primary"
