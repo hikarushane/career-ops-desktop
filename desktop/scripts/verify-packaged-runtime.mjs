@@ -151,11 +151,20 @@ async function verifyFiles({ target, runtime, launcher, launcherProbeFactory, da
     const installedProbe = launcherProbeFactory?.();
     const launcherProbe = installedProbe?.launcher ?? launcher;
     try {
-      for (const override of [undefined, '--no_jitless', '--no-jitless', '--jitless=false', '--jitless=0']) {
-        const launcherArgs = override ? [override, '-p', probe] : ['-p', probe];
+      const hostileCases = [
+        { argument: undefined, nodeOptions: '--no_jitless' },
+        { argument: '--no_jitless', nodeOptions: '--no_jitless' },
+        { argument: '--no-jitless', nodeOptions: '--no-jitless' },
+        { argument: '--nojitless', nodeOptions: '--nojitless' },
+        { argument: '-nojitless', nodeOptions: '--nojitless' },
+        { argument: '--jitless=false', nodeOptions: '--no_jitless' },
+        { argument: '--jitless=0', nodeOptions: '--no_jitless' },
+      ];
+      for (const { argument, nodeOptions } of hostileCases) {
+        const launcherArgs = argument ? [argument, '-p', probe] : ['-p', probe];
         assertJitless(
-          run(launcherProbe, launcherArgs, hostileEnvironment),
-          `careerops-node launcher (${override ?? 'ambient NODE_OPTIONS'})`,
+          run(launcherProbe, launcherArgs, { ...hostileEnvironment, NODE_OPTIONS: nodeOptions }),
+          `careerops-node launcher (${argument ?? `NODE_OPTIONS=${nodeOptions}`})`,
         );
       }
       assert(existsSync(seed), `installed workspace seed is missing intake.mjs: ${seed}`);

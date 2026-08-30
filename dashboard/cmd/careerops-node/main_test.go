@@ -40,6 +40,8 @@ func TestRuntimeArgsRemovesJitlessOverrides(t *testing.T) {
 		"--no_jitless",
 		"--no-jitless=true",
 		"--no_jitless=true",
+		"--nojitless",
+		"-nojitless",
 		"--jitless",
 		"--jitless=false",
 		"--jitless=0",
@@ -53,7 +55,7 @@ func TestRuntimeArgsRemovesJitlessOverrides(t *testing.T) {
 func TestRuntimeEnvironmentPinsNodeOptions(t *testing.T) {
 	got := runtimeEnvironment([]string{
 		"PATH=/bin",
-		"NODE_OPTIONS=--no_jitless",
+		"NODE_OPTIONS=--nojitless",
 		"node_options=--jitless=false",
 		"CAREEROPS_RESOURCE_DIR=/tmp/attacker-runtime",
 	})

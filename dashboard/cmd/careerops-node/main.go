@@ -45,7 +45,7 @@ func isJitlessOption(arg string) bool {
 	}
 	option := strings.ReplaceAll(strings.TrimLeft(arg, "-"), "_", "-")
 	name, _, _ := strings.Cut(option, "=")
-	return name == "jitless" || name == "no-jitless"
+	return name == "jitless" || name == "no-jitless" || name == "nojitless"
 }
 
 func runtimeEnvironment(environment []string) []string {
