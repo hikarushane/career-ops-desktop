@@ -88,6 +88,26 @@ function hostTriple() {
   return match[1].trim();
 }
 
+function installedLauncherLayout(launcher, runtimePath) {
+  if (process.platform !== 'darwin' && process.platform !== 'win32') return undefined;
+  const root = mkdtempSync(join(tmpdir(), 'careerops-installed-launcher-'));
+  const installedLauncher = process.platform === 'darwin'
+    ? join(root, 'CareerOps.app', 'Contents', 'MacOS', 'careerops-node')
+    : join(root, 'CareerOps', 'careerops-node.exe');
+  const installedRuntime = process.platform === 'darwin'
+    ? join(root, 'CareerOps.app', 'Contents', 'Resources', 'runtime', 'careerops-node-runtime')
+    : join(root, 'CareerOps', 'runtime', 'careerops-node-runtime.exe');
+  mkdirSync(dirname(installedLauncher), { recursive: true });
+  mkdirSync(dirname(installedRuntime), { recursive: true });
+  copyFileSync(launcher, installedLauncher);
+  copyFileSync(runtimePath, installedRuntime);
+  if (process.platform !== 'win32') {
+    chmodSync(installedLauncher, 0o755);
+    chmodSync(installedRuntime, 0o755);
+  }
+  return { root, launcher: installedLauncher };
+}
+
 const triple = hostTriple();
 const artifact = runtimeManifest.artifacts[triple];
 if (!artifact) throw new Error(`no pinned Node.js runtime for Rust target ${triple}`);
@@ -182,15 +202,27 @@ writeFileSync(stagedMetadata, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
 rmSync(metadataTarget, { force: true });
 renameSync(stagedMetadata, metadataTarget);
 
-const launcherProbe = JSON.parse(execFileSync(launcherTarget, [
-  '-p',
-  'JSON.stringify({jitless:process.execArgv.includes("--jitless"),eval:eval("1+1"),fn:new Function("return 3")(),wasm:typeof WebAssembly})',
-], {
-  encoding: 'utf8',
-  env: { ...process.env, CAREEROPS_RESOURCE_DIR: outDir },
-}).trim());
-if (!launcherProbe.jitless || launcherProbe.eval !== 2 || launcherProbe.fn !== 3 || launcherProbe.wasm !== 'undefined') {
-  throw new Error(`careerops-node launcher did not enforce --jitless: ${JSON.stringify(launcherProbe)}`);
+const installed = installedLauncherLayout(launcherTarget, runtimeTarget);
+if (installed) {
+  try {
+    const expression = 'JSON.stringify({jitless:process.execArgv.includes("--jitless"),eval:eval("1+1"),fn:new Function("return 3")(),wasm:typeof WebAssembly})';
+    for (const override of [undefined, '--no_jitless', '--no-jitless', '--jitless=false', '--jitless=0']) {
+      const launcherArgs = override ? [override, '-p', expression] : ['-p', expression];
+      const launcherProbe = JSON.parse(execFileSync(installed.launcher, launcherArgs, {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: '--no_jitless',
+          CAREEROPS_RESOURCE_DIR: join(installed.root, 'attacker-controlled-runtime'),
+        },
+      }).trim());
+      if (!launcherProbe.jitless || launcherProbe.eval !== 2 || launcherProbe.fn !== 3 || launcherProbe.wasm !== 'undefined') {
+        throw new Error(`careerops-node launcher did not enforce --jitless against ${override ?? 'ambient NODE_OPTIONS'}: ${JSON.stringify(launcherProbe)}`);
+      }
+    }
+  } finally {
+    rmSync(installed.root, { recursive: true, force: true });
+  }
 }
 
 console.log(`managed JavaScript runtime: ${runtimeTarget} (${actualVersion}, pinned ${artifact.archive})`);

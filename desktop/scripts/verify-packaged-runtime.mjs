@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { constants, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync,
+  rmSync, statSync, writeFileSync,
+} from 'node:fs';
 import { access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -72,6 +75,28 @@ function assertJitless(output, label) {
   assert(probe.wasm === 'undefined', `${label} unexpectedly enabled WebAssembly`);
 }
 
+function generatedInstalledLayout(target, launcher, runtime) {
+  const windows = target.includes('windows');
+  const macOS = target.includes('apple-darwin');
+  if (!windows && !macOS) return undefined;
+  const root = mkdtempSync(join(tmpdir(), 'careerops-generated-install-'));
+  const installedLauncher = windows
+    ? join(root, 'CareerOps', 'careerops-node.exe')
+    : join(root, 'CareerOps.app', 'Contents', 'MacOS', 'careerops-node');
+  const installedRuntime = windows
+    ? join(root, 'CareerOps', 'runtime', 'careerops-node-runtime.exe')
+    : join(root, 'CareerOps.app', 'Contents', 'Resources', 'runtime', 'careerops-node-runtime');
+  mkdirSync(dirname(installedLauncher), { recursive: true });
+  mkdirSync(dirname(installedRuntime), { recursive: true });
+  copyFileSync(launcher, installedLauncher);
+  copyFileSync(runtime, installedRuntime);
+  if (!windows) {
+    chmodSync(installedLauncher, 0o755);
+    chmodSync(installedRuntime, 0o755);
+  }
+  return { root, launcher: installedLauncher };
+}
+
 function verifyMacRuntimeSignature(runtime) {
   execFileSync('codesign', ['--verify', '--strict', runtime], { stdio: 'pipe' });
   const result = spawnSync('codesign', ['-d', '--verbose=4', runtime], { encoding: 'utf8' });
@@ -87,7 +112,7 @@ async function verifyExecutable(path, label, windows) {
   if (!windows) await access(path, constants.X_OK);
 }
 
-async function verifyFiles({ target, runtime, launcher, dataService, license, metadata, seed, launcherEnvironment, macApp, verifyAppSignature = true }) {
+async function verifyFiles({ target, runtime, launcher, launcherProbeFactory, dataService, license, metadata, seed, macApp, verifyAppSignature = true }) {
   // Check licensing first so corrupt or mismatched licensing produces precise guidance.
   assert(existsSync(license), `Node.js license is missing: ${license}`);
   const licenseHash = sha256(license);
@@ -117,10 +142,38 @@ async function verifyFiles({ target, runtime, launcher, dataService, license, me
   const expectedVersion = `v${manifest.version}`;
   assert(run(runtime, ['--jitless', '--version']) === expectedVersion, `runtime did not execute as ${expectedVersion}`);
   const probe = 'JSON.stringify({jitless:process.execArgv.includes("--jitless"),eval:eval("1+1"),fn:new Function("return 3")(),wasm:typeof WebAssembly})';
-  assertJitless(run(launcher, ['-p', probe], launcherEnvironment), 'careerops-node launcher');
-  assert(existsSync(seed), `installed workspace seed is missing intake.mjs: ${seed}`);
-  const selfTest = run(launcher, [seed, '--self-test'], launcherEnvironment);
-  assert(/self-test: \d+ passed, 0 failed/.test(selfTest), 'installed intake.mjs self-test failed');
+  const packagedLauncherSupported = windows || selectedTarget.includes('apple-darwin');
+  const hostileEnvironment = {
+    NODE_OPTIONS: '--no_jitless',
+    CAREEROPS_RESOURCE_DIR: windows ? 'Z:\\attacker-controlled-runtime' : '/nonexistent/attacker-controlled-runtime',
+  };
+  if (packagedLauncherSupported) {
+    const installedProbe = launcherProbeFactory?.();
+    const launcherProbe = installedProbe?.launcher ?? launcher;
+    try {
+      for (const override of [undefined, '--no_jitless', '--no-jitless', '--jitless=false', '--jitless=0']) {
+        const launcherArgs = override ? [override, '-p', probe] : ['-p', probe];
+        assertJitless(
+          run(launcherProbe, launcherArgs, hostileEnvironment),
+          `careerops-node launcher (${override ?? 'ambient NODE_OPTIONS'})`,
+        );
+      }
+      assert(existsSync(seed), `installed workspace seed is missing intake.mjs: ${seed}`);
+      const selfTest = run(launcherProbe, [seed, '--self-test'], hostileEnvironment);
+      assert(/self-test: \d+ passed, 0 failed/.test(selfTest), 'installed intake.mjs self-test failed');
+    } finally {
+      if (installedProbe) rmSync(installedProbe.root, { recursive: true, force: true });
+    }
+  } else {
+    assertJitless(run(runtime, ['--jitless', '-p', probe]), 'managed Node.js runtime');
+    const launcherFailure = spawnSync(launcher, ['-p', probe], { encoding: 'utf8', env: process.env });
+    assert(launcherFailure.status !== 0, 'unsupported packaged launcher did not fail closed');
+    assert(/managed JavaScript runtime unavailable/i.test(launcherFailure.stderr),
+      'unsupported packaged launcher did not explain that the managed runtime is unavailable');
+    assert(existsSync(seed), `installed workspace seed is missing intake.mjs: ${seed}`);
+    const selfTest = run(runtime, ['--jitless', seed, '--self-test']);
+    assert(/self-test: \d+ passed, 0 failed/.test(selfTest), 'installed intake.mjs self-test failed');
+  }
   if (dataService) {
     await verifyExecutable(dataService, 'career-data sidecar', windows);
     const noPath = windows ? 'C:\\CareerOps-no-PATH' : '/nonexistent';
@@ -128,7 +181,11 @@ async function verifyFiles({ target, runtime, launcher, dataService, license, me
     try {
       mkdirSync(join(workspace, 'config'));
       writeFileSync(join(workspace, 'config', 'profile.yml'), 'language:\n  analysis: de\n');
-      const settings = JSON.parse(run(dataService, ['language-settings', '--path', workspace], { PATH: noPath }));
+      const settings = JSON.parse(run(dataService, ['language-settings', '--path', workspace], {
+        PATH: noPath,
+        NODE_OPTIONS: '--no_jitless',
+        CAREEROPS_RESOURCE_DIR: windows ? 'Z:\\attacker-controlled-runtime' : '/nonexistent/attacker-controlled-runtime',
+      }));
       assert(settings.analysisLanguage === 'de', 'installed career-data could not run packaged scripts against an existing workspace without Node on PATH');
       assert(!existsSync(join(workspace, 'node_modules')), 'installed runtime smoke unexpectedly populated the user workspace');
     } finally {
@@ -150,14 +207,16 @@ async function main() {
     const selectedTarget = target ?? generated.target;
     assert(selectedTarget, '--target is required when generated metadata is unavailable');
     const windows = selectedTarget.includes('windows');
+    const runtime = join(binaries, 'runtime', `careerops-node-runtime${windows ? '.exe' : ''}`);
+    const launcher = join(binaries, externalBinaryFilename('careerops-node', selectedTarget));
     await verifyFiles({
       target: selectedTarget,
-      runtime: join(binaries, 'runtime', `careerops-node-runtime${windows ? '.exe' : ''}`),
-      launcher: join(binaries, externalBinaryFilename('careerops-node', selectedTarget)),
+      runtime,
+      launcher,
+      launcherProbeFactory: () => generatedInstalledLayout(selectedTarget, launcher, runtime),
       license: join(binaries, 'node-LICENSE'),
       metadata,
       seed: join(binaries, 'workspace-seed', 'intake.mjs'),
-      launcherEnvironment: { CAREEROPS_RESOURCE_DIR: binaries },
     });
     return;
   }
