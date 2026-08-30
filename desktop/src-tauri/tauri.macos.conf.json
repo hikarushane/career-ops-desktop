@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "binaries/runtime/careerops-node-runtime": "runtime/careerops-node-runtime"
+    }
+  }
+}

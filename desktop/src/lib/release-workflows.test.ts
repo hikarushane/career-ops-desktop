@@ -124,6 +124,16 @@ describe('workflow enforcement', () => {
     expect(readiness.indexOf('Build sidecar before Cargo')).toBeLessThan(readiness.indexOf('Cargo check'));
   });
 
+  it('executes generated and installed runtime smoke checks on release platforms', () => {
+    expect(readiness).toContain('verify-packaged-runtime.mjs --generated');
+    expect(readiness).toContain('verify-packaged-runtime.mjs --app');
+    expect(readiness).toContain('verify-packaged-runtime.mjs --install-dir');
+    expect(readiness).toContain('Get-AuthenticodeSignature');
+    expect(release).toContain('verify-packaged-runtime.mjs --app');
+    expect(release).toContain('verify-packaged-runtime.mjs --install-dir');
+    expect(release).toContain('Get-AuthenticodeSignature');
+  });
+
   it('uses the verified action major convention and job-scoped write permission', () => {
     expect(release).toContain('actions/checkout@v7');
     expect(release).toContain('actions/setup-node@v7');

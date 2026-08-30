@@ -21,6 +21,10 @@ const desktop = resolve(here, '..');
 const repoRoot = resolve(desktop, '..');
 const defaultOutput = join(desktop, 'src-tauri', 'binaries', 'workspace-seed');
 const normalizedTimestamp = new Date('2000-01-01T00:00:00.000Z');
+const packagedDependencies = {
+  'js-yaml': '5.4.1',
+  argparse: '2.0.1',
+};
 
 const excludedPrefixes = [
   '.fork/',
@@ -95,6 +99,17 @@ export function prepareWorkspaceSeed() {
   for (const path of updaterSystemPaths()) {
     const clean = normalized(path).replace(/\/$/, '');
     collectFiles(join(repoRoot, clean), clean, files);
+  }
+  for (const [name, version] of Object.entries(packagedDependencies)) {
+    const source = join(repoRoot, 'node_modules', name);
+    if (!existsSync(source)) {
+      throw new Error(`workspace runtime dependency ${name}@${version} is missing; run npm ci --ignore-scripts in the repository root before the release build`);
+    }
+    const packageJson = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8'));
+    if (packageJson.version !== version || !existsSync(join(source, 'LICENSE'))) {
+      throw new Error(`workspace runtime dependency ${name} must be the licensed pinned version ${version}`);
+    }
+    collectFiles(source, join('node_modules', name), files);
   }
 
   rmSync(staging, { recursive: true, force: true });

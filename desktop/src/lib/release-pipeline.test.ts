@@ -152,7 +152,12 @@ describe('packaged workspace seed', () => {
       'templates/cv-template.html',
       'documents/README.md',
       'config/profile.example.yml',
+      'node_modules/js-yaml/LICENSE',
+      'node_modules/argparse/LICENSE',
     ]) expect(existsSync(join(output, path))).toBe(true);
+
+    expect(readJson(join(output, 'node_modules/js-yaml/package.json')).version).toBe('5.4.1');
+    expect(readJson(join(output, 'node_modules/argparse/package.json')).version).toBe('2.0.1');
 
     for (const path of [
       'cv.md',
@@ -188,15 +193,24 @@ describe('packaged workspace seed', () => {
 describe('installed runtime package inputs', () => {
   it('packages the workspace seed, deterministic sidecar, and managed JavaScript runtime', () => {
     const conf = readJson(join(DESKTOP, 'src-tauri', 'tauri.conf.json'));
+    const macos = readJson(join(DESKTOP, 'src-tauri', 'tauri.macos.conf.json'));
+    const windows = readJson(join(DESKTOP, 'src-tauri', 'tauri.windows.conf.json'));
 
     expect(conf.bundle?.resources).toMatchObject({
       'binaries/workspace-seed/': 'workspace-seed/',
       'binaries/node-LICENSE': 'licenses/Node.js-LICENSE.txt',
+      'binaries/node-runtime.json': 'runtime/node-runtime.json',
     });
     expect(conf.bundle?.externalBin).toEqual(expect.arrayContaining([
       'binaries/career-data',
       'binaries/careerops-node',
     ]));
+    expect(macos.bundle?.resources).toMatchObject({
+      'binaries/runtime/careerops-node-runtime': 'runtime/careerops-node-runtime',
+    });
+    expect(windows.bundle?.resources).toMatchObject({
+      'binaries/runtime/careerops-node-runtime.exe': 'runtime/careerops-node-runtime.exe',
+    });
   });
 
   it('uses only package-local relative inputs, never source-checkout paths', () => {
@@ -213,12 +227,45 @@ describe('installed runtime package inputs', () => {
     }
   });
 
-  it('stages the managed runtime from the release build runtime, not a developer tool path', () => {
+  it('pins exact target distributions and never copies the mutable build-host runtime', () => {
     const build = readFileSync(join(DESKTOP, 'scripts', 'build-sidecar.mjs'), 'utf8');
+    const manifestPath = join(DESKTOP, 'scripts', 'node-runtime.json');
 
-    expect(build).toContain('process.execPath');
-    expect(build).toContain('careerops-node');
+    expect(existsSync(manifestPath)).toBe(true);
+    const manifest = readJson(manifestPath);
+    expect(manifest.version).toBe('22.23.2');
+    expect(manifest.licenseSha256).toBe('c738ae413cf561f174e34f6961f8ca458aae2369a73640dda6234c629b98bcc4');
+    for (const target of [
+      'aarch64-apple-darwin',
+      'x86_64-apple-darwin',
+      'x86_64-unknown-linux-gnu',
+      'x86_64-pc-windows-msvc',
+    ]) {
+      const artifact = manifest.artifacts[target];
+      expect(artifact, target).toBeDefined();
+      expect(artifact.archive, target).toContain('node-v22.23.2-');
+      expect(artifact.sha256, target).toMatch(/^[a-f0-9]{64}$/);
+      expect(artifact.binary, target).toContain('node-v22.23.2-');
+      expect(artifact.license, target).toContain('node-v22.23.2-');
+    }
+    expect(build).not.toContain('process.execPath');
     expect(build).not.toMatch(/(?:\/opt\/homebrew|\/usr\/local|[A-Za-z]:\\\\Program Files)/);
+  });
+
+  it('the generated-input verifier rejects a mismatched runtime license', () => {
+    const binaries = temp('career-ops-runtime-verifier-');
+    writeFileSync(join(binaries, 'node-LICENSE'), 'not the pinned Node license\n');
+    writeFileSync(join(binaries, 'node-runtime.json'), '{}\n');
+
+    const result = spawnSync(process.execPath, [
+      'scripts/verify-packaged-runtime.mjs',
+      '--generated',
+      '--target', 'aarch64-apple-darwin',
+      '--binaries', binaries,
+    ], { cwd: DESKTOP, encoding: 'utf8' });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/license checksum mismatch/i);
   });
 });
 

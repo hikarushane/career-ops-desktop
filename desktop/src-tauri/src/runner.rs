@@ -1187,7 +1187,7 @@ fn finalize_isolated_apply(
     before: &BTreeMap<String, String>,
     reviewed: &ReviewFingerprints,
     selection: &IntakeApplySelection,
-    js_runtime: &Path,
+    js_runtime: &PackagedJsRuntime,
 ) -> Result<Vec<String>, String> {
     let mut writer = CapabilityTargetWriter::open(workspace)?;
     verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
@@ -1322,7 +1322,7 @@ fn finalize_isolated_apply(
 fn commit_intake_sources(
     workspace: &Path,
     source_paths: &[String],
-    js_runtime: &Path,
+    js_runtime: &PackagedJsRuntime,
 ) -> Result<(), String> {
     if source_paths.is_empty()
         || source_paths
@@ -1332,11 +1332,12 @@ fn commit_intake_sources(
         return Err("refusing to commit empty or unsafe intake source paths".to_owned());
     }
 
-    let output = Command::new(js_runtime)
+    let output = Command::new(&js_runtime.launcher)
         .arg("intake.mjs")
         .arg("--commit")
         .args(source_paths)
         .current_dir(workspace)
+        .env("CAREEROPS_RESOURCE_DIR", &js_runtime.resource_dir)
         .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable")
         .output()
         .map_err(|error| {
@@ -1444,7 +1445,7 @@ enum IntakeExecution {
         before: BTreeMap<String, String>,
         reviewed: ReviewFingerprints,
         selection: IntakeApplySelection,
-        js_runtime: PathBuf,
+        js_runtime: PackagedJsRuntime,
         apply_lock: Arc<Mutex<()>>,
     },
 }
@@ -1470,29 +1471,53 @@ fn canonical_workspace(path: &str) -> Result<PathBuf, String> {
         .map_err(|error| format!("failed to resolve CareerOps workspace {path}: {error}"))
 }
 
-fn packaged_runtime_path_for_executable(executable: &Path) -> PathBuf {
-    executable
+#[derive(Clone, Debug)]
+struct PackagedJsRuntime {
+    launcher: PathBuf,
+    resource_dir: PathBuf,
+    runtime: PathBuf,
+}
+
+fn packaged_runtime_paths_for_executable(
+    executable: &Path,
+    resource_dir: &Path,
+) -> PackagedJsRuntime {
+    let launcher = executable
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join(if cfg!(windows) {
             "careerops-node.exe"
         } else {
             "careerops-node"
-        })
+        });
+    let runtime = resource_dir.join("runtime").join(if cfg!(windows) {
+        "careerops-node-runtime.exe"
+    } else {
+        "careerops-node-runtime"
+    });
+    PackagedJsRuntime {
+        launcher,
+        resource_dir: resource_dir.to_path_buf(),
+        runtime,
+    }
 }
 
-fn packaged_js_runtime() -> Result<PathBuf, String> {
+fn packaged_js_runtime(app: &AppHandle) -> Result<PackagedJsRuntime, String> {
     let executable = std::env::current_exe()
         .map_err(|error| format!("cannot locate the installed CareerOps application: {error}"))?;
-    let runtime = packaged_runtime_path_for_executable(&executable);
-    if runtime.is_file() {
-        Ok(runtime)
-    } else {
-        Err(format!(
-            "The packaged CareerOps JavaScript runtime is unavailable at {}. No files were changed; reinstall or update CareerOps Desktop.",
-            runtime.display()
-        ))
+    let resource_dir = app.path().resource_dir().map_err(|error| {
+        format!("cannot locate installed CareerOps resources: {error}. No files were changed; reinstall or update CareerOps Desktop.")
+    })?;
+    let paths = packaged_runtime_paths_for_executable(&executable, &resource_dir);
+    for path in [&paths.launcher, &paths.runtime] {
+        if !path.is_file() {
+            return Err(format!(
+                "The packaged CareerOps JavaScript runtime is unavailable at {}. No files were changed; reinstall or update CareerOps Desktop.",
+                path.display()
+            ));
+        }
     }
+    Ok(paths)
 }
 
 #[cfg(unix)]
@@ -1583,7 +1608,7 @@ fn isolated_provider_command(
     args: &[String],
     sandbox: &Path,
     protected_workspace: &Path,
-    js_runtime: &Path,
+    js_runtime: &PackagedJsRuntime,
 ) -> Result<Command, String> {
     fn escaped(path: &Path) -> String {
         path.to_string_lossy()
@@ -1611,7 +1636,8 @@ fn isolated_provider_command(
         .env("TMPDIR", sandbox)
         .env("TMP", sandbox)
         .env("TEMP", sandbox)
-        .env("CAREEROPS_JS_RUNTIME", js_runtime)
+        .env("CAREEROPS_JS_RUNTIME", &js_runtime.launcher)
+        .env("CAREEROPS_RESOURCE_DIR", &js_runtime.resource_dir)
         .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable");
     Ok(command)
 }
@@ -1622,7 +1648,7 @@ fn isolated_provider_command(
     args: &[String],
     sandbox: &Path,
     protected_workspace: &Path,
-    js_runtime: &Path,
+    js_runtime: &PackagedJsRuntime,
 ) -> Result<Command, String> {
     let bwrap = std::env::var_os("PATH")
         .into_iter()
@@ -1663,7 +1689,8 @@ fn isolated_provider_command(
         .env("TMPDIR", "/tmp")
         .env("TMP", "/tmp")
         .env("TEMP", "/tmp")
-        .env("CAREEROPS_JS_RUNTIME", js_runtime)
+        .env("CAREEROPS_JS_RUNTIME", &js_runtime.launcher)
+        .env("CAREEROPS_RESOURCE_DIR", &js_runtime.resource_dir)
         .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable");
     Ok(command)
 }
@@ -1674,7 +1701,7 @@ fn isolated_provider_command(
     _args: &[String],
     _sandbox: &Path,
     _protected_workspace: &Path,
-    _js_runtime: &Path,
+    _js_runtime: &PackagedJsRuntime,
 ) -> Result<Command, String> {
     Err(INTAKE_ISOLATION_UNAVAILABLE.to_owned())
 }
@@ -1760,7 +1787,7 @@ pub fn run_task(
 
     let workspace = canonical_workspace(&input.path)?;
     let js_runtime = matches!(input.task_type.as_str(), "intake-preview" | "intake-apply")
-        .then(packaged_js_runtime)
+        .then(|| packaged_js_runtime(&app))
         .transpose()?;
     let mut intake_execution = None;
     let execution_directory = match input.task_type.as_str() {
@@ -1875,7 +1902,7 @@ pub fn run_task(
             &execution_directory,
             &workspace,
             js_runtime
-                .as_deref()
+                .as_ref()
                 .expect("isolated intake has a packaged runtime"),
         ) {
             Ok(command) => command,
@@ -2078,9 +2105,9 @@ mod tests {
     use super::{
         build_apply_selection, build_prompt, create_intake_sandbox, finalize_isolated_apply,
         fingerprint_review_inputs, fingerprint_tree, get_task_def, language_context_instruction,
-        packaged_runtime_path_for_executable, verify_review_fingerprints,
+        packaged_runtime_paths_for_executable, verify_review_fingerprints,
         write_intake_selection_file, IntakeConflict, IntakeProposal, IntakeProposalItem,
-        LanguageContext, INTAKE_APPLY_PROMPT, INTAKE_ISOLATION_UNAVAILABLE,
+        LanguageContext, PackagedJsRuntime, INTAKE_APPLY_PROMPT, INTAKE_ISOLATION_UNAVAILABLE,
     };
 
     struct TempDir(PathBuf);
@@ -2177,6 +2204,14 @@ mod tests {
         assert!(status.success());
     }
 
+    fn test_runtime() -> PackagedJsRuntime {
+        PackagedJsRuntime {
+            launcher: PathBuf::from("node"),
+            resource_dir: PathBuf::from("."),
+            runtime: PathBuf::from("node"),
+        }
+    }
+
     #[test]
     fn intake_preview_prompt_keeps_evidence_untrusted_and_canonical_files_read_only() {
         let task = get_task_def("intake-preview").expect("intake preview task");
@@ -2197,20 +2232,31 @@ mod tests {
     }
 
     #[test]
-    fn packaged_runtime_resolves_beside_the_installed_application() {
+    fn packaged_runtime_resolves_launcher_and_resource_binary() {
         let executable = if cfg!(windows) {
             Path::new("C:/Program Files/CareerOps/CareerOps.exe")
         } else {
             Path::new("/Applications/CareerOps.app/Contents/MacOS/CareerOps")
         };
-        let expected = executable.parent().unwrap().join(if cfg!(windows) {
+        let expected_launcher = executable.parent().unwrap().join(if cfg!(windows) {
             "careerops-node.exe"
         } else {
             "careerops-node"
         });
+        let resources = Path::new("/Applications/CareerOps.app/Contents/Resources");
+        let expected_runtime = resources.join("runtime").join(if cfg!(windows) {
+            "careerops-node-runtime.exe"
+        } else {
+            "careerops-node-runtime"
+        });
+        let paths = packaged_runtime_paths_for_executable(executable, resources);
 
-        assert_eq!(packaged_runtime_path_for_executable(executable), expected);
-        assert!(!expected.to_string_lossy().contains("src-tauri/binaries"));
+        assert_eq!(paths.launcher, expected_launcher);
+        assert_eq!(paths.runtime, expected_runtime);
+        assert!(!paths
+            .launcher
+            .to_string_lossy()
+            .contains("src-tauri/binaries"));
     }
 
     #[test]
@@ -2282,7 +2328,7 @@ mod tests {
             &before,
             &reviewed,
             &selected,
-            Path::new("node"),
+            &test_runtime(),
         )
         .expect_err("out-of-allowlist write must fail");
 
@@ -2319,7 +2365,7 @@ mod tests {
             &before,
             &reviewed,
             &selected,
-            Path::new("node"),
+            &test_runtime(),
         )
         .expect_err("partial apply must fail");
 
@@ -2353,7 +2399,7 @@ mod tests {
             &before,
             &reviewed,
             &selected,
-            Path::new("node"),
+            &test_runtime(),
         )
         .expect_err("no-op apply must fail");
 
@@ -2779,7 +2825,7 @@ mod tests {
             &before,
             &reviewed,
             &selected,
-            Path::new("node"),
+            &test_runtime(),
         )
         .expect("verified apply");
 
@@ -2823,7 +2869,7 @@ mod tests {
             &args,
             sandbox.path(),
             workspace.path(),
-            Path::new("node"),
+            &test_runtime(),
         )
         .unwrap();
         let status = command

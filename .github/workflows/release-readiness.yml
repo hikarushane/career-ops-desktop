@@ -49,6 +49,9 @@ jobs:
       - name: Build sidecar before Cargo
         run: npm run build:sidecar
         working-directory: desktop
+      - name: Verify generated runtime package inputs
+        run: node scripts/verify-packaged-runtime.mjs --generated
+        working-directory: desktop
       - name: Cargo check
         run: cargo check --locked
         working-directory: desktop/src-tauri
@@ -77,15 +80,41 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: dashboard/go.mod
+      - name: Install root runtime dependencies
+        run: npm ci --ignore-scripts
       - run: npm ci
         working-directory: desktop
       - run: npm run build:sidecar
         working-directory: desktop
-      - name: Build unsigned macOS DMG
-        run: npx tauri build --ci --bundles dmg --config src-tauri/tauri.unsigned.conf.json
+      - name: Verify generated macOS runtime
+        run: node scripts/verify-packaged-runtime.mjs --generated
         working-directory: desktop
+      - name: Build unsigned macOS app and DMG
+        run: npx tauri build --ci --bundles app,dmg --config src-tauri/tauri.unsigned.conf.json
+        working-directory: desktop
+      - name: Ad-hoc sign app and smoke installed runtime
+        run: |
+          APP=$(find desktop/src-tauri/target/release/bundle/macos -name '*.app' -print -quit)
+          test -n "$APP"
+          for BIN in "$APP"/Contents/MacOS/*; do
+            codesign --force --sign - --options runtime --pagesize 4096 "$BIN"
+          done
+          codesign --force --sign - --options runtime --pagesize 4096 "$APP"
+          node desktop/scripts/verify-packaged-runtime.mjs --app "$APP"
       - name: Verify DMG
-        run: test -s "$(find desktop/src-tauri/target/release/bundle/dmg -name '*.dmg' -print -quit)"
+        run: |
+          DMG=$(find desktop/src-tauri/target/release/bundle/dmg -name '*.dmg' -print -quit)
+          test -s "$DMG"
+          MOUNT=$(mktemp -d)
+          cleanup() {
+            set +e
+            hdiutil detach "$MOUNT" >/dev/null 2>&1
+            rmdir "$MOUNT" 2>/dev/null
+            true
+          }
+          trap cleanup EXIT
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT" >/dev/null
+          node desktop/scripts/verify-packaged-runtime.mjs --app "$MOUNT/CareerOps.app" --allow-unsigned-app
 
   package-windows:
     runs-on: windows-latest
@@ -102,6 +131,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: dashboard/go.mod
+      - name: Install root runtime dependencies
+        run: npm ci --ignore-scripts
       - run: npm ci
         working-directory: desktop
       - name: Build .exe sidecar
@@ -113,6 +144,11 @@ jobs:
           $triple = (rustc -vV | Select-String '^host:').ToString().Split()[1]
           $path = "desktop/src-tauri/binaries/career-data-$triple.exe"
           if (-not (Test-Path $path)) { throw "Missing Windows sidecar: $path" }
+          $launcher = "desktop/src-tauri/binaries/careerops-node-$triple.exe"
+          if (-not (Test-Path $launcher)) { throw "Missing Windows launcher: $launcher" }
+      - name: Verify generated Windows runtime
+        run: node scripts/verify-packaged-runtime.mjs --generated
+        working-directory: desktop
       - name: Build unsigned Windows NSIS package
         run: npx tauri build --ci --bundles nsis --config src-tauri/tauri.unsigned.conf.json
         working-directory: desktop
@@ -121,3 +157,11 @@ jobs:
         run: |
           $installer = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis -Filter *.exe | Select-Object -First 1
           if (-not $installer -or $installer.Length -eq 0) { throw 'NSIS installer missing or empty' }
+          $installDir = Join-Path $env:RUNNER_TEMP 'CareerOps-installed'
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "NSIS install failed with exit code $($process.ExitCode)" }
+          node desktop/scripts/verify-packaged-runtime.mjs --install-dir $installDir
+          $signature = Get-AuthenticodeSignature (Join-Path $installDir 'runtime/careerops-node-runtime.exe')
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Node.js Foundation') {
+            throw "Installed Node.js runtime signature is invalid or has the wrong signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
+          }
