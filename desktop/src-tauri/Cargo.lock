@@ -766,6 +766,7 @@ dependencies = [
  "cap-fs-ext",
  "cap-std",
  "libc",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",

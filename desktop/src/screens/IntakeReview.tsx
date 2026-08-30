@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   applyIntakeProposal,
+  confirmIntakeProposal,
   discardIntakePreview,
   previewIntakeProposal,
   type IntakePreviewSession,
 } from '../lib/runner';
+import type { IntakeExactFileChange } from '../api';
 
 type Props = { root: string; onBack: () => void; onComplete: () => void };
 
@@ -15,6 +17,7 @@ function errorMessage(reason: unknown, fallback: string): string {
 export default function IntakeReview({ root, onBack, onComplete }: Props) {
   const [session, setSession] = useState<IntakePreviewSession | null>(null);
   const [approved, setApproved] = useState<Set<string>>(new Set());
+  const [exactChanges, setExactChanges] = useState<IntakeExactFileChange[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +30,7 @@ export default function IntakeReview({ root, onBack, onComplete }: Props) {
       const next = await previewIntakeProposal(root);
       setSession(next);
       setApproved(new Set());
+      setExactChanges(null);
     } catch (reason) {
       setSession(null);
       setError(errorMessage(reason, 'The intake preview could not be completed. Try again.'));
@@ -64,14 +68,28 @@ export default function IntakeReview({ root, onBack, onComplete }: Props) {
     setApplying(true);
     setError(null);
     try {
-      await applyIntakeProposal(root, session.intakeSessionId, approvedIds);
-      onComplete();
+      const prepared = await applyIntakeProposal(root, session.intakeSessionId, approvedIds);
+      setExactChanges(prepared.exactChanges);
     } catch (reason) {
       setError(errorMessage(reason, 'The selected changes could not be applied. Try again.'));
     } finally {
       setApplying(false);
     }
-  }, [applying, approved, onComplete, root, session]);
+  }, [applying, approved, root, session]);
+
+  const confirmExactChanges = useCallback(async () => {
+    if (!session || !exactChanges || exactChanges.length === 0 || applying) return;
+    setApplying(true);
+    setError(null);
+    try {
+      await confirmIntakeProposal(session.intakeSessionId);
+      onComplete();
+    } catch (reason) {
+      setError(errorMessage(reason, 'The exact changes could not be confirmed. No sources were recorded; review again.'));
+    } finally {
+      setApplying(false);
+    }
+  }, [applying, exactChanges, onComplete, session]);
 
   const skipForNow = useCallback(async () => {
     if (!session || applying) return;
@@ -114,6 +132,44 @@ export default function IntakeReview({ root, onBack, onComplete }: Props) {
         <div className="setup-actions">
           <button className="btn-ghost" onClick={onBack}>Back</button>
           <button className="btn-primary" onClick={loadPreview}>Try again</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (exactChanges) {
+    return (
+      <div className="setup-screen intake-review-screen">
+        <h1>Confirm exact file changes</h1>
+        <p className="setup-subtitle">
+          Review every full-file replacement below. Only these exact proposed bytes will be written.
+        </p>
+
+        <ul className="intake-review-list" aria-label="Exact background file changes">
+          {exactChanges.map((change) => (
+            <li key={change.targetFile} className="intake-proposal-card intake-exact-card">
+              <h2>{change.targetFile}</h2>
+              <div className="intake-exact-columns">
+                <section>
+                  <h3>Current file</h3>
+                  <pre>{change.beforeContent ?? '(file did not exist)'}</pre>
+                </section>
+                <section>
+                  <h3>Proposed file</h3>
+                  <pre>{change.afterContent}</pre>
+                </section>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        {error && <p className="intake-error" role="alert">{error}</p>}
+        <div className="setup-actions">
+          <button className="btn-ghost" onClick={goBack} disabled={applying}>Back</button>
+          <button className="btn-ghost" onClick={skipForNow} disabled={applying}>Skip for now</button>
+          <button className="btn-primary" onClick={confirmExactChanges} disabled={applying}>
+            {applying ? 'Confirming…' : 'Confirm exact file changes'}
+          </button>
         </div>
       </div>
     );
@@ -183,7 +239,7 @@ export default function IntakeReview({ root, onBack, onComplete }: Props) {
           onClick={applySelected}
           disabled={applying || approved.size === 0}
         >
-          {applying ? 'Applying…' : 'Apply selected changes'}
+          {applying ? 'Preparing…' : 'Prepare selected changes'}
         </button>
       </div>
     </div>

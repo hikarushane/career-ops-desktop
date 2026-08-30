@@ -1,4 +1,5 @@
-use std::ffi::OsString;
+use std::collections::HashSet;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
@@ -33,7 +34,7 @@ pub struct WorkspaceInitResult {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StageIntakeFile {
     pub source_path: String,
     pub category: String,
@@ -99,6 +100,96 @@ fn open_or_create_directory(parent: &Dir, name: &str) -> Result<Dir, String> {
 fn open_category_directory_in_workspace(workspace: &Dir, category: &str) -> Result<Dir, String> {
     let documents = open_or_create_directory(workspace, "documents")?;
     open_or_create_directory(&documents, category)
+}
+
+struct HeldWorkspace {
+    parent: Dir,
+    name: OsString,
+    root: Dir,
+}
+
+impl HeldWorkspace {
+    fn open(path: &Path) -> Result<Self, String> {
+        let name = path
+            .file_name()
+            .ok_or_else(|| "workspace path must name a directory".to_owned())?
+            .to_os_string();
+        let parent_path = path
+            .parent()
+            .ok_or_else(|| "workspace path must have a parent directory".to_owned())?;
+        let canonical_parent = fs::canonicalize(parent_path)
+            .map_err(|error| format!("cannot resolve workspace parent directory: {error}"))?;
+        let parent = Dir::open_ambient_dir(&canonical_parent, ambient_authority())
+            .map_err(|error| format!("cannot open workspace parent directory: {error}"))?;
+        let root = parent.open_dir_nofollow(&name).map_err(|error| {
+            format!("cannot open workspace without following symbolic links: {error}")
+        })?;
+        Ok(Self { parent, name, root })
+    }
+
+    fn validate_entry(&self) -> Result<(), String> {
+        let current = self
+            .parent
+            .open_dir_nofollow(&self.name)
+            .map_err(|error| format!("CareerOps workspace changed while it was in use: {error}"))?;
+        if !same_cap_directory(&self.root, &current)? {
+            return Err("CareerOps workspace changed while it was in use".to_owned());
+        }
+        Ok(())
+    }
+}
+
+fn regular_file_at(directory: &Dir, filename: &str) -> bool {
+    directory
+        .symlink_metadata(filename)
+        .is_ok_and(|metadata| metadata.is_file() && !metadata.file_type().is_symlink())
+}
+
+fn held_workspace_is_careerops(workspace: &Dir) -> bool {
+    let Ok(modes) = workspace.open_dir_nofollow("modes") else {
+        return false;
+    };
+    let Ok(config) = workspace.open_dir_nofollow("config") else {
+        return false;
+    };
+    let Ok(templates) = workspace.open_dir_nofollow("templates") else {
+        return false;
+    };
+    regular_file_at(workspace, "doctor.mjs")
+        && regular_file_at(&modes, "_shared.md")
+        && regular_file_at(&modes, "_profile.template.md")
+        && regular_file_at(&config, "profile.example.yml")
+        && regular_file_at(&templates, "portals.example.yml")
+}
+
+#[cfg(unix)]
+fn same_cap_directory(left: &Dir, right: &Dir) -> Result<bool, String> {
+    use cap_std::fs::MetadataExt;
+    let left = left
+        .dir_metadata()
+        .map_err(|error| format!("cannot inspect held workspace directory: {error}"))?;
+    let right = right
+        .dir_metadata()
+        .map_err(|error| format!("cannot inspect current workspace directory: {error}"))?;
+    Ok(left.dev() == right.dev() && left.ino() == right.ino())
+}
+
+#[cfg(windows)]
+fn same_cap_directory(left: &Dir, right: &Dir) -> Result<bool, String> {
+    use cap_std::fs::MetadataExt;
+    let left = left
+        .dir_metadata()
+        .map_err(|error| format!("cannot inspect held workspace directory: {error}"))?;
+    let right = right
+        .dir_metadata()
+        .map_err(|error| format!("cannot inspect current workspace directory: {error}"))?;
+    Ok(left.volume_serial_number() == right.volume_serial_number()
+        && left.file_index() == right.file_index())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn same_cap_directory(_left: &Dir, _right: &Dir) -> Result<bool, String> {
+    Err("workspace identity checks are unavailable on this platform".to_owned())
 }
 
 #[cfg(test)]
@@ -240,15 +331,24 @@ fn stage_file_in_category(
     }
 }
 
-pub fn stage_intake_files(
+fn stage_intake_files_with_hook<F>(
     workspace: &Path,
     files: &[StageIntakeFile],
-) -> Result<Vec<StagedIntakeFile>, String> {
-    let workspace_directory = Dir::open_ambient_dir(workspace, ambient_authority())
-        .map_err(|error| format!("cannot open workspace directory: {error}"))?;
+    before_copy: F,
+) -> Result<Vec<StagedIntakeFile>, String>
+where
+    F: FnOnce(),
+{
+    let held = HeldWorkspace::open(workspace)?;
+    if !held_workspace_is_careerops(&held.root) {
+        return Err("target is not a valid CareerOps workspace".to_owned());
+    }
+    before_copy();
+    held.validate_entry()?;
     let mut staged = Vec::with_capacity(files.len());
 
     for file in files {
+        held.validate_entry()?;
         let category = intake_category_folder(&file.category)?;
         let source = Path::new(&file.source_path);
         if !fs::metadata(source)
@@ -258,8 +358,7 @@ pub fn stage_intake_files(
             return Err(format!("intake source is not a file: {}", source.display()));
         }
 
-        let category_directory =
-            open_category_directory_in_workspace(&workspace_directory, category)?;
+        let category_directory = open_category_directory_in_workspace(&held.root, category)?;
         let destination_directory = workspace.join("documents").join(category);
         staged.push(stage_file_in_category(
             &file.source_path,
@@ -270,7 +369,15 @@ pub fn stage_intake_files(
         )?);
     }
 
+    held.validate_entry()?;
     Ok(staged)
+}
+
+pub fn stage_intake_files(
+    workspace: &Path,
+    files: &[StageIntakeFile],
+) -> Result<Vec<StagedIntakeFile>, String> {
+    stage_intake_files_with_hook(workspace, files, || {})
 }
 
 #[tauri::command]
@@ -378,25 +485,180 @@ pub fn inspect_workspace_path(workspace: &Path) -> Result<WorkspaceKind, String>
     Ok(kind)
 }
 
-fn copy_directory_contents(source: &Path, target: &Path) -> Result<(), String> {
-    for entry in source
+#[derive(Clone)]
+enum BootstrapEvent {
+    BeforeEntry(PathBuf),
+    BeforeMissingRootInstall,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct EntryIdentity(u64, u64);
+
+#[cfg(unix)]
+fn entry_identity(metadata: &cap_std::fs::Metadata) -> Option<EntryIdentity> {
+    use cap_std::fs::MetadataExt;
+    Some(EntryIdentity(metadata.dev(), metadata.ino()))
+}
+
+#[cfg(windows)]
+fn entry_identity(metadata: &cap_std::fs::Metadata) -> Option<EntryIdentity> {
+    use cap_std::fs::MetadataExt;
+    Some(EntryIdentity(
+        u64::from(metadata.volume_serial_number()?),
+        metadata.file_index()?,
+    ))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn entry_identity(_metadata: &cap_std::fs::Metadata) -> Option<EntryIdentity> {
+    None
+}
+
+enum CreatedEntryKind {
+    File,
+    Directory,
+}
+
+struct CreatedEntry {
+    parent: Dir,
+    name: OsString,
+    kind: CreatedEntryKind,
+    identity: Option<EntryIdentity>,
+}
+
+fn created_entry(
+    parent: &Dir,
+    name: &OsStr,
+    kind: CreatedEntryKind,
+    metadata: &cap_std::fs::Metadata,
+) -> Result<CreatedEntry, String> {
+    Ok(CreatedEntry {
+        parent: parent
+            .try_clone()
+            .map_err(|error| format!("cannot retain workspace directory capability: {error}"))?,
+        name: name.to_os_string(),
+        kind,
+        identity: entry_identity(metadata),
+    })
+}
+
+fn rollback_created_entries(entries: &[CreatedEntry]) -> Vec<String> {
+    let mut failures = Vec::new();
+    for entry in entries.iter().rev() {
+        let current = match entry.parent.symlink_metadata(&entry.name) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                failures.push(format!("cannot inspect rollback entry: {error}"));
+                continue;
+            }
+        };
+        if entry.identity.is_none() || entry_identity(&current) != entry.identity {
+            failures.push(format!(
+                "workspace entry {} was replaced during rollback and was preserved",
+                Path::new(&entry.name).display()
+            ));
+            continue;
+        }
+        let result = match entry.kind {
+            CreatedEntryKind::File => entry.parent.remove_file(&entry.name),
+            CreatedEntryKind::Directory => entry.parent.remove_dir(&entry.name),
+        };
+        if let Err(error) = result {
+            failures.push(format!(
+                "cannot roll back workspace entry {}: {error}",
+                Path::new(&entry.name).display()
+            ));
+        }
+    }
+    failures
+}
+
+fn copy_seed_contents<F>(
+    source: &Path,
+    target: &Dir,
+    relative_parent: &Path,
+    created: &mut Vec<CreatedEntry>,
+    owned_directories: &mut HashSet<PathBuf>,
+    before_entry: &mut F,
+) -> Result<(), String>
+where
+    F: FnMut(BootstrapEvent) -> Result<(), String>,
+{
+    let mut entries = source
         .read_dir()
         .map_err(|error| format!("cannot read workspace seed: {error}"))?
-    {
-        let entry = entry.map_err(|error| format!("cannot read workspace seed entry: {error}"))?;
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("cannot read workspace seed entry: {error}"))?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let name = entry.file_name();
+        let relative = relative_parent.join(&name);
+        before_entry(BootstrapEvent::BeforeEntry(relative.clone()))?;
         let source_path = entry.path();
-        let target_path = target.join(entry.file_name());
         let file_type = entry
             .file_type()
             .map_err(|error| format!("cannot inspect workspace seed entry: {error}"))?;
-
         if file_type.is_dir() {
-            fs::create_dir_all(&target_path)
-                .map_err(|error| format!("cannot create workspace directory: {error}"))?;
-            copy_directory_contents(&source_path, &target_path)?;
+            target.create_dir(&name).map_err(|error| {
+                format!(
+                    "cannot exclusively create workspace directory {}: {error}",
+                    relative.display()
+                )
+            })?;
+            let directory = target.open_dir_nofollow(&name).map_err(|error| {
+                format!(
+                    "cannot open created workspace directory {}: {error}",
+                    relative.display()
+                )
+            })?;
+            created.push(created_entry(
+                target,
+                &name,
+                CreatedEntryKind::Directory,
+                &directory.dir_metadata().map_err(|error| {
+                    format!("cannot inspect created workspace directory: {error}")
+                })?,
+            )?);
+            owned_directories.insert(relative.clone());
+            copy_seed_contents(
+                &source_path,
+                &directory,
+                &relative,
+                created,
+                owned_directories,
+                before_entry,
+            )?;
         } else if file_type.is_file() {
-            fs::copy(&source_path, &target_path)
-                .map_err(|error| format!("cannot copy workspace seed file: {error}"))?;
+            let mut source_file = fs::File::open(&source_path)
+                .map_err(|error| format!("cannot read workspace seed file: {error}"))?;
+            let mut options = CapOpenOptions::new();
+            options
+                .write(true)
+                .create_new(true)
+                .follow(FollowSymlinks::No);
+            let mut destination = target.open_with(&name, &options).map_err(|error| {
+                format!(
+                    "cannot exclusively create workspace file {}: {error}",
+                    relative.display()
+                )
+            })?;
+            created.push(created_entry(
+                target,
+                &name,
+                CreatedEntryKind::File,
+                &destination
+                    .metadata()
+                    .map_err(|error| format!("cannot inspect created workspace file: {error}"))?,
+            )?);
+            io::copy(&mut source_file, &mut destination)
+                .and_then(|_| destination.sync_all())
+                .map_err(|error| {
+                    format!(
+                        "cannot copy workspace seed file {}: {error}",
+                        relative.display()
+                    )
+                })?;
         } else {
             return Err(format!(
                 "workspace seed contains an unsupported entry: {}",
@@ -404,21 +666,254 @@ fn copy_directory_contents(source: &Path, target: &Path) -> Result<(), String> {
             ));
         }
     }
-
     Ok(())
 }
 
-pub fn initialize_workspace_from_seed(
+fn ensure_user_directory<F>(
+    root: &Dir,
+    relative: &Path,
+    created: &mut Vec<CreatedEntry>,
+    owned_directories: &mut HashSet<PathBuf>,
+    before_entry: &mut F,
+) -> Result<(), String>
+where
+    F: FnMut(BootstrapEvent) -> Result<(), String>,
+{
+    let mut directory = root
+        .try_clone()
+        .map_err(|error| format!("cannot retain workspace directory capability: {error}"))?;
+    let mut current = PathBuf::new();
+    for component in relative.components() {
+        let Component::Normal(name) = component else {
+            return Err("workspace user directory is not relative".to_owned());
+        };
+        current.push(name);
+        match directory.symlink_metadata(name) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                    return Err(format!(
+                        "workspace directory {} was replaced",
+                        current.display()
+                    ));
+                }
+                if !owned_directories.contains(&current) {
+                    return Err(format!(
+                        "workspace directory {} appeared during initialization",
+                        current.display()
+                    ));
+                }
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                before_entry(BootstrapEvent::BeforeEntry(current.clone()))?;
+                directory.create_dir(name).map_err(|error| {
+                    format!(
+                        "cannot exclusively create workspace directory {}: {error}",
+                        current.display()
+                    )
+                })?;
+                let child = directory.open_dir_nofollow(name).map_err(|error| {
+                    format!(
+                        "cannot open created workspace directory {}: {error}",
+                        current.display()
+                    )
+                })?;
+                created.push(created_entry(
+                    &directory,
+                    name,
+                    CreatedEntryKind::Directory,
+                    &child.dir_metadata().map_err(|error| {
+                        format!("cannot inspect created workspace directory: {error}")
+                    })?,
+                )?);
+                owned_directories.insert(current.clone());
+            }
+            Err(error) => {
+                return Err(format!(
+                    "cannot inspect workspace directory {}: {error}",
+                    current.display()
+                ));
+            }
+        }
+        directory = directory.open_dir_nofollow(name).map_err(|error| {
+            format!(
+                "cannot open workspace directory {} without following links: {error}",
+                current.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn populate_empty_root<F>(
+    root: &Dir,
+    seed: &Path,
+    before_entry: &mut F,
+) -> Result<Vec<CreatedEntry>, String>
+where
+    F: FnMut(BootstrapEvent) -> Result<(), String>,
+{
+    let mut created = Vec::new();
+    let mut owned_directories = HashSet::new();
+    let result = copy_seed_contents(
+        seed,
+        root,
+        Path::new(""),
+        &mut created,
+        &mut owned_directories,
+        before_entry,
+    )
+    .and_then(|()| {
+        for directory in USER_DIRECTORIES {
+            ensure_user_directory(
+                root,
+                Path::new(directory),
+                &mut created,
+                &mut owned_directories,
+                before_entry,
+            )?;
+        }
+        Ok(())
+    });
+    if let Err(error) = result {
+        let rollback = rollback_created_entries(&created);
+        return Err(if rollback.is_empty() {
+            error
+        } else {
+            format!("{error}; rollback incomplete: {}", rollback.join("; "))
+        });
+    }
+    Ok(created)
+}
+
+struct WorkspaceLocation {
+    parent: Dir,
+    name: OsString,
+}
+
+impl WorkspaceLocation {
+    fn open(path: &Path) -> Result<Self, String> {
+        let name = path
+            .file_name()
+            .ok_or_else(|| "workspace path must name a directory".to_owned())?
+            .to_os_string();
+        let parent_path = path
+            .parent()
+            .ok_or_else(|| "workspace path must have a parent directory".to_owned())?;
+        let canonical_parent = fs::canonicalize(parent_path)
+            .map_err(|error| format!("cannot resolve workspace parent directory: {error}"))?;
+        let parent = Dir::open_ambient_dir(canonical_parent, ambient_authority())
+            .map_err(|error| format!("cannot open workspace parent directory: {error}"))?;
+        Ok(Self { parent, name })
+    }
+
+    fn inspect(&self) -> Result<(WorkspaceKind, Option<Dir>), String> {
+        match self.parent.symlink_metadata(&self.name) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+                Ok((WorkspaceKind::NonemptyInvalid, None))
+            }
+            Ok(_) => {
+                let root = self.parent.open_dir_nofollow(&self.name).map_err(|error| {
+                    format!("cannot open workspace without following symbolic links: {error}")
+                })?;
+                let empty = root
+                    .entries()
+                    .map_err(|error| format!("cannot inspect workspace: {error}"))?
+                    .next()
+                    .is_none();
+                let kind = if empty {
+                    WorkspaceKind::Empty
+                } else if held_workspace_is_careerops(&root) {
+                    WorkspaceKind::Careerops
+                } else {
+                    WorkspaceKind::NonemptyInvalid
+                };
+                Ok((kind, Some(root)))
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                Ok((WorkspaceKind::Missing, None))
+            }
+            Err(error) => Err(format!("cannot inspect workspace: {error}")),
+        }
+    }
+}
+
+static NEXT_BOOTSTRAP_STAGE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn create_staging_root(parent: &Dir) -> Result<(OsString, Dir), String> {
+    loop {
+        let name = OsString::from(format!(
+            ".careerops-workspace-stage-{}-{}",
+            std::process::id(),
+            NEXT_BOOTSTRAP_STAGE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        match parent.create_dir(&name) {
+            Ok(()) => {
+                let directory = parent
+                    .open_dir_nofollow(&name)
+                    .map_err(|error| format!("cannot open workspace staging directory: {error}"))?;
+                return Ok((name, directory));
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(format!(
+                    "cannot create workspace staging directory: {error}"
+                ))
+            }
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn install_staging_root(parent: &Dir, staging: &OsStr, target: &OsStr) -> io::Result<()> {
+    rustix::fs::renameat_with(
+        parent,
+        staging,
+        parent,
+        target,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(Into::into)
+}
+
+#[cfg(windows)]
+fn install_staging_root(parent: &Dir, staging: &OsStr, target: &OsStr) -> io::Result<()> {
+    parent.rename(staging, parent, target)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+fn install_staging_root(_parent: &Dir, _staging: &OsStr, _target: &OsStr) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "atomic no-replace workspace installation is unavailable",
+    ))
+}
+
+fn initialize_workspace_from_seed_with_hook<F>(
     workspace: &Path,
     seed: &Path,
-) -> Result<WorkspaceInitResult, String> {
+    mut hook: F,
+) -> Result<WorkspaceInitResult, String>
+where
+    F: FnMut(BootstrapEvent) -> Result<(), String>,
+{
     let path = workspace.to_string_lossy().into_owned();
-    match inspect_workspace_path(workspace)? {
+    if !CAREEROPS_SYSTEM_INVARIANTS
+        .iter()
+        .all(|relative| seed.join(relative).is_file())
+    {
+        return Err(format!(
+            "packaged workspace seed is invalid: {}",
+            seed.display()
+        ));
+    }
+    let location = WorkspaceLocation::open(workspace)?;
+    let (kind, root) = location.inspect()?;
+    match kind {
         WorkspaceKind::Careerops => {
             return Ok(WorkspaceInitResult {
                 path,
                 created: false,
-            });
+            })
         }
         WorkspaceKind::NonemptyInvalid => {
             return Err(format!(
@@ -426,29 +921,90 @@ pub fn initialize_workspace_from_seed(
                 workspace.display()
             ));
         }
-        WorkspaceKind::Missing | WorkspaceKind::Empty => {}
+        WorkspaceKind::Empty => {
+            let held = HeldWorkspace {
+                parent: location
+                    .parent
+                    .try_clone()
+                    .map_err(|error| format!("cannot retain workspace parent: {error}"))?,
+                name: location.name.clone(),
+                root: root.expect("empty workspace has an open directory"),
+            };
+            let mut guarded_hook = |event| {
+                hook(event)?;
+                held.validate_entry()
+            };
+            let _created = populate_empty_root(&held.root, seed, &mut guarded_hook)?;
+        }
+        WorkspaceKind::Missing => {
+            let (staging_name, staging_root) = create_staging_root(&location.parent)?;
+            let staging_metadata = staging_root
+                .dir_metadata()
+                .map_err(|error| format!("cannot inspect workspace staging directory: {error}"))?;
+            let staging_entry = created_entry(
+                &location.parent,
+                &staging_name,
+                CreatedEntryKind::Directory,
+                &staging_metadata,
+            )?;
+            let staged_entries = match populate_empty_root(&staging_root, seed, &mut hook) {
+                Ok(entries) => entries,
+                Err(error) => {
+                    let rollback = rollback_created_entries(&[staging_entry]);
+                    return Err(if rollback.is_empty() {
+                        error
+                    } else {
+                        format!(
+                            "{error}; staging cleanup incomplete: {}",
+                            rollback.join("; ")
+                        )
+                    });
+                }
+            };
+            if let Err(error) = hook(BootstrapEvent::BeforeMissingRootInstall) {
+                let _ = rollback_created_entries(&staged_entries);
+                let _ = rollback_created_entries(&[staging_entry]);
+                return Err(error);
+            }
+            match location.parent.symlink_metadata(&location.name) {
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Ok(_) => {
+                    let _ = rollback_created_entries(&staged_entries);
+                    let _ = rollback_created_entries(&[staging_entry]);
+                    return Err("workspace target changed before atomic install".to_owned());
+                }
+                Err(error) => {
+                    let _ = rollback_created_entries(&staged_entries);
+                    let _ = rollback_created_entries(&[staging_entry]);
+                    return Err(format!(
+                        "cannot inspect workspace before atomic install: {error}"
+                    ));
+                }
+            }
+            if let Err(error) =
+                install_staging_root(&location.parent, &staging_name, &location.name)
+            {
+                let _ = rollback_created_entries(&staged_entries);
+                let _ = rollback_created_entries(&[staging_entry]);
+                return Err(format!("cannot atomically install workspace: {error}"));
+            }
+        }
     }
-
-    if !CAREEROPS_SYSTEM_INVARIANTS
-        .iter()
-        .all(|path| seed.join(path).is_file())
-    {
-        return Err(format!(
-            "packaged workspace seed is invalid: {}",
-            seed.display()
-        ));
-    }
-
-    fs::create_dir_all(workspace).map_err(|error| format!("cannot create workspace: {error}"))?;
-    copy_directory_contents(seed, workspace)?;
-    for directory in USER_DIRECTORIES {
-        fs::create_dir_all(workspace.join(directory))
-            .map_err(|error| format!("cannot create workspace directory: {error}"))?;
-    }
-
     Ok(WorkspaceInitResult {
         path,
         created: true,
+    })
+}
+
+pub fn initialize_workspace_from_seed(
+    workspace: &Path,
+    seed: &Path,
+) -> Result<WorkspaceInitResult, String> {
+    initialize_workspace_from_seed_with_hook(workspace, seed, |event| {
+        if let BootstrapEvent::BeforeEntry(relative) = event {
+            let _ = relative.as_os_str();
+        }
+        Ok(())
     })
 }
 
@@ -951,6 +1507,148 @@ mod tests {
     }
 
     #[test]
+    fn a_mid_copy_failure_rolls_back_an_empty_root_and_retry_is_clean() {
+        let workspace = TempDir::new("empty-init-failure");
+        let seed = seed();
+
+        let error =
+            initialize_workspace_from_seed_with_hook(workspace.path(), seed.path(), |event| {
+                match event {
+                    BootstrapEvent::BeforeEntry(relative)
+                        if relative == Path::new("modes/_shared.md") =>
+                    {
+                        Err("injected copy failure".to_owned())
+                    }
+                    _ => Ok(()),
+                }
+            })
+            .expect_err("injected copy failure must abort initialization");
+
+        assert!(error.contains("injected copy failure"));
+        assert_eq!(fs::read_dir(workspace.path()).unwrap().count(), 0);
+
+        let result = initialize_workspace_from_seed(workspace.path(), seed.path()).unwrap();
+        assert!(result.created);
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("modes/_shared.md")).unwrap(),
+            "seed mode\n"
+        );
+    }
+
+    #[test]
+    fn raced_entries_are_preserved_and_bootstrap_rolls_back_its_own_files() {
+        for raced_kind in ["file", "directory"] {
+            let workspace = TempDir::new(&format!("empty-init-raced-{raced_kind}"));
+            let seed = seed();
+            let error = initialize_workspace_from_seed_with_hook(
+                workspace.path(),
+                seed.path(),
+                |event| {
+                    if matches!(event, BootstrapEvent::BeforeEntry(ref relative) if relative == Path::new("doctor.mjs")) {
+                        let raced = workspace.path().join("doctor.mjs");
+                        if raced_kind == "file" {
+                            fs::write(raced, "raced user bytes\n").unwrap();
+                        } else {
+                            fs::create_dir(raced).unwrap();
+                        }
+                    }
+                    Ok(())
+                },
+            )
+            .expect_err("raced destination must abort initialization");
+
+            assert!(error.contains("doctor.mjs") || error.contains("workspace"));
+            if raced_kind == "file" {
+                assert_eq!(
+                    fs::read_to_string(workspace.path().join("doctor.mjs")).unwrap(),
+                    "raced user bytes\n"
+                );
+            } else {
+                assert!(workspace.path().join("doctor.mjs").is_dir());
+            }
+            assert!(!workspace.path().join("modes/_shared.md").exists());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_raced_symlink_is_preserved_without_touching_its_target() {
+        let workspace = TempDir::new("empty-init-raced-link");
+        let external = TempDir::new("empty-init-raced-link-external");
+        let external_doctor = external.path().join("doctor.mjs");
+        fs::write(&external_doctor, "external bytes\n").unwrap();
+        let seed = seed();
+
+        let error = initialize_workspace_from_seed_with_hook(
+            workspace.path(),
+            seed.path(),
+            |event| {
+                if matches!(event, BootstrapEvent::BeforeEntry(ref relative) if relative == Path::new("doctor.mjs")) {
+                    std::os::unix::fs::symlink(&external_doctor, workspace.path().join("doctor.mjs"))
+                        .unwrap();
+                }
+                Ok(())
+            },
+        )
+        .expect_err("raced link must abort initialization");
+
+        assert!(error.contains("doctor.mjs") || error.contains("workspace"));
+        assert_eq!(
+            fs::read_to_string(external_doctor).unwrap(),
+            "external bytes\n"
+        );
+        assert!(fs::symlink_metadata(workspace.path().join("doctor.mjs"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn missing_root_install_never_replaces_a_raced_target() {
+        for raced_kind in ["file", "directory", "symlink"] {
+            let parent = TempDir::new(&format!("missing-install-raced-{raced_kind}"));
+            let workspace = parent.path().join("CareerOps");
+            let external = TempDir::new(&format!("missing-install-raced-{raced_kind}-external"));
+            fs::write(external.path().join("sentinel"), "external\n").unwrap();
+            let seed = seed();
+
+            let error =
+                initialize_workspace_from_seed_with_hook(&workspace, seed.path(), |event| {
+                    if matches!(event, BootstrapEvent::BeforeMissingRootInstall) {
+                        match raced_kind {
+                            "file" => fs::write(&workspace, "raced root\n").unwrap(),
+                            "directory" => fs::create_dir(&workspace).unwrap(),
+                            "symlink" => {
+                                std::os::unix::fs::symlink(external.path(), &workspace).unwrap()
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    Ok(())
+                })
+                .expect_err("no-replace install must reject a raced root");
+
+            assert!(
+                error.contains("changed") || error.contains("install") || error.contains("exists")
+            );
+            assert_eq!(
+                fs::read_to_string(external.path().join("sentinel")).unwrap(),
+                "external\n"
+            );
+            match raced_kind {
+                "file" => assert_eq!(fs::read_to_string(&workspace).unwrap(), "raced root\n"),
+                "directory" => assert_eq!(fs::read_dir(&workspace).unwrap().count(), 0),
+                "symlink" => assert!(fs::symlink_metadata(&workspace)
+                    .unwrap()
+                    .file_type()
+                    .is_symlink()),
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
     fn prepares_missing_onboarding_scaffolds_without_overwriting_user_files() {
         let workspace = TempDir::new("prepare-onboarding");
         mark_as_careerops(workspace.path(), "export {};\n");
@@ -1156,6 +1854,7 @@ mod tests {
     #[test]
     fn stages_a_copy_without_changing_the_source() {
         let workspace = TempDir::new("stage-copy");
+        mark_as_careerops(workspace.path(), "export {};\n");
         let source_dir = TempDir::new("stage-source");
         let source = source_dir.path().join("resume.pdf");
         fs::write(&source, "original CV").unwrap();
@@ -1173,6 +1872,7 @@ mod tests {
     #[test]
     fn rejects_a_category_that_would_escape_documents() {
         let workspace = TempDir::new("stage-traversal");
+        mark_as_careerops(workspace.path(), "export {};\n");
         let source_dir = TempDir::new("stage-traversal-source");
         let source = source_dir.path().join("resume.pdf");
         fs::write(&source, "original CV").unwrap();
@@ -1185,8 +1885,51 @@ mod tests {
     }
 
     #[test]
+    fn refuses_to_stage_into_an_arbitrary_directory() {
+        let workspace = TempDir::new("stage-invalid-root");
+        let source_dir = TempDir::new("stage-invalid-root-source");
+        let source = source_dir.path().join("resume.pdf");
+        fs::write(&source, "original CV").unwrap();
+
+        let error = stage_intake_files(workspace.path(), &[stage_file(&source, "cv")])
+            .expect_err("arbitrary directory must not become an intake workspace");
+
+        assert!(error.contains("CareerOps workspace"));
+        assert!(!workspace.path().join("documents").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn staging_rejects_a_workspace_replacement_before_copy() {
+        let parent = TempDir::new("stage-replaced-root-parent");
+        let workspace = parent.path().join("CareerOps");
+        fs::create_dir(&workspace).unwrap();
+        mark_as_careerops(&workspace, "export {};\n");
+        let held = parent.path().join("CareerOps-held");
+        let source_dir = TempDir::new("stage-replaced-root-source");
+        let source = source_dir.path().join("resume.pdf");
+        fs::write(&source, "original CV").unwrap();
+
+        let error = stage_intake_files_with_hook(&workspace, &[stage_file(&source, "cv")], || {
+            fs::rename(&workspace, &held).unwrap();
+            fs::create_dir(&workspace).unwrap();
+            fs::write(workspace.join("sentinel"), "replacement\n").unwrap();
+        })
+        .expect_err("replaced workspace path must fail closed");
+
+        assert!(error.contains("changed") || error.contains("CareerOps workspace"));
+        assert_eq!(
+            fs::read_to_string(workspace.join("sentinel")).unwrap(),
+            "replacement\n"
+        );
+        assert!(!workspace.join("documents/cv/resume.pdf").exists());
+        assert!(!held.join("documents/cv/resume.pdf").exists());
+    }
+
+    #[test]
     fn skips_an_existing_file_with_identical_content() {
         let workspace = TempDir::new("stage-duplicate");
+        mark_as_careerops(workspace.path(), "export {};\n");
         let first_source_dir = TempDir::new("stage-duplicate-first");
         let second_source_dir = TempDir::new("stage-duplicate-second");
         let first = first_source_dir.path().join("master.pdf");
@@ -1209,6 +1952,7 @@ mod tests {
     #[test]
     fn suffixes_same_named_files_with_different_content_deterministically() {
         let workspace = TempDir::new("stage-collision");
+        mark_as_careerops(workspace.path(), "export {};\n");
         let first_source_dir = TempDir::new("stage-collision-first");
         let second_source_dir = TempDir::new("stage-collision-second");
         let third_source_dir = TempDir::new("stage-collision-third");

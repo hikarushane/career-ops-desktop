@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IntakeProposal } from '../api';
-import { applyIntakeProposal, discardIntakePreview, previewIntakeProposal } from '../lib/runner';
+import type { IntakeExactFileChange, IntakeProposal } from '../api';
+import {
+  applyIntakeProposal, confirmIntakeProposal, discardIntakePreview, previewIntakeProposal,
+} from '../lib/runner';
 import IntakeReview from './IntakeReview';
 
 const hooks = vi.hoisted(() => {
@@ -38,11 +40,13 @@ vi.mock('react', async (importOriginal) => {
 });
 vi.mock('../lib/runner', () => ({
   applyIntakeProposal: vi.fn(),
+  confirmIntakeProposal: vi.fn(),
   discardIntakePreview: vi.fn(),
   previewIntakeProposal: vi.fn(),
 }));
 
 const mockedApply = vi.mocked(applyIntakeProposal);
+const mockedConfirm = vi.mocked(confirmIntakeProposal);
 const mockedDiscard = vi.mocked(discardIntakePreview);
 const mockedPreview = vi.mocked(previewIntakeProposal);
 
@@ -74,7 +78,12 @@ beforeEach(() => {
   vi.resetAllMocks();
   hooks.reset();
   mockedPreview.mockResolvedValue({ proposal, intakeSessionId: 'intake-1' });
-  mockedApply.mockResolvedValue({ applied: true });
+  mockedApply.mockResolvedValue({ applied: false, exactChanges: [{
+    targetFile: 'cv.md',
+    beforeContent: '# CV\n\nEngineer\n',
+    afterContent: '# CV\n\nSenior Engineer\nFABRICATED EXTRA\n',
+  }] });
+  mockedConfirm.mockResolvedValue({ applied: true, committedSourcePaths: ['work/review.txt'] });
   mockedDiscard.mockResolvedValue(undefined);
 });
 
@@ -90,8 +99,19 @@ type ElementNode = {
   };
 };
 
-function render(approved: string[] = [], onComplete = vi.fn()) {
-  hooks.reset([{ proposal, intakeSessionId: 'intake-1' }, new Set(approved), false, false, null]);
+function render(
+  approved: string[] = [],
+  onComplete = vi.fn(),
+  exactChanges: IntakeExactFileChange[] | null = null,
+) {
+  hooks.reset([
+    { proposal, intakeSessionId: 'intake-1' },
+    new Set(approved),
+    exactChanges,
+    false,
+    false,
+    null,
+  ]);
   hooks.beginRender();
   return {
     tree: IntakeReview({ root: '/workspace', onBack: vi.fn(), onComplete }) as ElementNode,
@@ -137,27 +157,48 @@ describe('IntakeReview', () => {
     expect(text).toContain('Proposed value');
     expect(text).toContain('Senior Engineer');
     expect(button(tree, 'Approve all')).toBeDefined();
-    expect(button(tree, 'Apply selected changes')).toBeDefined();
+    expect(button(tree, 'Prepare selected changes')).toBeDefined();
     expect(button(tree, 'Back')).toBeDefined();
     expect(button(tree, 'Skip for now')).toBeDefined();
   });
 
   it('keeps apply disabled and inert when zero items are approved', async () => {
     const { tree } = render();
-    const apply = button(tree, 'Apply selected changes');
+    const apply = button(tree, 'Prepare selected changes');
 
     expect(apply.props?.disabled).toBe(true);
     await apply.props?.onClick?.();
     expect(mockedApply).not.toHaveBeenCalled();
   });
 
-  it('supplies only checked proposal IDs and completes after apply', async () => {
+  it('prepares only checked proposal IDs without completing', async () => {
     const onComplete = vi.fn();
     const { tree } = render(['research-1'], onComplete);
 
-    await button(tree, 'Apply selected changes').props?.onClick?.();
+    await button(tree, 'Prepare selected changes').props?.onClick?.();
 
     expect(mockedApply).toHaveBeenCalledWith('/workspace', 'intake-1', ['research-1']);
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(mockedConfirm).not.toHaveBeenCalled();
+  });
+
+  it('shows exact current and proposed file bytes before a separate confirmation', async () => {
+    const onComplete = vi.fn();
+    const exactChanges: IntakeExactFileChange[] = [{
+      targetFile: 'cv.md',
+      beforeContent: '# CV\n\nEngineer\n',
+      afterContent: '# CV\n\nSenior Engineer\nFABRICATED EXTRA\n',
+    }];
+    const { tree } = render(['work-1'], onComplete, exactChanges);
+    const text = textContent(tree);
+
+    expect(text).toContain('Confirm exact file changes');
+    expect(text).toContain('Current file');
+    expect(text).toContain('Proposed file');
+    expect(text).toContain('FABRICATED EXTRA');
+    await button(tree, 'Confirm exact file changes').props?.onClick?.();
+
+    expect(mockedConfirm).toHaveBeenCalledWith('intake-1');
     expect(onComplete).toHaveBeenCalledOnce();
   });
 

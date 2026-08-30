@@ -12,6 +12,13 @@ export async function loadRoot(): Promise<string | null> {
   return loadWorkspacePath();
 }
 
+export async function loadActiveRoot(): Promise<string | null> {
+  const path = await loadRoot();
+  if (!path) return null;
+  const inspection = await inspectWorkspace(path);
+  return inspection.kind === 'careerops' ? inspection.path : null;
+}
+
 export async function saveRoot(path: string): Promise<void> {
   await saveWorkspacePath(path);
 }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as runner from './runner';
-import type { IntakeProposal, TaskFinishedEvent, TaskOutputEvent } from '../api';
+import type { IntakeExactFileChange, IntakeProposal, TaskFinishedEvent, TaskOutputEvent } from '../api';
 
 const mocks = vi.hoisted(() => {
   const listeners = new Map<string, (event: { payload: unknown }) => void>();
@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => {
     invokeCancelTask: vi.fn(),
     bindIntakeProposal: vi.fn(),
     discardIntakeSession: vi.fn(),
+    getPendingIntakeChanges: vi.fn(),
+    confirmIntakeChanges: vi.fn(),
     getPreferredProvider: vi.fn(),
     listeners,
     listen: vi.fn(async (event: string, callback: (event: { payload: unknown }) => void) => {
@@ -26,6 +28,8 @@ vi.mock('../api', async (importOriginal) => {
     cancelTask: mocks.invokeCancelTask,
     bindIntakeProposal: mocks.bindIntakeProposal,
     discardIntakeSession: mocks.discardIntakeSession,
+    getPendingIntakeChanges: mocks.getPendingIntakeChanges,
+    confirmIntakeChanges: mocks.confirmIntakeChanges,
   };
 });
 vi.mock('@tauri-apps/api/event', () => ({ listen: mocks.listen }));
@@ -40,8 +44,14 @@ const applyIntakeProposal = (runner as unknown as {
     root: string,
     intakeSessionId: string,
     approvedIds: string[],
-  ) => Promise<{ applied: boolean }>;
+  ) => Promise<{ applied: boolean; exactChanges: IntakeExactFileChange[] }>;
 }).applyIntakeProposal;
+
+const confirmIntakeProposal = (runner as unknown as {
+  confirmIntakeProposal: (
+    intakeSessionId: string,
+  ) => Promise<{ applied: true; committedSourcePaths: string[] }>;
+}).confirmIntakeProposal;
 
 const previewIntakeProposal = (runner as unknown as {
   previewIntakeProposal: (root: string) => Promise<{
@@ -56,6 +66,12 @@ beforeEach(() => {
   mocks.invokeRunTask.mockResolvedValue({ task_id: 'task-1', intake_session_id: 'intake-1' });
   mocks.bindIntakeProposal.mockResolvedValue(undefined);
   mocks.discardIntakeSession.mockResolvedValue(undefined);
+  mocks.getPendingIntakeChanges.mockResolvedValue([{
+    targetFile: 'cv.md',
+    beforeContent: '# CV\n',
+    afterContent: '# CV\nSenior Engineer\n',
+  }]);
+  mocks.confirmIntakeChanges.mockResolvedValue(['work/review.txt']);
   mocks.getPreferredProvider.mockResolvedValue({
     id: 'claude',
     displayName: 'Claude Code',
@@ -125,12 +141,34 @@ describe('intake proposal protocol', () => {
 
     expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
   });
+
+  it('rejects duplicate proposal end delimiters', () => {
+    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
+{"items":[],"sourcePaths":[]}
+---CAREEROPS_INTAKE_PROPOSAL_END---
+---CAREEROPS_INTAKE_PROPOSAL_END---`;
+
+    expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
+  });
+
+  it.each([
+    '{"items":[],"sourcePaths":[],"unexpected":true}',
+    '{"items":[{"id":"work-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"unexpected":true}],"sourcePaths":["work/review.txt"]}',
+    '{"items":[{"id":"work-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"conflict":{"existingValue":"Engineer","proposedValue":"Senior Engineer","unexpected":true}}],"sourcePaths":["work/review.txt"]}',
+  ])('rejects unknown intake proposal fields', (json) => {
+    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
+${json}
+---CAREEROPS_INTAKE_PROPOSAL_END---`;
+
+    expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
+  });
 });
 
 describe('reviewed intake apply gate', () => {
   it('does not invoke intake-apply when zero proposals are approved', async () => {
     await expect(applyIntakeProposal('/workspace', 'intake-1', [])).resolves.toEqual({
       applied: false,
+      exactChanges: [],
     });
 
     expect(mocks.invokeRunTask).not.toHaveBeenCalled();
@@ -150,12 +188,29 @@ describe('reviewed intake apply gate', () => {
     await applying;
   });
 
-  it('reports success only after the trusted apply task succeeds', async () => {
+  it('returns exact candidate bytes without confirming them', async () => {
     const applying = applyIntakeProposal('/workspace', 'intake-1', ['research-1']);
 
     await finishTask();
 
-    await expect(applying).resolves.toEqual({ applied: true });
+    await expect(applying).resolves.toEqual({
+      applied: false,
+      exactChanges: [{
+        targetFile: 'cv.md',
+        beforeContent: '# CV\n',
+        afterContent: '# CV\nSenior Engineer\n',
+      }],
+    });
+    expect(mocks.getPendingIntakeChanges).toHaveBeenCalledWith('intake-1');
+    expect(mocks.confirmIntakeChanges).not.toHaveBeenCalled();
+  });
+
+  it('promotes only through the separate exact confirmation command', async () => {
+    await expect(confirmIntakeProposal('intake-1')).resolves.toEqual({
+      applied: true,
+      committedSourcePaths: ['work/review.txt'],
+    });
+    expect(mocks.confirmIntakeChanges).toHaveBeenCalledWith('intake-1');
   });
 });
 

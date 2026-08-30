@@ -12,9 +12,9 @@ const EXPLAIN: Record<string, string> = {
   'data/applications.md': 'The tracker. Nothing appears in this dashboard until it exists.',
 };
 
-// No shell here — App.tsx renders this before the sidebar/header mount
-// (no folder chosen yet). Amber, not red: nothing is broken, setup is
-// just incomplete. See desktop/STITCH-PROMPT.md §6.7.
+// No shell here — App.tsx renders this after a workspace was selected but
+// doctor could not load a ready tracker. Amber, not red: the workspace needs
+// attention, but the Desktop app remains recoverable through workspace setup.
 export default function EmptyState({ root, missing, onPick }: Props) {
   return (
     <main className="state-screen" style={{ maxWidth: 640, margin: '0 auto', padding: 48 }}>
@@ -43,8 +43,8 @@ export default function EmptyState({ root, missing, onPick }: Props) {
       </ul>
 
       <p style={{ color: 'var(--color-text-secondary)' }}>
-        Onboarding happens in the CLI. Open career-ops in your AI coding CLI and it will walk you
-        through creating these. This window picks up the result on Reload.
+        CareerOps Desktop completes onboarding and workspace setup in the app. If this workspace
+        was moved or is incomplete, choose its current location or another CareerOps workspace.
       </p>
 
       <button className="btn-primary" onClick={onPick}>

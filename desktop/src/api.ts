@@ -166,6 +166,12 @@ export type IntakeProposal = {
   sourcePaths: string[];
 };
 
+export type IntakeExactFileChange = {
+  targetFile: IntakeProposalItem['targetFile'];
+  beforeContent: string | null;
+  afterContent: string;
+};
+
 export function isError(r: { ok: boolean }): r is SidecarError {
   return r.ok === false;
 }
@@ -273,6 +279,14 @@ export function cancelTask(taskId: string) {
 
 export function bindIntakeProposal(intakeSessionId: string, proposal: IntakeProposal) {
   return invoke<void>('bind_intake_proposal', { intakeSessionId, proposal });
+}
+
+export function getPendingIntakeChanges(intakeSessionId: string) {
+  return invoke<IntakeExactFileChange[]>('pending_intake_changes', { intakeSessionId });
+}
+
+export function confirmIntakeChanges(intakeSessionId: string) {
+  return invoke<string[]>('confirm_intake_changes', { intakeSessionId });
 }
 
 export function discardIntakeSession(intakeSessionId: string) {
