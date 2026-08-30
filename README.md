@@ -28,6 +28,14 @@ Desktop 架構刻意避免重寫 CareerOps 的 business logic。App 負責 UX �
 
 從 [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases) 下載最新版 DMG 或 `CareerOps-macOS-<version>.zip`。開啟 DMG，把 CareerOps 拖入 Applications，再從 Applications 啟動。
 
+如果你已經使用設定完成的 Homebrew tap，cask 是可選的安裝方式，不是 onboarding 或 managed runtime 的必要條件：
+
+```bash
+brew install --cask <owner>/<tap>/career-ops
+```
+
+`<owner>/<tap>` 必須和 fork operator 設定的 tap repository 一致；例如 repository 名稱是 `homebrew-career-ops` 時，tap token 通常是 `career-ops`。Release workflow 會從實際 DMG 計算 SHA256 並發布 versioned cask，不使用 `sha256 :no_check`。
+
 ### Windows
 
 從 [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases) 下載 `CareerOps_<version>_Windows.exe` 或 `CareerOps-Windows-<version>.zip`，並執行 NSIS installer。
@@ -87,7 +95,20 @@ Background Import 提供以下八個背景證據分類：
 - Certificates
 - Portfolio / Projects
 
-你可以拖放檔案，或用 **Add files** 加入檔案，接著檢查每個檔案的分類。CareerOps 會把選取的檔案複製到目前 workspace 的 `documents/<category>/`。之後它會在單一整合 intake 中檢查全部新增或變更過的證據、提出帶有來源的建議、顯示衝突，並且只套用你明確核准的個別變更。
+你可以拖放檔案，或用 **Add files** 加入檔案，接著檢查每個檔案的分類。CareerOps 會把選取的檔案複製到目前 workspace 的下列實際位置：
+
+| 證據分類 | 儲存路徑 |
+| --- | --- |
+| CV / Resume | `documents/cv/` |
+| Work records | `documents/work/` |
+| Publications / Research | `documents/research/` |
+| Degrees / Transcripts | `documents/diplomas/` |
+| LinkedIn | `documents/linkedin/` |
+| References | `documents/references/` |
+| Certificates | `documents/certificates/` |
+| Portfolio / Projects | `documents/portfolio/` |
+
+之後 onboarding 會在單一整合 intake 中檢查全部新增或變更過的證據、提出帶有來源的建議並顯示衝突。
 
 這些檔案是**證據**，不是各自獨立的 profile database。Canonical profile 仍是審閱後寫入以下檔案的內容：
 
@@ -95,7 +116,9 @@ Background Import 提供以下八個背景證據分類：
 - `config/profile.yml`
 - `modes/_profile.md`
 
-在你選取建議並按下 **Apply selected changes** 前，Background Import 不會修改這些 canonical 檔案。PDF 仍會被 stage，但此版本無法抽取 PDF 文字；若要讓其中內容用於 profile extraction，請同時加入 `.md`、`.txt` 或 `.tex` 版本。
+Stage 只會複製證據。**Apply selected changes** 只會把你明確核准的 proposals 寫入 canonical 檔案，並記錄已完成的 intake。**Skip for now** 會丟棄這次 review session、保留已 stage 的 documents，而且不會提交 intake fingerprints 或 canonical profile 變更。PDF 仍會被 stage，但此版本無法抽取 PDF 文字；若要讓其中內容用於 profile extraction，請同時加入 `.md`、`.txt` 或 `.tex` 版本。
+
+目前 Desktop UI 將 Background Import 放在 onboarding 流程中，並不保證有獨立的 post-onboarding import route。
 
 目前的 macOS release 支援審閱式 AI intake。Windows 與 self-contained Linux package 若無法使用安全的 provider isolation，審閱式 intake 階段會 fail closed：已 stage 的證據維持不變，canonical profile 檔案不會被修改；請更新到支援的 package 後再試。
 

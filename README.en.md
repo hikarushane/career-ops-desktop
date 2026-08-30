@@ -28,6 +28,14 @@ Prebuilt desktop releases are the intended installation path.
 
 Download the latest DMG or `CareerOps-macOS-<version>.zip` from [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases). Open the DMG, drag CareerOps into Applications, and launch it from Applications.
 
+If you already use the configured Homebrew tap, the cask is an optional alternative installation method—not an onboarding or managed-runtime prerequisite:
+
+```bash
+brew install --cask <owner>/<tap>/career-ops
+```
+
+`<owner>/<tap>` must match the tap repository configured by the fork operator. For a repository named `homebrew-career-ops`, the tap token is normally `career-ops`. The release workflow computes the actual DMG SHA256 and publishes a versioned cask; it never uses `sha256 :no_check`.
+
 ### Windows
 
 Download `CareerOps_<version>_Windows.exe` or `CareerOps-Windows-<version>.zip` from [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases), then run the NSIS installer.
@@ -87,7 +95,20 @@ Background Import accepts these evidence categories:
 - Certificates
 - Portfolio / Projects
 
-Drag files in (or use **Add files**), check the category for each file, and continue. CareerOps copies the selected files into `documents/<category>/` in the active workspace. It then reviews all new or changed evidence in one consolidated intake session, creates source-annotated proposals, shows any conflicts, and applies only the individual changes you explicitly approve.
+Drag files in (or use **Add files**), check the category for each file, and continue. CareerOps copies the selected files to these exact workspace locations:
+
+| Evidence category | Storage path |
+| --- | --- |
+| CV / Resume | `documents/cv/` |
+| Work records | `documents/work/` |
+| Publications / Research | `documents/research/` |
+| Degrees / Transcripts | `documents/diplomas/` |
+| LinkedIn | `documents/linkedin/` |
+| References | `documents/references/` |
+| Certificates | `documents/certificates/` |
+| Portfolio / Projects | `documents/portfolio/` |
+
+The onboarding flow then reviews all new or changed evidence in one consolidated intake session, creates source-annotated proposals, and shows any conflicts.
 
 These files are **evidence**, not separate profile databases. The canonical profile remains the reviewed content in:
 
@@ -95,7 +116,9 @@ These files are **evidence**, not separate profile databases. The canonical prof
 - `config/profile.yml`
 - `modes/_profile.md`
 
-Nothing in Background Import changes those canonical files until you select proposals and choose **Apply selected changes**. PDFs are still staged, but this build cannot extract PDF text; add a `.md`, `.txt`, or `.tex` companion when you need its contents considered for profile extraction.
+Staging copies evidence only. **Apply selected changes** writes only the proposals you explicitly approve to the canonical files and records the completed intake. **Skip for now** discards the review session, leaves the staged documents in place, and commits neither intake fingerprints nor canonical-profile changes. PDFs are still staged, but this build cannot extract PDF text; add a `.md`, `.txt`, or `.tex` companion when you need its contents considered for profile extraction.
+
+Background Import is part of onboarding in the current Desktop UI; it does not promise a separate post-onboarding import route.
 
 Reviewed AI intake is supported in the current macOS release. On Windows and self-contained Linux packages, the reviewed-intake phase fails closed when secure provider isolation is unavailable: staged evidence remains untouched and no canonical profile files are changed. Updating to a supported package is the next step.
 

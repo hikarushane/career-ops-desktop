@@ -449,7 +449,7 @@
       <h1>使用指南</h1>
       <p class="lead">從第一次啟動到匯入背景證據、分析職缺、找工作、追蹤申請與準備面試。一般使用不需要自己操作 Markdown、YAML 或 coding-agent prompt。</p>
       <div class="notice">
-        <strong>目前版本範圍：</strong>這份指南只描述 <code>tauri-dashboard</code> 已有的功能。尚未合併的 release、自動更新、Homebrew 與 Windows 發佈流程不列入本指南。
+        <strong>目前版本範圍：</strong>這份指南描述目前 Desktop UI。安裝 package 與各版本的簽章資訊請以 GitHub Releases 為準；App 可從 header 的更新 badge 或 Profile &amp; Settings → About 檢查已設定的更新。
       </div>
     </header>
 
@@ -558,16 +558,7 @@
         <div class="card">
           <span class="card-label">八個分類</span>
           <h3>檔案送到正確位置</h3>
-          <ul>
-            <li>CV / Resume</li>
-            <li>Work records</li>
-            <li>Publications / Research</li>
-            <li>Degrees / Transcripts</li>
-            <li>LinkedIn</li>
-            <li>References</li>
-            <li>Certificates</li>
-            <li>Portfolio / Projects</li>
-          </ul>
+          <p>你先為每個檔案確認分類；下方表格列出每個使用者分類實際對應的 workspace 路徑。</p>
         </div>
         <div class="card">
           <span class="card-label teal">Canonical profile</span>
@@ -576,21 +567,42 @@
         </div>
       </div>
 
+      <table>
+        <thead>
+          <tr>
+            <th>證據分類</th>
+            <th>實際儲存路徑</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>CV / Resume</td><td><code>documents/cv/</code></td></tr>
+          <tr><td>Work records</td><td><code>documents/work/</code></td></tr>
+          <tr><td>Publications / Research</td><td><code>documents/research/</code></td></tr>
+          <tr><td>Degrees / Transcripts</td><td><code>documents/diplomas/</code></td></tr>
+          <tr><td>LinkedIn</td><td><code>documents/linkedin/</code></td></tr>
+          <tr><td>References</td><td><code>documents/references/</code></td></tr>
+          <tr><td>Certificates</td><td><code>documents/certificates/</code></td></tr>
+          <tr><td>Portfolio / Projects</td><td><code>documents/portfolio/</code></td></tr>
+        </tbody>
+      </table>
+
       <div class="flow" aria-label="Background Import 流程">
         <span class="flow-node active">Drag / Add files</span>
         <span class="flow-arrow">→</span>
         <span class="flow-node">Review category</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Copy to documents/&lt;category&gt;/</span>
+        <span class="flow-node">Stage: copy evidence</span>
         <span class="flow-arrow">→</span>
         <span class="flow-node">One intake review</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Explicit apply</span>
+        <span class="flow-node">Apply approved proposals</span>
       </div>
 
-      <p>拖放檔案或按 <strong>Add files</strong> 後，請檢查每個檔案的 category。App 會把選取檔案複製到 workspace 的 <code>documents/&lt;category&gt;/</code>。AI setup 完成後，CareerOps 會在一個整合 intake 中檢查所有新增或變更過的證據，並提出附來源的 profile 更新建議。</p>
+      <p>拖放檔案或按 <strong>Add files</strong> 後，請檢查每個檔案的 category。Stage 只會把選取檔案複製到上表所列的 workspace 路徑。AI setup 完成後，CareerOps 會在一個整合 intake 中檢查所有新增或變更過的證據，並提出附來源的 profile 更新建議。</p>
 
-      <p>你會先看到每個 proposal、目標檔案、來源與可能的衝突。沒有任何 canonical profile 檔案會在預覽時被改寫；只有你勾選的 proposal 會在按下 <strong>Apply selected changes</strong> 後套用。</p>
+      <p>你會先看到每個 proposal、目標檔案、來源與可能的衝突。沒有任何 canonical profile 檔案會在預覽時被改寫；<strong>Apply selected changes</strong> 只會寫入你核准的 proposals，並提交完成的 intake。<strong>Skip for now</strong> 會丟棄 review session、保留已 stage 的 documents，且不會提交 intake fingerprints 或 canonical profile 變更。</p>
+
+      <p class="muted">Background Import 目前是 onboarding 流程的一部分；本版 UI 不提供或承諾獨立的 post-onboarding import route。</p>
 
       <div class="callout warning">
         <p><strong>PDF 限制：</strong>此 build 仍會 stage PDF，但不能抽取其中的文字。若要讓內容參與 profile extraction，請同時加入對應的 <code>.md</code>、<code>.txt</code> 或 <code>.tex</code> 檔。</p>
@@ -780,7 +792,7 @@
         <div class="card">
           <span class="card-label">Profile</span>
           <h3>調整你的設定</h3>
-          <p>Profile &amp; Settings 分成 My Background、Job Search、Search Sources、AI 四個區域。</p>
+          <p>Profile &amp; Settings 分成 My Background、Job Search、Search Sources、Workspace、AI 與 About 六個區域。</p>
         </div>
       </div>
 
@@ -805,8 +817,16 @@
             <td>CareerOps 要掃描的公司與 job board，對應 <code>portals.yml</code>。</td>
           </tr>
           <tr>
+            <td>Workspace</td>
+            <td>查看目前 workspace 路徑、開啟資料夾，或切換到另一個 workspace。</td>
+          </tr>
+          <tr>
             <td>AI</td>
             <td>查看 Provider 狀態並切換 preferred AI Provider。</td>
+          </tr>
+          <tr>
+            <td>About</td>
+            <td>查看 App 版本，並使用 <strong>Check Now</strong> 檢查已設定的更新。</td>
           </tr>
         </tbody>
       </table>
@@ -856,7 +876,7 @@
       <details>
         <summary>Background Import 完成後，AI 已經改寫我的 profile 了嗎？</summary>
         <div class="details-body">
-          <p>還沒有。匯入會先把你分類過的檔案複製到 <code>documents/&lt;category&gt;/</code>，再在一個 intake 中產生建議。只有你明確核准的個別 proposal 會在你按下 Apply selected changes 後寫入 <code>cv.md</code>、<code>config/profile.yml</code> 或 <code>modes/_profile.md</code>。</p>
+          <p>還沒有。Stage 只會把你分類過的檔案複製到各自的 <code>documents/</code> 路徑，再在一個 intake 中產生建議。Apply selected changes 只會寫入你明確核准的個別 proposal，並提交完成的 intake；Skip for now 會丟棄 review session、保留已 stage 的 documents，而且不提交 fingerprints 或 canonical profile 變更。</p>
         </div>
       </details>
 
@@ -868,7 +888,7 @@
       </details>
 
       <div class="callout danger">
-        <p><strong>本指南尚未包含：</strong>App 內自動更新、GitHub Release 安裝、Homebrew、Windows installer 與 biweekly upstream maintenance。這些屬於尚未 merge 進 <code>tauri-dashboard</code> 的 <code>feature/fork-release-system</code>。</p>
+        <p><strong>安裝與更新：</strong>從 GitHub Releases 取得 macOS DMG/ZIP 或 Windows installer/ZIP。已設定的 Homebrew tap 可作為 macOS 的可選安裝方式，不是 onboarding 或 runtime 的必要條件；日常更新請使用 App 的更新 badge 或 About → Check Now。</p>
       </div>
     </section>
 
