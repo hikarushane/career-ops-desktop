@@ -28,14 +28,6 @@ Desktop 架構刻意避免重寫 CareerOps 的 business logic。App 負責 UX �
 
 從 [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases) 下載最新版 DMG 或 `CareerOps-macOS-<version>.zip`。開啟 DMG，把 CareerOps 拖入 Applications，再從 Applications 啟動。
 
-Homebrew tap 設定完成後，可以安裝同一份已簽章 release：
-
-```bash
-brew install --cask <owner>/<tap>/career-ops
-```
-
-`<owner>/<tap>` 必須和 fork operator 設定的 tap repository 一致；例如 repository 名稱是 `homebrew-career-ops` 時，tap token 通常是 `career-ops`。Release workflow 會從實際 DMG 計算 SHA256 並發布 versioned cask，不使用 `sha256 :no_check`。
-
 ### Windows
 
 從 [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases) 下載 `CareerOps_<version>_Windows.exe` 或 `CareerOps-Windows-<version>.zip`，並執行 NSIS installer。
@@ -46,11 +38,70 @@ brew install --cask <owner>/<tap>/career-ops
 
 ## 第一次啟動
 
-1. 選擇或建立 CareerOps data folder；既有 `cv.md`、profile、tracker、reports 與 output 都保留在這個 folder。
+已安裝的 App、workspace 與 profile 是刻意分開的概念：
+
+- **App 安裝**：你下載與更新的 CareerOps Desktop 應用程式。
+- **Workspace**：你的私人 CareerOps 資料夾；所有求職檔案放在這裡，可獨立備份或開啟。
+- **App 技術狀態**：已安裝 package 與其受管理元件是否完整；這不是另一套 profile 資料。
+- **背景證據（Background evidence）**：你在匯入時加入的原始資料。
+- **Canonical profile**：CareerOps 審閱後實際用來支援求職流程的資料。
+
+第一次啟動時，CareerOps 會在作業系統慣用的 Documents 位置提供預設 workspace：
+
+| 平台 | 預設 workspace |
+| --- | --- |
+| macOS | `~/Documents/CareerOps` |
+| Windows | `Documents\CareerOps` |
+
+你也可以選擇自訂位置，或選取既有的 CareerOps workspace。既有的 `cv.md`、profile、tracker、reports 與 output 都會保留在該 workspace。
+
+1. 建立預設 workspace，或選擇自訂位置。
 2. 完成 profile 設定，讓 evaluation 使用你的目標，而不是 shipped examples。
 3. 開啟 **Settings → AI Provider**，選擇可用的本機 provider，並透過 provider 自己的 CLI 登入；Desktop App 不儲存 provider password。
-4. 使用 **Background Import** 把既有 CareerOps workspace 帶入 Desktop flow。Import 會保留 user layer，並在執行 AI 工作前列出它找到的資料。
+4. 使用 **Background Import** 加入背景證據，並審閱任何 profile 更新建議。
 5. 回到 Home，貼上職缺 URL 或執行 scanner。
+
+### 管理 workspace
+
+在 **Settings → Workspace** 中會看到：
+
+```text
+Workspace
+<path>
+
+Open Folder    Change Location
+```
+
+**Open Folder** 會在檔案管理器開啟目前的 workspace。**Change Location** 只會切換 App 使用的 workspace，**不會**搬移舊 workspace 或其中任何檔案。
+
+### Background Import 與 canonical profile
+
+Background Import 提供以下八個背景證據分類：
+
+- CV / Resume
+- Work records
+- Publications / Research
+- Degrees / Transcripts
+- LinkedIn
+- References
+- Certificates
+- Portfolio / Projects
+
+你可以拖放檔案，或用 **Add files** 加入檔案，接著檢查每個檔案的分類。CareerOps 會把選取的檔案複製到目前 workspace 的 `documents/<category>/`。之後它會在單一整合 intake 中檢查全部新增或變更過的證據、提出帶有來源的建議、顯示衝突，並且只套用你明確核准的個別變更。
+
+這些檔案是**證據**，不是各自獨立的 profile database。Canonical profile 仍是審閱後寫入以下檔案的內容：
+
+- `cv.md`
+- `config/profile.yml`
+- `modes/_profile.md`
+
+在你選取建議並按下 **Apply selected changes** 前，Background Import 不會修改這些 canonical 檔案。PDF 仍會被 stage，但此版本無法抽取 PDF 文字；若要讓其中內容用於 profile extraction，請同時加入 `.md`、`.txt` 或 `.tex` 版本。
+
+目前的 macOS release 支援審閱式 AI intake。Windows 與 self-contained Linux package 若無法使用安全的 provider isolation，審閱式 intake 階段會 fail closed：已 stage 的證據維持不變，canonical profile 檔案不會被修改；請更新到支援的 package 後再試。
+
+### App 技術狀態
+
+打包的 App 包含受管理的 JavaScript runtime 與必要的 CareerOps assets。一般 Desktop 使用不需要安裝 Git、Homebrew、Node、npm、Rust 或 Go。若 App 指出受打包 assets 或 managed runtime 缺失，請重新安裝或更新 CareerOps Desktop；不要用 developer commands 嘗試修復安裝。這種技術狀態和你所選 AI provider 是否已就緒或登入是不同的事情。
 
 ## Desktop updater
 
