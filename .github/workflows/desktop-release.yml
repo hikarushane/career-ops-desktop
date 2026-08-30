@@ -56,11 +56,16 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: dashboard/go.mod
+      - name: Install root runtime dependencies
+        run: npm ci --ignore-scripts
       - name: Install Desktop dependencies
         run: npm ci
         working-directory: desktop
       - name: Build sidecar before Rust checks
         run: npm run build:sidecar
+        working-directory: desktop
+      - name: Verify generated macOS runtime
+        run: node scripts/verify-packaged-runtime.mjs --generated
         working-directory: desktop
       - name: Cargo checks
         run: cargo check --locked && cargo test --locked
@@ -79,6 +84,11 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: desktop
+      - name: Verify signed macOS app runtime
+        run: |
+          APP=$(find desktop/src-tauri/target/release/bundle/macos -name '*.app' -print -quit)
+          test -n "$APP"
+          node desktop/scripts/verify-packaged-runtime.mjs --app "$APP"
       - name: Collect canonical artifacts
         env:
           VERSION: ${{ needs.detect-release.outputs.version }}
@@ -111,11 +121,16 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: dashboard/go.mod
+      - name: Install root runtime dependencies
+        run: npm ci --ignore-scripts
       - name: Install Desktop dependencies
         run: npm ci
         working-directory: desktop
       - name: Build Windows .exe sidecar before Rust checks
         run: npm run build:sidecar
+        working-directory: desktop
+      - name: Verify generated Windows runtime
+        run: node scripts/verify-packaged-runtime.mjs --generated
         working-directory: desktop
       - name: Cargo checks
         run: cargo check --locked; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; cargo test --locked
@@ -128,6 +143,19 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
+      - name: Verify installed Windows runtime
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis -Filter *.exe | Select-Object -First 1
+          if (-not $installer -or $installer.Length -eq 0) { throw 'NSIS installer missing or empty' }
+          $installDir = Join-Path $env:RUNNER_TEMP 'CareerOps-installed'
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "NSIS install failed with exit code $($process.ExitCode)" }
+          node desktop/scripts/verify-packaged-runtime.mjs --install-dir $installDir
+          $signature = Get-AuthenticodeSignature (Join-Path $installDir 'runtime/careerops-node-runtime.exe')
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Node.js Foundation') {
+            throw "Installed Node.js runtime signature is invalid or has the wrong signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
+          }
       - name: Collect canonical artifacts
         shell: bash
         env:

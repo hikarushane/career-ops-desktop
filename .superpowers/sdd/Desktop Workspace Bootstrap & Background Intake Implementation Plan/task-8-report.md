@@ -2,313 +2,365 @@
 
 ## Status
 
-Implemented and verified from exact base
-`d9377f16d608c57a725a329cfb50c05ab97c1e81`.
+Fix round 1 is implemented from clean base `c831c0a`, the original Task 8
+commit based on `d9377f16d608c57a725a329cfb50c05ab97c1e81`.
 
-The installed-user developer-prerequisite contract is satisfied for app launch,
-workspace create/stage/open/switch, the bundled `career-data` operations, and
-the deterministic `intake.mjs` scan/commit route. The Desktop package now
-contains:
+The macOS release architecture now has direct generated-input, installed-app,
+post-sign, and mounted-DMG proof for its managed JavaScript runtime. Installed
+users do not need Git, Homebrew, Node/npm, Rust/Cargo, Go, or Xcode tools for
+app launch, workspace creation/staging/open/switch, or deterministic Desktop
+operations exercised here.
 
-- the generated workspace seed;
-- the `career-data` Go sidecar;
-- a managed JavaScript runtime staged from the release build's exact Node
-  executable; and
-- that runtime version's full Node.js license as a package resource.
+Reviewed intake remains deliberately fail-closed on Windows and on Linux
+without external `bwrap`. Those are unresolved acceptance limitations; this
+change does not weaken pre-confirmation isolation or the canonical write
+allowlist to make either platform appear complete.
 
-Reviewed intake isolation is fully resolved for the current macOS release path.
-It remains an explicit acceptance limitation on Windows and on a self-contained
-Linux package. Those platforms continue to fail closed before the provider is
-started or any canonical file is changed. No isolation or write allowlist was
-weakened to make the package appear portable.
+## Correction to the original report
 
-## Architecture and package proof
+The original report incorrectly called the build-host `process.execPath`
+runtime an unmodified, package-compatible macOS external binary. Tauri copies
+every `externalBin` into `Contents/MacOS` and includes it in the app signing
+set. Re-signing official Node stripped its V8/JIT entitlements and changed the
+signature page size from 4096 to 16384 on this host. The re-signed runtime then
+exited 133 during ordinary execution.
 
-Tauri's documented sidecar contract requires each `externalBin` input to exist
-at build time as `<name>-<target-triple>[.exe]`, while the installed executable
-is exposed under the unsuffixed name. The build now stages both:
+That prior macOS acceptance claim was false and is superseded here. Node is no
+longer an `externalBin`, and no permissive entitlement was added to the app.
+
+## Runtime and signing architecture
+
+### Exact official runtime
+
+`desktop/scripts/node-runtime.json` pins Node.js `22.23.2` and official target
+archives instead of the build host's mutable `process.execPath`:
+
+| Rust target | Official archive | SHA-256 |
+|---|---|---|
+| `aarch64-apple-darwin` | `node-v22.23.2-darwin-arm64.tar.gz` | `61130f394c1630d211dd50aecc4353d379480f36d3ac913cd85dbba1aed585c6` |
+| `x86_64-apple-darwin` | `node-v22.23.2-darwin-x64.tar.gz` | `58e99022c2ff89395576cc7fd4d98cea24bb68081475d5f88b801ee8729fb026` |
+| `aarch64-unknown-linux-gnu` | `node-v22.23.2-linux-arm64.tar.gz` | `013b59cfd2819703a6f4a14ab891fc46fc2a4e3f5bcd92de3fb4929b43e35b30` |
+| `x86_64-unknown-linux-gnu` | `node-v22.23.2-linux-x64.tar.gz` | `b294a556e639d64338823920e5866c21c02741742d2e1529ee1a225c1ec9252a` |
+| `aarch64-pc-windows-msvc` | `node-v22.23.2-win-arm64.zip` | `fec025a6da31757e3b6af84c5a1628e9d38442ca99a2161091d78f2fcfa35ef3` |
+| `x86_64-pc-windows-msvc` | `node-v22.23.2-win-x64.zip` | `1177b4137ba5adaa56354ae40f1080c7450e8ae09cecb47da459d1c52ac99f97` |
+
+`LICENSE` is extracted from that same verified archive. Its required SHA-256
+is `c738ae413cf561f174e34f6961f8ca458aae2369a73640dda6234c629b98bcc4`.
+There is no independent mutable license fetch.
+
+The downloader is bounded to 128 MiB and 120 seconds, uses only the exact
+versioned Node distribution URL, verifies the target archive hash before
+extraction, validates archive-relative members, and records target,
+architecture, archive, runtime, and license hashes. A verified cache permits
+later offline builds. A first offline build without the cache fails explicitly
+and never falls back to a host runtime.
+
+Official evidence used:
+
+- [Node.js v22.23.2 official checksums](https://nodejs.org/dist/v22.23.2/SHASUMS256.txt)
+- [Node.js `--jitless` documentation](https://nodejs.org/download/release/v22.23.2/docs/api/cli.html#--jitless)
+- [Tauri sidecar documentation](https://v2.tauri.app/develop/sidecar/)
+- [Tauri platform configuration overrides](https://v2.tauri.app/develop/configuration-files/)
+
+### Resource plus launcher
+
+Official Node is now a Tauri resource:
 
 ```text
-binaries/career-data-<target-triple>[.exe]
-binaries/careerops-node-<target-triple>[.exe]
+macOS:  Contents/Resources/runtime/careerops-node-runtime
+Windows: <install>/runtime/careerops-node-runtime.exe
 ```
 
-The runtime resolver uses only the installed application executable directory:
+Resources are sealed by the app/package but are not part of Tauri's
+external-binary re-signing set. macOS therefore preserves the official Node.js
+Foundation signature and its 4096-byte page size.
+
+`careerops-node` is a small Go `externalBin` launcher. It resolves only the
+package resource layout, removes conflicting JIT-less overrides, replaces
+inherited `NODE_OPTIONS`, and starts the pinned runtime with `--jitless`. It
+preserves stdio and child exit status. A missing runtime gives reinstall/update
+guidance.
+
+The JIT-less probe proves `eval("1+1") == 2`,
+`new Function("return 3")() == 3`, and `typeof WebAssembly == "undefined"`.
+`intake.mjs` does not use WebAssembly and its packaged self-test passes. The
+expected V8 warning about disabling WebAssembly is diagnostic stderr only.
+
+### Deterministic sidecar operations
+
+The expanded spawn audit found that `career-data` previously called bare
+`node` for `profile-language.mjs` and `job-language.mjs`. It now resolves the
+colocated installed launcher and canonical scripts in the packaged workspace
+seed by absolute path, while keeping the selected user workspace as `cwd`.
+That works for existing workspaces without copying dependencies into them.
+Successful runtime stderr is kept separate from JSON stdout, so the JIT-less
+warning cannot corrupt data.
+
+The seed includes exact lockfile-resolved runtime packages and licenses:
 
 ```text
-<installed executable directory>/careerops-node[.exe]
+node_modules/js-yaml@5.4.1
+node_modules/argparse@2.0.1
 ```
 
-It never refers to `src-tauri/binaries`, the repository root, a user home, a
-Homebrew prefix, or another source-checkout path. If the packaged runtime is
-missing, the user is told to reinstall or update CareerOps Desktop; they are
-not told to install Node or run a developer build.
+Native release jobs run root `npm ci --ignore-scripts` at build time. The seed
+builder rejects a missing, differently versioned, or unlicensed input. The
+installed user never runs npm.
 
-`tauri.conf.json` release inputs are all package-local relative paths:
+## Generated and installed verification
+
+`desktop/scripts/verify-packaged-runtime.mjs` performs executable checks, not
+source assertions alone. Its generated/app/installed modes verify:
+
+- exact manifest/metadata target, archive, architecture, and hashes;
+- exact license checksum and target/runtime correspondence;
+- runtime/launcher existence and Unix executable bits;
+- Mach-O, ELF, or PE architecture where inspectable;
+- runtime SHA and exact `v22.23.2` execution;
+- launcher-enforced JIT-less compatibility;
+- installed workspace seed and `intake.mjs --self-test`;
+- deterministic `career-data language-settings` against a temporary existing
+  workspace with no scripts or `node_modules`, using an unusable `PATH`;
+- macOS Node.js Foundation signature and `Page size=4096`;
+- deep/strict app signature in signed-app mode.
+
+macOS readiness builds app and DMG, ad-hoc re-signs the app executables and app
+with hardened runtime, runs the strict post-sign verifier, mounts the actual
+DMG read-only, and repeats the installed-layout smoke. Production release runs
+the strict verifier after `tauri-action` performs Developer ID signing and
+notarization.
+
+Windows readiness/release verify generated inputs, build NSIS, silently install
+to a temporary directory, run the installed verifier, and require a valid
+`Node.js Foundation` Authenticode signature. These Windows jobs could not run
+on this macOS host, so Windows success is CI-enforced but **not claimed as
+locally executed**.
+
+### Actual macOS artifact evidence
+
+On macOS 26.5.1 arm64 with Xcode 26.5:
+
+1. Built a real Tauri `CareerOps.app` with the platform resource override.
+2. Re-signed all `Contents/MacOS` executables and the app with hardened runtime
+   and 4096-byte signing page size.
+3. Passed `codesign --verify --deep --strict` on the post-sign app.
+4. Verified Node still reported Node.js Foundation authority and page size 4096.
+5. Executed launcher compatibility, packaged intake self-test, and deterministic
+   `career-data language-settings` without Node on `PATH`.
+6. Built and mounted the actual Tauri DMG read-only and repeated runtime,
+   license, architecture, launcher, intake, and language smokes from it.
+
+The readiness DMG is intentionally unsigned, so mounted-DMG mode does not claim
+an app signature. Production CI uses strict verification on the signed app.
+All local runtime executions passed.
+
+## Missing `career-data` behavior
+
+Tauri sidecar construction failure and asynchronous `.output()` spawn failure
+now share this mapping:
 
 ```text
-resources:
-  binaries/workspace-seed/ -> workspace-seed/
-  binaries/node-LICENSE    -> licenses/Node.js-LICENSE.txt
-
-externalBin:
-  binaries/career-data
-  binaries/careerops-node
+CareerOps data service failed to start: ... Reinstall or update CareerOps Desktop.
 ```
 
-Release regressions verify these inputs, reject absolute/parent/source-checkout
-paths, and verify that the release script takes the runtime from
-`process.execPath` rather than a developer-machine installation prefix.
+The regression creates an actually missing executable with
+`std::process::Command`, captures its spawn error, and verifies reinstall/update
+guidance with no npm/build instruction.
 
-The managed runtime is an unmodified official Node binary. The build retrieves
-and validates the matching `v<process.versions.node>/LICENSE` document and
-packages it. On the verification host the binary is a Node.js Foundation-signed
-universal Mach-O whose dynamic dependencies are Apple system libraries only.
-This is package-compatible for the macOS release architecture; it does not ask
-the installed user for Homebrew, Node/npm, Xcode tools, or another runtime.
+## PDF and security carryover
 
-## Intake behavior
+- PDFs still stage; extraction is clearly unavailable without a bundled
+  extractor, with no Homebrew/apt/Poppler prompt.
+- Semantic intake remains upstream `intake.mjs` plus `modes/intake.md`, not React.
+- Preview/apply retain the disposable dereferenced workspace.
+- Review fingerprints remain verified before promotion.
+- The write allowlist remains exactly `cv.md`, `config/profile.yml`, and
+  `modes/_profile.md`.
+- Selection/source validation, provider quiescence, exact-path commit, rollback,
+  and recovery artifacts remain intact.
+- macOS retains deny-default `/usr/bin/sandbox-exec` isolation.
+- Windows returns `INTAKE_ISOLATION_UNAVAILABLE` before provider start.
+- Linux refuses reviewed intake without `bwrap`; there is no fallback.
 
-- Preview and apply receive `CAREEROPS_JS_RUNTIME` pointing to the packaged
-  runtime. The provider prompt must use that path and explicitly forbids `node`
-  from `PATH`.
-- The trusted, post-confirmation selective commit uses the same resolved
-  runtime directly for `intake.mjs --commit <validated paths>`.
-- The semantic intake workflow remains upstream `intake.mjs` plus
-  `modes/intake.md`; it was not reimplemented in React.
-- Normal CLI intake retains its existing optional Poppler hint. Desktop sets
-  `CAREEROPS_DESKTOP_PDF_EXTRACTION=unavailable`, so it never probes or invokes
-  a host `pdftotext` and never suggests Homebrew/apt/Poppler.
-- A PDF is still copied into the selected `documents/*` category. The UI then
-  states that extraction is unavailable in this build and suggests an
-  `.md`, `.txt`, or `.tex` companion for text extraction.
-- Missing `career-data` or managed runtime assets now produce reinstall/update
-  guidance, not `npm run build:sidecar` or other developer instructions.
+## Platform matrix
 
-## Security carryover from Task 6
-
-The Task 6 trusted boundary remains load-bearing and unchanged in meaning:
-
-- preview and apply run in a disposable, dereferenced workspace;
-- canonical review fingerprints are verified before promotion;
-- only `cv.md`, `config/profile.yml`, and `modes/_profile.md` can be promoted;
-- selected proposal IDs/items and explicit merged-source paths are revalidated;
-- provider process groups are quiesced before any promotion;
-- post-confirmation commit is path-explicit and never forms `--commit --all`;
-- rollback and recovery-artifact behavior remains intact.
-
-The macOS provider still runs under `/usr/bin/sandbox-exec` with a deny-default
-profile and the Task 6 write allowlist. Windows still returns
-`INTAKE_ISOLATION_UNAVAILABLE`. Linux still requires `bwrap`; absence returns a
-package-limitation error with “No files were changed.” There is no unsandboxed
-fallback.
-
-## Supported-platform matrix
-
-| Platform | Launch/workspace/deterministic operations | Packaged `.mjs` runtime | Reviewed intake isolation | PDF behavior | Acceptance |
+| Platform | Launch/workspace/deterministic operations | Managed `.mjs` runtime | Reviewed intake isolation | PDF | Acceptance |
 |---|---|---|---|---|---|
-| macOS | Bundled Rust app + `career-data`; no developer tools | Bundled `careerops-node` | Built-in `/usr/bin/sandbox-exec`, fail closed on setup error | Stages; extraction explicitly unavailable | Satisfied for current release architecture |
-| Windows | Bundled Rust app + `career-data`; no developer tools | Bundled `careerops-node.exe` | No supported package-local restricted-token/AppContainer implementation exists in this branch; fails closed before provider start | Stages; extraction explicitly unavailable | **Unresolved acceptance failure for reviewed intake** |
-| Linux | Code paths for bundled app/data/runtime; no current Linux release job | Build can stage `careerops-node` | External `bwrap` from `PATH`; missing runtime fails closed | Stages; extraction explicitly unavailable | **Unresolved acceptance failure for a self-contained package** |
+| macOS | Bundled app, seed, data service, runtime and JS packages; installed/package smoke passed without developer PATH tools | Pinned official Node resource via JIT-less launcher; post-sign and DMG smoke passed | Built-in Seatbelt profile; security regressions pass | Stages; extraction unavailable | **Satisfied for current release path** |
+| Windows | NSIS workflow checks exact inputs, installed paths, execution and Authenticode; not run locally | Pinned official Node resource via `.exe` launcher | No package-local restricted-token/AppContainer boundary; fails closed | Stages; extraction unavailable | Package proof awaits native CI; **reviewed intake unresolved** |
+| Linux | No supported native Desktop release job/config exists | Linux archives are pinned, but no package is claimed | External PATH `bwrap`; absence fails closed | Code path stages; extraction unavailable | **Self-contained/supported package unresolved** |
 
-### Precise isolation limitation
-
-No Windows filesystem sandbox equivalent to the macOS Seatbelt profile is
-implemented in the release architecture. Shipping a token/AppContainer helper
-would require a separate designed and reviewed boundary, not a command-line
-substitution.
-
-Linux `bwrap` was not silently added to `externalBin`. A defensible bundle would
-need a supported Linux release target, kernel/user-namespace compatibility,
-portable runtime dependencies, and complete GPL redistribution/source-offer
-handling. None is established by the current release architecture. Therefore
-the existing external `bwrap` branch remains fail-closed and is reported as a
-limitation, not claimed as installed-user support.
+No defensible Windows sandbox or self-contained Linux isolation runtime was
+established. A Windows token/AppContainer helper needs separate design/review.
+Bundled `bwrap` needs a supported target, kernel/user-namespace compatibility,
+portable dependencies, and redistribution/source-offer review. The limitation
+is reported instead of weakening isolation.
 
 ## Runtime command/spawn audit
 
-Audit command required by the brief:
+Required audit:
 
 ```text
 rg -n "Command::new|execFile|spawn|node |npm |npx |pdftotext|git " \
   desktop/src-tauri desktop/src desktop/scripts
 ```
 
-Every match is classified below. Line numbers are those at final verification.
+It produced 103 matches. A supplemental Go audit covered both sidecars.
 
-| Match(es) | Classification | Finding |
+| Match/group | Classification | Finding |
 |---|---|---|
-| `desktop/scripts/build-sidecar.mjs:3,17,39` | build-time only | Imports child-process helpers, asks build-host `rustc` for its target triple, and compiles the Go sidecar. These run in release/dev build, never in the installed app. |
-| `desktop/src-tauri/src/sidecar.rs:1` | bundled runtime | Comment match only. The separately audited `.sidecar("career-data")` call at line 15 invokes the packaged external binary. |
-| `desktop/src-tauri/src/runner.rs:109` | bundled runtime | Prompt text requires `CAREEROPS_JS_RUNTIME` and explicitly rejects Node from `PATH`. |
-| `runner.rs:1335` | bundled runtime | Trusted selective commit invokes the resolved packaged JS executable. |
-| `runner.rs:1603` | bundled/OS runtime | macOS built-in `/usr/bin/sandbox-exec`; no user install or developer tool. |
-| `runner.rs:1636` | accidental external runtime dependency, fail-closed limitation | Linux `bwrap` remains external. Missing `bwrap` stops reviewed intake before provider start; no install prompt or fallback. |
-| `runner.rs:1888,1899,1902` | external AI Provider | Constructs and spawns the user-selected provider; the error string reports a secure spawn failure. Reviewed intake reaches this only after isolation construction succeeds. |
-| `runner.rs:1917,1934,1952` | bundled runtime | Rust in-process reader/wait threads; these are not external commands. |
-| `runner.rs:2063` | bundled/OS runtime | Existing Unix `kill` cancellation command for an external AI task. It is not a developer prerequisite and is outside deterministic workspace operations. |
-| `runner.rs:2172,2195,2744,2747,2750` | build/test-time only | Rust test fixtures use host Node/fake provider processes and a negative prompt assertion. They are behind `#[cfg(test)]` and absent from release runtime. |
-| `desktop/src/lib/release-pipeline.test.ts:2,126,140,171,175,230` | build/test-time only | Release tests spawn fixture seed commands or inspect command text. |
-| `desktop/src-tauri/tauri.conf.json:7,9` | build-time only | Tauri `beforeDevCommand`/`beforeBuildCommand` npm hooks; neither is executed by an installed app. |
-| `desktop/src/lib/pre-push.test.ts:2,19,23,62,87,98,122,131,132` | build/test-time only | Hermetic Git/pre-push release test fixtures. |
-| `desktop/src/lib/release-prepare.test.ts:2,37-41,47,57,59` | build/test-time only | Temporary Git repositories and release-prepare tests. |
-| `desktop/src/lib/release-workflows.test.ts:2,35-44,110-123` | build/test-time only | Temporary Git repositories and static CI workflow assertions, including npm/npx strings. |
-| `AnalysisLanguageField.test.ts:50-51`; `WorkspaceSettings.test.ts:73,75`; `BackgroundImport.test.ts:48-50,61-62`; `WorkspaceSetup.test.ts:90,92`; `IntakeReview.test.ts:104-105,114-116`; `Onboarding.test.ts:41-43,54-55` | build/test-time false positives | Local React test variable named `node`; no executable or subprocess. |
+| `build-sidecar.mjs`: `rustc`, Go builds, `tar`, runtime/launcher probes | build-time only | Release/dev build machinery; absent after install. |
+| `verify-packaged-runtime.mjs`: executables and `codesign` | build/test-time only | Artifact release gate; not an installed dependency. |
+| Tauri npm hooks; workflow/test npm/npx/Git/Bash commands | build/test-time only | Maintainer CI and hermetic test fixtures. |
+| `careerops-node/main.go:64` | bundled runtime | Absolute package resource execution with forced JIT-less settings. |
+| `career-data/language.go` | bundled runtime | Absolute colocated packaged launcher; former bare `node` removed. |
+| `career-data/providers.go:79` | external AI Provider | Detects/version-checks user-selected AI CLIs, not deterministic operations. |
+| `sidecar.rs` `.sidecar("career-data")`/`.output()` | bundled runtime | Tauri packaged sidecar with reinstall/update missing-file handling. |
+| `runner.rs:1335` trusted commit | bundled runtime | Verified launcher plus package resource directory. |
+| `runner.rs:1628` `/usr/bin/sandbox-exec` | bundled OS runtime | macOS built-in isolation, not a developer tool. |
+| `runner.rs:1662` Linux `bwrap` | external runtime, fail-closed limitation | Missing runtime stops before provider/canonical writes. |
+| `runner.rs:1915,1926` provider command/spawn | external AI Provider | Starts selected provider only after isolation construction. |
+| `runner.rs:1944,1961,1979` thread spawns | bundled runtime | In-process threads, no external executable. |
+| `runner.rs:2090` `kill` | bundled OS runtime/provider control | Existing Unix AI-task cancellation, not deterministic workspace work. |
+| Rust/Go/TS fixtures using Node, Git, Bash, fake commands or spawn | build/test-time only | Test-only code absent from release execution. |
+| React local variable `node`; prompt/assertion/comment strings | text-only false positive | No subprocess. |
 
-Additional spawn API audit beyond the required regex:
-
-- `desktop/src-tauri/src/sidecar.rs:15` calls Tauri
-  `.sidecar("career-data")`: **bundled runtime**.
-- No production Desktop path invokes Git, Homebrew, npm/npx, Cargo/Rust, Go, or
-  Xcode tools for launch, workspace creation, staging, folder opening,
-  workspace switching, or deterministic non-AI data operations.
-
-The only unresolved installed-user command dependency in reviewed intake is
-Linux `bwrap`, and it is explicitly fail-closed and recorded above.
+No accidental installed-user Git/Homebrew/Node/npm/Rust/Go/Xcode dependency
+remains in supported macOS/Windows deterministic Desktop paths. Linux `bwrap`
+is the sole external isolation dependency and remains fail-closed/unresolved.
 
 ## TDD evidence
 
-Initial focused RED runs failed as intended:
+Focused RED evidence preceded each implementation:
+
+```text
+release-pipeline.test.ts
+→ 3 failures: platform resources, pinned manifest, verifier absent
+
+go test ./cmd/careerops-node
+→ packagedRuntimePath/runtimeArgs undefined
+
+cargo test ...missing_sidecar...
+→ data_service_spawn_error undefined
+
+release-workflows.test.ts
+→ generated/installed smoke commands absent
+
+go test ./cmd/career-data
+→ managedNodePath undefined
+
+go test ./cmd/career-data -run TestNodeJSONResult
+→ nodeJSONResult undefined
+
+release-pipeline.test.ts workspace seed
+→ licensed js-yaml/argparse inputs absent
+```
+
+The first mounted-DMG run also failed because isolated `js-yaml` was absent.
+After pinning both lockfile packages, the same artifact test passed.
+
+## Verification results
 
 ```text
 cd desktop
-npm test -- --run src/lib/release-pipeline.test.ts src/screens/BackgroundImport.test.ts
-→ 3 failures: managed runtime/license package inputs and PDF capability UI absent
+npm test -- --run src/lib/pre-push.test.ts src/lib/release-pipeline.test.ts \
+  src/lib/release-prepare.test.ts src/lib/release-workflows.test.ts
+→ 4 files, 67 tests passed
 
-cd desktop/src-tauri
-cargo test packaged_runtime...
-→ compile failure: packaged runtime resolver did not exist
-
-node test-all.mjs --only intake.test.mjs
-→ 24 passed, 1 failed: Desktop mode still probed host pdftotext
-```
-
-After the minimal runtime/resource, resolver, and PDF capability changes:
-
-```text
-npm test -- --run src/lib/release-pipeline.test.ts src/screens/BackgroundImport.test.ts
-→ 2 files, 53 tests passed
-
-cargo test unsupported_isolation_error_is_explicit_retryable_and_fail_closed
-cargo test packaged_runtime_resolves_beside_the_installed_application
-→ 1 passed each
-
-node test-all.mjs --only intake.test.mjs
-→ 25 passed, 0 failed
-```
-
-## Final verification
-
-Actual release regression tests:
-
-```text
-cd desktop
-npm test -- --run \
-  src/lib/pre-push.test.ts \
-  src/lib/release-pipeline.test.ts \
-  src/lib/release-prepare.test.ts \
-  src/lib/release-workflows.test.ts
-→ 4 files, 65 tests passed
-```
-
-Required component commands:
-
-```text
-cd desktop
 npm test
-→ 17 files, 164 tests passed
+→ 17 files, 166 tests passed
 
 npm run build
 → passed; 925 modules transformed
-→ existing non-failing >500 kB Vite chunk advisory remains
+→ existing non-failing >500 kB advisory remains
 
 npm run build:sidecar
-→ workspace seed: 527 files
-→ career-data-aarch64-apple-darwin staged
-→ careerops-node-aarch64-apple-darwin staged (v26.3.0)
+→ workspace seed: 547 files
+→ Node v22.23.2 runtime/license/metadata, career-data and launcher staged/probed
 
-env PATH=/nonexistent CAREEROPS_DESKTOP_PDF_EXTRACTION=unavailable \
-  desktop/src-tauri/binaries/careerops-node-aarch64-apple-darwin \
-  desktop/src-tauri/binaries/workspace-seed/intake.mjs --self-test
-→ 19 passed, 0 failed
+node scripts/verify-packaged-runtime.mjs --generated
+→ passed for aarch64-apple-darwin
 
-env PATH=/nonexistent \
-  desktop/src-tauri/binaries/careerops-node-aarch64-apple-darwin --version
-→ v26.3.0
-
-cd src-tauri
-cargo check
+cd ../dashboard && go test ./...
 → passed
 
-cargo test
-→ 51 passed, 0 failed
-
+cd ../desktop/src-tauri
+cargo check --locked
+→ passed
+cargo test --locked
+→ 52 passed
 cargo fmt --check
 → passed
-
 git diff --check
 → passed
 ```
 
-Integrated release entrypoint:
+Native artifacts:
+
+```text
+npx tauri build --ci --bundles app --config src-tauri/tauri.unsigned.conf.json
+codesign --force --sign - --options runtime --pagesize 4096 <executables/app>
+node scripts/verify-packaged-runtime.mjs --app CareerOps.app
+→ passed after signing
+
+npx tauri build --ci --bundles dmg --config src-tauri/tauri.unsigned.conf.json
+hdiutil attach ... -readonly
+node scripts/verify-packaged-runtime.mjs --app <mount>/CareerOps.app --allow-unsigned-app
+→ passed from mounted Tauri DMG
+```
+
+Integrated readiness:
 
 ```text
 node scripts/release/readiness.mjs --skip-package
-→ root suite: 5700 passed, 0 failed, 6 pre-existing fixture/data warnings
-→ Go suite: passed
-→ Desktop production build: passed
-→ Desktop Vitest: 164 passed
-→ workspace seed + career-data + managed JS runtime staging: passed
-→ cargo check --locked: passed
-→ cargo test --locked: 51 passed
-→ version consistency: 0.4.0 across all release metadata
-→ release metadata validation: passed
-→ git diff --check: passed
+→ root: 5699 passed, 1 failed, 6 warnings
+→ sole failure: already tracked task-8-report.md is not registered in
+  update-system.mjs SYSTEM_PATHS/USER_PATHS
+
+node scripts/release/readiness.mjs --skip-root-tests --skip-package
+→ Go, Desktop build, 166 Vitest tests, sidecar/runtime verifier, Cargo check,
+  52 Cargo tests, version consistency, metadata, and diff check passed
 ```
 
-Native DMG/NSIS packaging was deliberately not run locally. The integrated
-entrypoint used `--skip-package`; native package construction remains the Task
-10/CI platform job. Task 8 verifies its package inputs and runtime placement
-contract, and both existing macOS and Windows package jobs run
-`npm run build:sidecar` before Tauri builds.
+The updater coverage failure is reported, not suppressed. Registering the SDD
+report in product updater policy would broaden Task 8 and was not done.
 
-## Files changed
+## Files changed in fix round 1
 
+- `.github/workflows/desktop-release.yml`
+- `.github/workflows/release-readiness.yml`
+- `dashboard/cmd/career-data/language.go`
+- `dashboard/cmd/career-data/language_test.go`
+- `dashboard/cmd/careerops-node/main.go`
+- `dashboard/cmd/careerops-node/main_test.go`
 - `desktop/scripts/build-sidecar.mjs`
-- `desktop/scripts/sidecar-naming.d.mts`
-- `desktop/scripts/sidecar-naming.mjs`
+- `desktop/scripts/node-runtime.json`
+- `desktop/scripts/verify-packaged-runtime.mjs`
+- `desktop/scripts/workspace-seed.mjs`
 - `desktop/src-tauri/src/runner.rs`
 - `desktop/src-tauri/src/sidecar.rs`
 - `desktop/src-tauri/tauri.conf.json`
-- `desktop/src/components/ReportPane.tsx`
+- `desktop/src-tauri/tauri.macos.conf.json`
+- `desktop/src-tauri/tauri.windows.conf.json`
 - `desktop/src/lib/release-pipeline.test.ts`
-- `desktop/src/screens/BackgroundImport.test.ts`
-- `desktop/src/screens/BackgroundImport.tsx`
-- `desktop/src/screens/Help.tsx`
-- `intake.mjs`
-- `tests/intake.test.mjs`
+- `desktop/src/lib/release-workflows.test.ts`
+- `scripts/release/readiness.mjs`
 - `.superpowers/sdd/Desktop Workspace Bootstrap & Background Intake Implementation Plan/task-8-report.md`
 
-No README, localized README, release documentation, user-layer profile data,
-protected branch, workflow, or unrelated release infrastructure was edited.
+No README/localized README, product docs, user data, protected branch, or
+unrelated updater behavior was changed.
 
 ## README consistency gate / Task 9 follow-up
 
-Task 9 should synchronize the README languages to say:
-
-- Desktop uses its bundled managed JavaScript runtime; users do not install
-  Node/npm for intake;
-- missing packaged services are repaired by reinstall/update, not by running
-  maintainer build commands; and
-- PDFs remain staged when extraction is unavailable, with no Homebrew/Poppler
-  requirement.
-
-This report records the needed documentation change, but Task 8 intentionally
-does not edit README or release docs.
+Task 9 still needs the identified README synchronization: Desktop uses bundled
+managed JavaScript/runtime dependencies; missing assets are repaired by
+reinstall/update rather than installing Node/npm; PDFs stage when extraction is
+unavailable. Task 8 intentionally does not edit those docs.
 
 ## Commit
 
-`test(release): guard workspace runtime dependencies`
+Focused fix commit message:
 
-This is the single commit containing the implementation, tests, and this
-report.
+```text
+fix(release): preserve signed managed runtime
+```

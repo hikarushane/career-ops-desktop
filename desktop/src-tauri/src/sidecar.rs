@@ -5,6 +5,12 @@
 
 use tauri_plugin_shell::ShellExt;
 
+fn data_service_spawn_error(error: impl std::fmt::Display) -> String {
+    format!(
+        "CareerOps data service failed to start: {error}. Reinstall or update CareerOps Desktop."
+    )
+}
+
 /// Runs the sidecar and returns its stdout without interpreting the payload.
 ///
 /// A `{"ok": false, ...}` payload remains a normal sidecar response. `Err`
@@ -13,13 +19,10 @@ async fn run(app: &tauri::AppHandle, args: Vec<String>) -> Result<String, String
     let command = app
         .shell()
         .sidecar("career-data")
-        .map_err(|e| format!("CareerOps data service is unavailable: {e}. Reinstall or update CareerOps Desktop."))?
+        .map_err(data_service_spawn_error)?
         .args(args);
 
-    let output = command
-        .output()
-        .await
-        .map_err(|e| format!("sidecar failed to start: {e}"))?;
+    let output = command.output().await.map_err(data_service_spawn_error)?;
 
     let stdout = String::from_utf8(output.stdout)
         .map_err(|error| format!("sidecar returned non-UTF-8 stdout: {error}"))?;
@@ -139,4 +142,22 @@ pub async fn resolve_job_language(
         ],
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::data_service_spawn_error;
+    use std::process::Command;
+
+    #[test]
+    fn missing_sidecar_spawn_points_to_reinstall_or_update() {
+        let error = Command::new("careerops-definitely-missing-sidecar")
+            .output()
+            .expect_err("fixture executable must not exist");
+        let message = data_service_spawn_error(error);
+
+        assert!(message.contains("Reinstall or update CareerOps Desktop"));
+        assert!(!message.contains("npm"));
+        assert!(!message.contains("build:sidecar"));
+    }
 }

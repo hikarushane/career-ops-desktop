@@ -27,7 +27,8 @@
     "createUpdaterArtifacts": true,
     "resources": {
       "binaries/workspace-seed/": "workspace-seed/",
-      "binaries/node-LICENSE": "licenses/Node.js-LICENSE.txt"
+      "binaries/node-LICENSE": "licenses/Node.js-LICENSE.txt",
+      "binaries/node-runtime.json": "runtime/node-runtime.json"
     },
     "externalBin": [
       "binaries/career-data",

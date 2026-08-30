@@ -19,6 +19,7 @@ run('go', ['test', './...'], join(root, 'dashboard'));
 run('npm', ['run', 'build'], desktop);
 run('npm', ['test'], desktop);
 run('npm', ['run', 'build:sidecar'], desktop);
+run(process.execPath, ['scripts/verify-packaged-runtime.mjs', '--generated'], desktop);
 run('cargo', ['check', '--locked'], tauri);
 run('cargo', ['test', '--locked'], tauri);
 run(process.execPath, ['scripts/release/version-consistency.mjs']);
