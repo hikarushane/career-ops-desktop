@@ -206,18 +206,27 @@ const installed = installedLauncherLayout(launcherTarget, runtimeTarget);
 if (installed) {
   try {
     const expression = 'JSON.stringify({jitless:process.execArgv.includes("--jitless"),eval:eval("1+1"),fn:new Function("return 3")(),wasm:typeof WebAssembly})';
-    for (const override of [undefined, '--no_jitless', '--no-jitless', '--jitless=false', '--jitless=0']) {
-      const launcherArgs = override ? [override, '-p', expression] : ['-p', expression];
+    const hostileCases = [
+      { argument: undefined, nodeOptions: '--no_jitless' },
+      { argument: '--no_jitless', nodeOptions: '--no_jitless' },
+      { argument: '--no-jitless', nodeOptions: '--no-jitless' },
+      { argument: '--nojitless', nodeOptions: '--nojitless' },
+      { argument: '-nojitless', nodeOptions: '--nojitless' },
+      { argument: '--jitless=false', nodeOptions: '--no_jitless' },
+      { argument: '--jitless=0', nodeOptions: '--no_jitless' },
+    ];
+    for (const { argument, nodeOptions } of hostileCases) {
+      const launcherArgs = argument ? [argument, '-p', expression] : ['-p', expression];
       const launcherProbe = JSON.parse(execFileSync(installed.launcher, launcherArgs, {
         encoding: 'utf8',
         env: {
           ...process.env,
-          NODE_OPTIONS: '--no_jitless',
+          NODE_OPTIONS: nodeOptions,
           CAREEROPS_RESOURCE_DIR: join(installed.root, 'attacker-controlled-runtime'),
         },
       }).trim());
       if (!launcherProbe.jitless || launcherProbe.eval !== 2 || launcherProbe.fn !== 3 || launcherProbe.wasm !== 'undefined') {
-        throw new Error(`careerops-node launcher did not enforce --jitless against ${override ?? 'ambient NODE_OPTIONS'}: ${JSON.stringify(launcherProbe)}`);
+        throw new Error(`careerops-node launcher did not enforce --jitless against ${argument ?? `NODE_OPTIONS=${nodeOptions}`}: ${JSON.stringify(launcherProbe)}`);
       }
     }
   } finally {
