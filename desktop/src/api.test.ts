@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  languageSettings, prepareOnboardingWorkspace, resolveJobLanguage, setAnalysisLanguage, stageIntakeFiles,
+  confirmIntakeChanges, getPendingIntakeChanges, languageSettings, prepareOnboardingWorkspace,
+  resolveJobLanguage, setAnalysisLanguage, stageIntakeFiles,
 } from './api';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
@@ -59,6 +60,28 @@ describe('sidecar JSON bridge', () => {
     await expect(prepareOnboardingWorkspace('/workspace')).resolves.toBeUndefined();
     expect(mockedInvoke).toHaveBeenCalledWith('prepare_onboarding_workspace', {
       root: '/workspace',
+    });
+  });
+
+  it('loads the exact full-file candidate before confirmation', async () => {
+    mockedInvoke.mockResolvedValueOnce([{
+      targetFile: 'cv.md',
+      beforeContent: '# CV\n',
+      afterContent: '# CV\nSenior Engineer\n',
+    }]);
+
+    await expect(getPendingIntakeChanges('intake-1')).resolves.toHaveLength(1);
+    expect(mockedInvoke).toHaveBeenCalledWith('pending_intake_changes', {
+      intakeSessionId: 'intake-1',
+    });
+  });
+
+  it('forwards the separate exact-change confirmation', async () => {
+    mockedInvoke.mockResolvedValueOnce(['work/review.txt']);
+
+    await expect(confirmIntakeChanges('intake-1')).resolves.toEqual(['work/review.txt']);
+    expect(mockedInvoke).toHaveBeenCalledWith('confirm_intake_changes', {
+      intakeSessionId: 'intake-1',
     });
   });
 

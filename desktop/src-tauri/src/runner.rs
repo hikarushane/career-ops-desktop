@@ -58,14 +58,14 @@ struct TaskDef {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct IntakeProposal {
     items: Vec<IntakeProposalItem>,
     source_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct IntakeProposalItem {
     id: String,
     target_file: String,
@@ -76,7 +76,7 @@ struct IntakeProposalItem {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct IntakeConflict {
     existing_value: String,
     proposed_value: String,
@@ -96,12 +96,29 @@ struct IntakeApplySelection {
     commit_source_paths: Vec<String>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntakeExactFileChange {
+    target_file: String,
+    before_content: Option<String>,
+    after_content: String,
+}
+
+#[derive(Clone, Debug)]
+struct PendingIntakeApply {
+    exact_changes: Vec<IntakeExactFileChange>,
+    target_bytes: BTreeMap<String, Vec<u8>>,
+    intake_state_bytes: Option<Vec<u8>>,
+    commit_source_paths: Vec<String>,
+}
+
 struct IntakeSession {
     workspace: PathBuf,
     fingerprints: ReviewFingerprints,
     proposal: Option<IntakeProposal>,
     preview_complete: bool,
     applying: bool,
+    pending: Option<PendingIntakeApply>,
 }
 
 const INTAKE_PREVIEW_PROMPT: &str = r#"Run one CareerOps intake preview session using the existing modes/intake.md workflow.
@@ -283,6 +300,7 @@ fn is_safe_proposal_id(id: &str) -> bool {
 }
 
 const CANONICAL_TARGETS: [&str; 3] = ["cv.md", "config/profile.yml", "modes/_profile.md"];
+const INTAKE_STATE_TARGET: &str = "data/intake-state.json";
 const REVIEW_INPUTS: [&str; 7] = [
     "cv.md",
     "config/profile.yml",
@@ -403,6 +421,8 @@ struct CanonicalDirectories {
     root: Dir,
     config: Dir,
     modes: Dir,
+    data: Dir,
+    lib: Dir,
 }
 
 impl CanonicalDirectories {
@@ -415,15 +435,28 @@ impl CanonicalDirectories {
         let modes = root.open_dir_nofollow("modes").map_err(|error| {
             format!("cannot open canonical modes directory without following links: {error}")
         })?;
+        let data = root.open_dir_nofollow("data").map_err(|error| {
+            format!("cannot open canonical data directory without following links: {error}")
+        })?;
+        let lib = root.open_dir_nofollow("lib").map_err(|error| {
+            format!("cannot open canonical lib directory without following links: {error}")
+        })?;
         Ok(Self {
             root,
             config,
             modes,
+            data,
+            lib,
         })
     }
 
     fn validate_parent_entries(&self) -> Result<(), String> {
-        for (name, held) in [("config", &self.config), ("modes", &self.modes)] {
+        for (name, held) in [
+            ("config", &self.config),
+            ("modes", &self.modes),
+            ("data", &self.data),
+            ("lib", &self.lib),
+        ] {
             let current = self.root.open_dir_nofollow(name).map_err(|error| {
                 format!("canonical {name} directory changed or became a symbolic link: {error}")
             })?;
@@ -436,46 +469,84 @@ impl CanonicalDirectories {
         Ok(())
     }
 
+    fn validate_target_parent(&self, relative: &str) -> Result<(), String> {
+        let parent = match relative {
+            "cv.md" => return Ok(()),
+            "config/profile.yml" => ("config", &self.config),
+            "modes/_profile.md" => ("modes", &self.modes),
+            INTAKE_STATE_TARGET => ("data", &self.data),
+            _ => return Err(format!("not a canonical intake target: {relative}")),
+        };
+        let current = self.root.open_dir_nofollow(parent.0).map_err(|error| {
+            format!(
+                "canonical {} directory changed or became a symbolic link: {error}",
+                parent.0
+            )
+        })?;
+        if !same_directory(parent.1, &current)? {
+            return Err(format!(
+                "canonical {} directory changed after intake review; no files were promoted",
+                parent.0
+            ));
+        }
+        Ok(())
+    }
+
     fn target(&self, relative: &str) -> Result<(&Dir, &'static str), String> {
         match relative {
             "cv.md" => Ok((&self.root, "cv.md")),
             "config/profile.yml" => Ok((&self.config, "profile.yml")),
             "modes/_profile.md" => Ok((&self.modes, "_profile.md")),
+            INTAKE_STATE_TARGET => Ok((&self.data, "intake-state.json")),
             _ => Err(format!("not a canonical intake target: {relative}")),
         }
     }
 
     fn read_target(&self, relative: &str) -> Result<Option<Vec<u8>>, String> {
         let (directory, filename) = self.target(relative)?;
+        Self::read_regular_file(directory, filename, relative)
+    }
+
+    fn read_review_input(&self, relative: &str) -> Result<Option<Vec<u8>>, String> {
+        match relative {
+            "cv.md" | "config/profile.yml" | "modes/_profile.md" | INTAKE_STATE_TARGET => {
+                self.read_target(relative)
+            }
+            "intake.mjs" => Self::read_regular_file(&self.root, "intake.mjs", relative),
+            "modes/intake.md" => Self::read_regular_file(&self.modes, "intake.md", relative),
+            "lib/is-main-module.mjs" => {
+                Self::read_regular_file(&self.lib, "is-main-module.mjs", relative)
+            }
+            _ => Err(format!("not an intake review input: {relative}")),
+        }
+    }
+
+    fn read_regular_file(
+        directory: &Dir,
+        filename: &str,
+        relative: &str,
+    ) -> Result<Option<Vec<u8>>, String> {
         match directory.symlink_metadata(filename) {
             Ok(metadata) if metadata.file_type().is_symlink() => {
                 return Err(format!(
-                    "canonical intake target must not be a symbolic link: {relative}"
+                    "intake input must not be a symbolic link: {relative}"
                 ));
             }
             Ok(metadata) if !metadata.is_file() => {
-                return Err(format!(
-                    "canonical intake target must be a regular file: {relative}"
-                ));
+                return Err(format!("intake input must be a regular file: {relative}"));
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => {
-                return Err(format!(
-                    "cannot inspect canonical intake target {relative}: {error}"
-                ))
-            }
+            Err(error) => return Err(format!("cannot inspect intake input {relative}: {error}")),
         }
         let mut options = CapOpenOptions::new();
         options.read(true).follow(FollowSymlinks::No);
         let mut file = directory.open_with(filename, &options).map_err(|error| {
-            format!(
-                "cannot read canonical intake target without following links {relative}: {error}"
-            )
+            format!("cannot read intake input without following links {relative}: {error}")
         })?;
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes)
-            .map_err(|error| format!("cannot read canonical intake target {relative}: {error}"))?;
+            .map_err(|error| format!("cannot read intake input {relative}: {error}"))?;
         Ok(Some(bytes))
     }
 }
@@ -493,9 +564,23 @@ fn same_directory(left: &Dir, right: &Dir) -> Result<bool, String> {
     Ok(left.dev() == right.dev() && left.ino() == right.ino())
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn same_directory(left: &Dir, right: &Dir) -> Result<bool, String> {
+    use cap_std::fs::MetadataExt;
+
+    let left = left
+        .dir_metadata()
+        .map_err(|error| format!("cannot inspect held canonical directory: {error}"))?;
+    let right = right
+        .dir_metadata()
+        .map_err(|error| format!("cannot inspect current canonical directory: {error}"))?;
+    Ok(left.volume_serial_number() == right.volume_serial_number()
+        && left.file_index() == right.file_index())
+}
+
+#[cfg(not(any(unix, windows)))]
 fn same_directory(_left: &Dir, _right: &Dir) -> Result<bool, String> {
-    Ok(true)
+    Err("canonical directory identity checks are unavailable on this platform".to_owned())
 }
 
 fn hash_bytes(bytes: &[u8]) -> String {
@@ -736,18 +821,9 @@ fn fingerprint_review_inputs_with_canonical(
     let documents = fingerprint_documents(&workspace.join("documents"))?;
     let mut review_inputs = BTreeMap::new();
     for relative in REVIEW_INPUTS {
-        let fingerprint = if CANONICAL_TARGETS.contains(&relative) {
-            canonical
-                .read_target(relative)?
-                .map(|bytes| hash_bytes(&bytes))
-        } else {
-            let path = workspace.join(relative);
-            if path.is_file() {
-                Some(hash_file(&path)?)
-            } else {
-                None
-            }
-        };
+        let fingerprint = canonical
+            .read_review_input(relative)?
+            .map(|bytes| hash_bytes(&bytes));
         review_inputs.insert(relative.to_owned(), fingerprint);
     }
     Ok(ReviewFingerprints {
@@ -812,27 +888,25 @@ fn create_intake_sandbox(workspace: &Path) -> Result<TempDir, String> {
         .tempdir()
         .map_err(|error| format!("failed to create intake sandbox: {error}"))?;
     let canonical = CanonicalDirectories::open(workspace)?;
-    for relative in REVIEW_INPUTS.into_iter().chain(SANDBOX_SUPPORT_FILES) {
+    for relative in REVIEW_INPUTS {
         let destination = sandbox.path().join(relative);
-        if CANONICAL_TARGETS.contains(&relative) {
-            if let Some(bytes) = canonical.read_target(relative)? {
-                if let Some(parent) = destination.parent() {
-                    fs::create_dir_all(parent).map_err(|error| {
-                        format!(
-                            "failed to create sandbox directory {}: {error}",
-                            parent.display()
-                        )
-                    })?;
-                }
-                fs::write(&destination, bytes).map_err(|error| {
-                    format!("failed to copy canonical target {relative}: {error}")
+        if let Some(bytes) = canonical.read_review_input(relative)? {
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent).map_err(|error| {
+                    format!(
+                        "failed to create sandbox directory {}: {error}",
+                        parent.display()
+                    )
                 })?;
             }
-        } else {
-            let source = workspace.join(relative);
-            if source.is_file() {
-                copy_regular_file(&source, &destination)?;
-            }
+            fs::write(&destination, bytes)
+                .map_err(|error| format!("failed to copy intake input {relative}: {error}"))?;
+        }
+    }
+    for relative in SANDBOX_SUPPORT_FILES {
+        let source = workspace.join(relative);
+        if source.is_file() {
+            copy_regular_file(&source, &sandbox.path().join(relative))?;
         }
     }
     copy_document_sources(
@@ -881,6 +955,9 @@ trait CanonicalTargetWriter {
     fn validate_layout(&self) -> Result<(), String> {
         Ok(())
     }
+    fn validate_target_layout(&self, _relative: &str) -> Result<(), String> {
+        self.validate_layout()
+    }
     fn read(&self, relative: &str) -> Result<Option<Vec<u8>>, String>;
     fn replace(&mut self, relative: &str, contents: &[u8]) -> Result<(), String>;
     fn remove(&mut self, relative: &str) -> Result<(), String>;
@@ -903,6 +980,10 @@ static NEXT_ATOMIC_TARGET: std::sync::atomic::AtomicU64 = std::sync::atomic::Ato
 impl CanonicalTargetWriter for CapabilityTargetWriter {
     fn validate_layout(&self) -> Result<(), String> {
         self.directories.validate_parent_entries()
+    }
+
+    fn validate_target_layout(&self, relative: &str) -> Result<(), String> {
+        self.directories.validate_target_parent(relative)
     }
 
     fn read(&self, relative: &str) -> Result<Option<Vec<u8>>, String> {
@@ -1045,7 +1126,7 @@ fn restore_target_changes<W: CanonicalTargetWriter>(
     let mut failures = Vec::new();
     for backup in backups.iter().rev() {
         let result = writer
-            .validate_layout()
+            .validate_target_layout(&backup.relative)
             .and_then(|()| match &backup.contents {
                 Some(contents) => writer.replace(&backup.relative, contents),
                 None => writer.remove(&backup.relative),
@@ -1126,7 +1207,7 @@ fn promote_target_changes<W: CanonicalTargetWriter>(
 ) -> Result<Vec<TargetBackup>, PromotionFailure> {
     let mut backups = Vec::new();
     for (relative, contents) in changes {
-        if let Err(error) = writer.validate_layout() {
+        if let Err(error) = writer.validate_target_layout(relative) {
             let rollback_failures = restore_target_changes(writer, &backups);
             return Err(promotion_failure(error, &backups, rollback_failures));
         }
@@ -1149,49 +1230,10 @@ fn promote_target_changes<W: CanonicalTargetWriter>(
     Ok(backups)
 }
 
-fn atomic_replace(path: &Path, contents: &[u8]) -> Result<(), String> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| format!("invalid intake target: {}", path.display()))?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
-    let mut staged = TempBuilder::new()
-        .prefix(".careerops-intake-")
-        .tempfile_in(parent)
-        .map_err(|error| format!("failed to stage {}: {error}", path.display()))?;
-    staged
-        .write_all(contents)
-        .and_then(|_| staged.as_file().sync_all())
-        .map_err(|error| format!("failed to stage {}: {error}", path.display()))?;
-    if let Ok(metadata) = fs::metadata(path) {
-        fs::set_permissions(staged.path(), metadata.permissions()).map_err(|error| {
-            format!(
-                "failed to preserve permissions for {}: {error}",
-                path.display()
-            )
-        })?;
-    }
-    staged.persist(path).map_err(|error| {
-        format!(
-            "failed to atomically replace {}: {}",
-            path.display(),
-            error.error
-        )
-    })?;
-    Ok(())
-}
-
-fn finalize_isolated_apply(
-    workspace: &Path,
-    sandbox: &Path,
+fn changed_paths(
     before: &BTreeMap<String, String>,
-    reviewed: &ReviewFingerprints,
-    selection: &IntakeApplySelection,
-    js_runtime: &PackagedJsRuntime,
-) -> Result<Vec<String>, String> {
-    let mut writer = CapabilityTargetWriter::open(workspace)?;
-    verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
-    let after = fingerprint_tree(sandbox)?;
+    after: &BTreeMap<String, String>,
+) -> Vec<String> {
     let mut changed: Vec<String> = before
         .keys()
         .chain(after.keys())
@@ -1201,6 +1243,98 @@ fn finalize_isolated_apply(
         .filter(|path| before.get(path) != after.get(path))
         .collect();
     changed.sort();
+    changed
+}
+
+fn prepare_intake_state_candidate(
+    sandbox: &Path,
+    provider_after: &BTreeMap<String, String>,
+    reviewed: &ReviewFingerprints,
+    source_paths: &[String],
+    js_runtime: &PackagedJsRuntime,
+) -> Result<Option<Vec<u8>>, String> {
+    if source_paths.is_empty() {
+        return Ok(None);
+    }
+    if source_paths
+        .iter()
+        .any(|path| !is_safe_intake_source_path(path) || !reviewed.documents.contains_key(path))
+    {
+        return Err("refusing to commit unreviewed or unsafe intake source paths".to_owned());
+    }
+    if &fingerprint_tree(sandbox)? != provider_after {
+        return Err(
+            "The isolated intake candidate changed before source hashes were recorded. No real files were changed."
+                .to_owned(),
+        );
+    }
+
+    let output = Command::new(&js_runtime.launcher)
+        .arg("intake.mjs")
+        .arg("--commit")
+        .args(source_paths)
+        .current_dir(sandbox)
+        .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable")
+        .output()
+        .map_err(|error| {
+            format!("packaged CareerOps JavaScript runtime failed to record reviewed intake sources: {error}")
+        })?;
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(if detail.is_empty() {
+            "failed to record reviewed intake sources".to_owned()
+        } else {
+            format!("failed to record reviewed intake sources: {detail}")
+        });
+    }
+
+    let after_commit = fingerprint_tree(sandbox)?;
+    if let Some(path) = changed_paths(provider_after, &after_commit)
+        .iter()
+        .find(|path| path.as_str() != INTAKE_STATE_TARGET)
+    {
+        return Err(format!(
+            "The trusted intake recorder changed {path}, outside its state target. No real files were changed."
+        ));
+    }
+    let state_bytes = fs::read(sandbox.join(INTAKE_STATE_TARGET))
+        .map_err(|error| format!("failed to read prepared intake state: {error}"))?;
+    let state: serde_json::Value = serde_json::from_slice(&state_bytes)
+        .map_err(|error| format!("prepared intake state is invalid JSON: {error}"))?;
+    let ingested = state
+        .get("ingested")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| "prepared intake state has no ingested source map".to_owned())?;
+    for source in source_paths {
+        let expected = reviewed
+            .documents
+            .get(source)
+            .expect("reviewed source membership checked above");
+        let actual = ingested
+            .get(source)
+            .and_then(|entry| entry.get("hash"))
+            .and_then(serde_json::Value::as_str);
+        if actual != Some(expected.as_str()) {
+            return Err(format!(
+                "Prepared intake state does not bind {source} to its reviewed source hash. No real files were changed."
+            ));
+        }
+    }
+    Ok(Some(state_bytes))
+}
+
+fn prepare_isolated_apply(
+    workspace: &Path,
+    sandbox: &Path,
+    before: &BTreeMap<String, String>,
+    reviewed: &ReviewFingerprints,
+    selection: &IntakeApplySelection,
+    js_runtime: &PackagedJsRuntime,
+) -> Result<PendingIntakeApply, String> {
+    let writer = CapabilityTargetWriter::open(workspace)?;
+    verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
+    let after = fingerprint_tree(sandbox)?;
+    let changed = changed_paths(before, &after);
     if let Some(path) = changed
         .iter()
         .find(|path| !CANONICAL_TARGETS.contains(&path.as_str()))
@@ -1275,82 +1409,124 @@ fn finalize_isolated_apply(
         }
     }
 
-    verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
-    let backups =
-        promote_target_changes(&mut writer, &captured).map_err(|error| error.to_string())?;
-
-    let state_path = workspace.join("data/intake-state.json");
-    let state_backup = match fs::read(&state_path) {
-        Ok(contents) => Some(contents),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-        Err(error) => {
-            let rollback_failures = restore_target_changes(&mut writer, &backups);
-            return Err(promotion_failure(
-                format!("failed to back up {}: {error}", state_path.display()),
-                &backups,
-                rollback_failures,
+    let mut exact_changes = Vec::with_capacity(changed.len());
+    for relative in &changed {
+        let before_content = writer
+            .read(relative)?
+            .map(|bytes| {
+                String::from_utf8(bytes).map_err(|_| {
+                    format!(
+                        "Canonical intake target {relative} is not valid UTF-8; no intake changes were applied."
+                    )
+                })
+            })
+            .transpose()?;
+        let after_content = String::from_utf8(
+            captured
+                .get(relative)
+                .expect("all changed targets were captured")
+                .clone(),
+        )
+        .map_err(|_| {
+            format!(
+                "Canonical intake candidate {relative} is not valid UTF-8; no intake changes were applied."
             )
-            .to_string());
-        }
-    };
-    if !selection.commit_source_paths.is_empty() {
-        if let Err(error) =
-            commit_intake_sources(workspace, &selection.commit_source_paths, js_runtime)
-        {
-            let mut failures = restore_target_changes(&mut writer, &backups);
-            let state_rollback = match &state_backup {
-                Some(contents) => atomic_replace(&state_path, contents),
-                None if state_path.exists() => {
-                    fs::remove_file(&state_path).map_err(|state_error| {
-                        format!(
-                            "failed to roll back {}: {state_error}",
-                            state_path.display()
-                        )
-                    })
-                }
-                None => Ok(()),
-            };
-            if let Err(rollback_error) = state_rollback {
-                failures.push(format!("intake-state rollback failed: {rollback_error}"));
+        })?;
+        exact_changes.push(IntakeExactFileChange {
+            target_file: relative.clone(),
+            before_content,
+            after_content,
+        });
+    }
+    let intake_state_bytes = prepare_intake_state_candidate(
+        sandbox,
+        &after,
+        reviewed,
+        &selection.commit_source_paths,
+        js_runtime,
+    )?;
+    verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
+    Ok(PendingIntakeApply {
+        exact_changes,
+        target_bytes: captured,
+        intake_state_bytes,
+        commit_source_paths: selection.commit_source_paths.clone(),
+    })
+}
+
+fn verify_confirmation_inputs(
+    workspace: &Path,
+    canonical: &CanonicalDirectories,
+    reviewed: &ReviewFingerprints,
+    pending: &PendingIntakeApply,
+) -> Result<(), String> {
+    canonical.validate_parent_entries()?;
+    let current_documents = fingerprint_documents(&workspace.join("documents"))?;
+    if current_documents != reviewed.documents {
+        return Err(
+            "Intake evidence changed after exact confirmation; no sources were recorded."
+                .to_owned(),
+        );
+    }
+    let mut expected_inputs = reviewed.review_inputs.clone();
+    for (relative, bytes) in &pending.target_bytes {
+        expected_inputs.insert(relative.clone(), Some(hash_bytes(bytes)));
+    }
+    let current = fingerprint_review_inputs_with_canonical(workspace, canonical)?;
+    if current.review_inputs != expected_inputs {
+        return Err(
+            "Intake profile inputs changed after exact confirmation; no sources were recorded."
+                .to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn confirm_pending_intake_with_hook<F>(
+    workspace: &Path,
+    reviewed: &ReviewFingerprints,
+    pending: &PendingIntakeApply,
+    after_canonical_promotion: F,
+) -> Result<Vec<String>, String>
+where
+    F: FnOnce(),
+{
+    let mut writer = CapabilityTargetWriter::open(workspace)?;
+    verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
+    let backups = promote_target_changes(&mut writer, &pending.target_bytes)
+        .map_err(|error| error.to_string())?;
+
+    after_canonical_promotion();
+    if let Err(error) =
+        verify_confirmation_inputs(workspace, &writer.directories, reviewed, pending)
+    {
+        let failures = restore_target_changes(&mut writer, &backups);
+        return Err(promotion_failure(error, &backups, failures).to_string());
+    }
+
+    if let Some(state_bytes) = &pending.intake_state_bytes {
+        let state_backup = match writer.read(INTAKE_STATE_TARGET) {
+            Ok(contents) => TargetBackup {
+                relative: INTAKE_STATE_TARGET.to_owned(),
+                contents,
+            },
+            Err(error) => {
+                let failures = restore_target_changes(&mut writer, &backups);
+                return Err(promotion_failure(error, &backups, failures).to_string());
             }
+        };
+        if let Err(error) = writer
+            .validate_target_layout(INTAKE_STATE_TARGET)
+            .and_then(|()| writer.replace(INTAKE_STATE_TARGET, state_bytes))
+            .and_then(|()| writer.validate_layout())
+        {
+            let mut failures =
+                restore_target_changes(&mut writer, std::slice::from_ref(&state_backup));
+            failures.extend(restore_target_changes(&mut writer, &backups));
             return Err(promotion_failure(error, &backups, failures).to_string());
         }
     }
-    Ok(selection.commit_source_paths.clone())
-}
-
-fn commit_intake_sources(
-    workspace: &Path,
-    source_paths: &[String],
-    js_runtime: &PackagedJsRuntime,
-) -> Result<(), String> {
-    if source_paths.is_empty()
-        || source_paths
-            .iter()
-            .any(|path| !is_safe_intake_source_path(path))
-    {
-        return Err("refusing to commit empty or unsafe intake source paths".to_owned());
-    }
-
-    let output = Command::new(&js_runtime.launcher)
-        .arg("intake.mjs")
-        .arg("--commit")
-        .args(source_paths)
-        .current_dir(workspace)
-        .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable")
-        .output()
-        .map_err(|error| {
-            format!("packaged CareerOps JavaScript runtime failed to record merged intake sources: {error}")
-        })?;
-    if !output.status.success() {
-        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        return Err(if detail.is_empty() {
-            "failed to record merged intake sources".to_owned()
-        } else {
-            format!("failed to record merged intake sources: {detail}")
-        });
-    }
-    Ok(())
+    Ok(pending.commit_source_paths.clone())
 }
 
 fn is_language_tag(value: &str) -> bool {
@@ -1445,7 +1621,6 @@ enum IntakeExecution {
         reviewed: ReviewFingerprints,
         selection: IntakeApplySelection,
         js_runtime: PackagedJsRuntime,
-        apply_lock: Arc<Mutex<()>>,
     },
 }
 
@@ -1572,7 +1747,7 @@ fn terminate_provider_process_group(_process_group: u32) -> Result<(), String> {
 const INTAKE_ISOLATION_UNAVAILABLE: &str = "Secure reviewed intake is unavailable in this CareerOps Desktop package on this operating system. No files were changed; retry only after updating to a build with supported provider isolation.";
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-fn provider_writable_paths(provider_id: &str) -> Vec<PathBuf> {
+fn provider_writable_paths(provider_id: &str) -> Result<Vec<PathBuf>, String> {
     let relatives: &[&str] = match provider_id {
         "claude" => &[".claude", ".config/claude", ".cache/claude"],
         "codex" => &[".codex", ".cache/codex"],
@@ -1587,13 +1762,65 @@ fn provider_writable_paths(provider_id: &str) -> Vec<PathBuf> {
         "grok" => &[".grok"],
         _ => &[],
     };
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .into_iter()
-        .flat_map(|home| relatives.iter().map(move |relative| home.join(relative)))
-        .filter(|path| path.exists())
-        .map(|path| fs::canonicalize(&path).unwrap_or(path))
-        .collect()
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        return Ok(Vec::new());
+    };
+    let mut paths = Vec::new();
+    for relative in relatives {
+        let path = home.join(relative);
+        match fs::symlink_metadata(&path) {
+            Ok(_) => {
+                let canonical = fs::canonicalize(&path).map_err(|error| {
+                    format!(
+                        "cannot safely resolve provider credential directory {}: {error}",
+                        path.display()
+                    )
+                })?;
+                if !canonical.is_dir() {
+                    return Err(format!(
+                        "provider credential path is not a directory: {}",
+                        canonical.display()
+                    ));
+                }
+                paths.push(canonical);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "cannot safely inspect provider credential directory {}: {error}",
+                    path.display()
+                ))
+            }
+        }
+    }
+    Ok(paths)
+}
+
+fn validate_provider_writable_paths(
+    writable_paths: &[PathBuf],
+    protected_workspace: &Path,
+) -> Result<(), String> {
+    let protected_workspace = fs::canonicalize(protected_workspace).map_err(|error| {
+        format!(
+            "cannot safely resolve protected CareerOps workspace {}: {error}",
+            protected_workspace.display()
+        )
+    })?;
+    for path in writable_paths {
+        let path = fs::canonicalize(path).map_err(|error| {
+            format!(
+                "cannot safely resolve provider writable path {}: {error}",
+                path.display()
+            )
+        })?;
+        if path.starts_with(&protected_workspace) || protected_workspace.starts_with(&path) {
+            return Err(format!(
+                "Provider writable path {} overlaps the CareerOps workspace. Secure reviewed intake is unavailable; no files were changed.",
+                path.display()
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -1609,11 +1836,10 @@ fn isolated_provider_command(
             .replace('\\', "\\\\")
             .replace('"', "\\\"")
     }
+    let provider_paths = provider_writable_paths(provider_id)?;
+    validate_provider_writable_paths(&provider_paths, protected_workspace)?;
     let mut writable_rules = format!("(subpath \"{}\")", escaped(sandbox));
-    for path in provider_writable_paths(provider_id)
-        .into_iter()
-        .filter(|path| !protected_workspace.starts_with(path))
-    {
+    for path in provider_paths {
         writable_rules.push_str(&format!(" (subpath \"{}\")", escaped(&path)));
     }
     let profile = format!(
@@ -1667,10 +1893,9 @@ fn isolated_provider_command(
         ])
         .arg(sandbox)
         .arg("/careerops-intake");
-    for path in provider_writable_paths(provider_id)
-        .into_iter()
-        .filter(|path| !protected_workspace.starts_with(path))
-    {
+    let provider_paths = provider_writable_paths(provider_id)?;
+    validate_provider_writable_paths(&provider_paths, protected_workspace)?;
+    for path in provider_paths {
         command.args(["--bind"]).arg(&path).arg(&path);
     }
     command
@@ -1744,6 +1969,64 @@ pub fn discard_intake_session(
 }
 
 #[tauri::command]
+pub fn pending_intake_changes(
+    state: tauri::State<'_, RunnerState>,
+    intake_session_id: String,
+) -> Result<Vec<IntakeExactFileChange>, String> {
+    let sessions = state.intake_sessions.lock().map_err(|e| e.to_string())?;
+    let session = sessions
+        .get(&intake_session_id)
+        .ok_or_else(|| "The intake preview session expired. Review again.".to_owned())?;
+    if session.applying {
+        return Err("The intake session is still preparing changes.".to_owned());
+    }
+    session
+        .pending
+        .as_ref()
+        .map(|pending| pending.exact_changes.clone())
+        .ok_or_else(|| "No exact intake changes are ready for confirmation.".to_owned())
+}
+
+#[tauri::command]
+pub fn confirm_intake_changes(
+    state: tauri::State<'_, RunnerState>,
+    intake_session_id: String,
+) -> Result<Vec<String>, String> {
+    let (workspace, reviewed, pending, apply_lock) = {
+        let mut sessions = state.intake_sessions.lock().map_err(|e| e.to_string())?;
+        let session = sessions
+            .get_mut(&intake_session_id)
+            .ok_or_else(|| "The intake preview session expired. Review again.".to_owned())?;
+        if session.applying {
+            return Err("The intake session is not ready to confirm.".to_owned());
+        }
+        let pending = session
+            .pending
+            .clone()
+            .ok_or_else(|| "No exact intake changes are ready for confirmation.".to_owned())?;
+        session.applying = true;
+        (
+            session.workspace.clone(),
+            session.fingerprints.clone(),
+            pending,
+            state.intake_apply_lock.clone(),
+        )
+    };
+
+    let result = match apply_lock.lock() {
+        Ok(_guard) => confirm_pending_intake_with_hook(&workspace, &reviewed, &pending, || {}),
+        Err(error) => Err(format!("intake apply lock failed: {error}")),
+    };
+    let mut sessions = state.intake_sessions.lock().map_err(|e| e.to_string())?;
+    if result.is_ok() {
+        sessions.remove(&intake_session_id);
+    } else if let Some(session) = sessions.get_mut(&intake_session_id) {
+        session.applying = false;
+    }
+    result
+}
+
+#[tauri::command]
 pub fn run_task(
     app: AppHandle,
     state: tauri::State<'_, RunnerState>,
@@ -1799,6 +2082,7 @@ pub fn run_task(
                         proposal: None,
                         preview_complete: false,
                         applying: false,
+                        pending: None,
                     },
                 );
             let directory = sandbox.path().to_path_buf();
@@ -1829,7 +2113,7 @@ pub fn run_task(
                 if session.workspace != workspace {
                     return Err("The intake session belongs to a different workspace.".to_owned());
                 }
-                if !session.preview_complete || session.applying {
+                if !session.preview_complete || session.applying || session.pending.is_some() {
                     return Err("The intake preview session is not ready to apply.".to_owned());
                 }
                 verify_review_fingerprints(&workspace, &session.fingerprints)?;
@@ -1880,7 +2164,6 @@ pub fn run_task(
                 js_runtime: js_runtime
                     .clone()
                     .expect("intake tasks resolve their packaged runtime"),
-                apply_lock: state.intake_apply_lock.clone(),
             });
             directory
         }
@@ -2007,34 +2290,48 @@ pub fn run_task(
                     reviewed,
                     selection,
                     js_runtime,
-                    apply_lock,
                 }) => {
                     if success {
-                        match apply_lock.lock() {
-                            Ok(_guard) => {
-                                if let Err(error) = finalize_isolated_apply(
-                                    &workspace,
-                                    sandbox.path(),
-                                    &before,
-                                    &reviewed,
-                                    &selection,
-                                    &js_runtime,
-                                ) {
+                        match prepare_isolated_apply(
+                            &workspace,
+                            sandbox.path(),
+                            &before,
+                            &reviewed,
+                            &selection,
+                            &js_runtime,
+                        ) {
+                            Ok(pending) => {
+                                if let Ok(mut sessions) =
+                                    a.state::<RunnerState>().intake_sessions.lock()
+                                {
+                                    if let Some(session) = sessions.get_mut(&session_id) {
+                                        session.pending = Some(pending);
+                                    } else {
+                                        success = false;
+                                        exit_code = Some(1);
+                                        intake_error = Some(
+                                            "The intake preview session expired. Review again."
+                                                .to_owned(),
+                                        );
+                                    }
+                                } else {
                                     success = false;
                                     exit_code = Some(1);
-                                    intake_error = Some(error);
+                                    intake_error = Some("intake session lock failed".to_owned());
                                 }
                             }
                             Err(error) => {
                                 success = false;
                                 exit_code = Some(1);
-                                intake_error = Some(format!("intake apply lock failed: {error}"));
+                                intake_error = Some(error);
                             }
                         }
                     }
                     if let Ok(mut sessions) = a.state::<RunnerState>().intake_sessions.lock() {
                         if success {
-                            sessions.remove(&session_id);
+                            if let Some(session) = sessions.get_mut(&session_id) {
+                                session.applying = false;
+                            }
                         } else if let Some(session) = sessions.get_mut(&session_id) {
                             session.applying = false;
                         }
@@ -2095,11 +2392,13 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        build_apply_selection, build_prompt, create_intake_sandbox, finalize_isolated_apply,
-        fingerprint_review_inputs, fingerprint_tree, get_task_def, language_context_instruction,
-        packaged_runtime_paths_for_executable, verify_review_fingerprints,
+        build_apply_selection, build_prompt, confirm_pending_intake_with_hook,
+        create_intake_sandbox, fingerprint_review_inputs, fingerprint_tree, get_task_def,
+        language_context_instruction, packaged_runtime_paths_for_executable,
+        prepare_isolated_apply, validate_provider_writable_paths, verify_review_fingerprints,
         write_intake_selection_file, IntakeConflict, IntakeProposal, IntakeProposalItem,
         LanguageContext, PackagedJsRuntime, INTAKE_APPLY_PROMPT, INTAKE_ISOLATION_UNAVAILABLE,
+        INTAKE_STATE_TARGET,
     };
 
     struct TempDir(PathBuf);
@@ -2162,7 +2461,7 @@ mod tests {
         .unwrap();
         fs::write(
             workspace.path().join("intake.mjs"),
-            "import { mkdirSync, writeFileSync } from 'node:fs';\nif (process.argv.includes('--commit')) { mkdirSync('data', { recursive: true }); writeFileSync('data/intake-state.json', JSON.stringify({ committed: process.argv.slice(3) })); }\n",
+            "import { createHash } from 'node:crypto';\nimport { mkdirSync, readFileSync, writeFileSync } from 'node:fs';\nif (process.argv.includes('--commit')) { const ingested = Object.fromEntries(process.argv.slice(3).map((source) => [source, { hash: createHash('sha256').update(readFileSync(`documents/${source}`)).digest('hex'), ingestedAt: 'test' }])); mkdirSync('data', { recursive: true }); writeFileSync('data/intake-state.json', JSON.stringify({ ingested })); }\n",
         )
         .unwrap();
         workspace
@@ -2313,7 +2612,7 @@ mod tests {
         let before = fingerprint_tree(sandbox.path()).unwrap();
         fake_provider(sandbox.path(), provider);
 
-        let error = finalize_isolated_apply(
+        let error = prepare_isolated_apply(
             workspace.path(),
             sandbox.path(),
             &before,
@@ -2350,7 +2649,7 @@ mod tests {
         let before = fingerprint_tree(sandbox.path()).unwrap();
         fake_provider(sandbox.path(), provider);
 
-        let error = finalize_isolated_apply(
+        let error = prepare_isolated_apply(
             workspace.path(),
             sandbox.path(),
             &before,
@@ -2384,7 +2683,7 @@ mod tests {
         let before = fingerprint_tree(sandbox.path()).unwrap();
         fake_provider(sandbox.path(), provider);
 
-        let error = finalize_isolated_apply(
+        let error = prepare_isolated_apply(
             workspace.path(),
             sandbox.path(),
             &before,
@@ -2486,6 +2785,17 @@ mod tests {
             .expect_err("ambiguous conflict must be rejected");
 
         assert!(error.contains("conflict proposed value"));
+    }
+
+    #[test]
+    fn rust_proposal_schema_rejects_unknown_fields() {
+        for json in [
+            r#"{"items":[],"sourcePaths":[],"unexpected":true}"#,
+            r#"{"items":[{"id":"work-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"unexpected":true}],"sourcePaths":["work/review.txt"]}"#,
+            r#"{"items":[{"id":"work-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"conflict":{"existingValue":"Engineer","proposedValue":"Senior Engineer","unexpected":true}}],"sourcePaths":["work/review.txt"]}"#,
+        ] {
+            assert!(serde_json::from_str::<IntakeProposal>(json).is_err());
+        }
     }
 
     #[test]
@@ -2810,7 +3120,7 @@ mod tests {
         let before = fingerprint_tree(sandbox.path()).unwrap();
         fake_provider(sandbox.path(), provider);
 
-        let committed = finalize_isolated_apply(
+        let pending = prepare_isolated_apply(
             workspace.path(),
             sandbox.path(),
             &before,
@@ -2818,15 +3128,338 @@ mod tests {
             &selected,
             &test_runtime(),
         )
-        .expect("verified apply");
+        .expect("verified candidate");
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "# CV\n\nEngineer\n"
+        );
+        let committed =
+            confirm_pending_intake_with_hook(workspace.path(), &reviewed, &pending, || {})
+                .expect("verified exact confirmation");
 
         assert_eq!(committed, vec!["work/review.txt"]);
         assert!(fs::read_to_string(workspace.path().join("cv.md"))
             .unwrap()
             .contains("Senior Engineer"));
+        let state: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(workspace.path().join("data/intake-state.json")).unwrap(),
+        )
+        .unwrap();
         assert_eq!(
-            fs::read_to_string(workspace.path().join("data/intake-state.json")).unwrap(),
-            "{\"committed\":[\"work/review.txt\"]}"
+            state["ingested"]["work/review.txt"]["hash"],
+            reviewed.documents["work/review.txt"]
+        );
+    }
+
+    #[test]
+    fn provider_extra_content_is_only_a_candidate_until_exact_confirmation() {
+        let workspace = intake_workspace("candidate-extra-content");
+        let reviewed = fingerprint_review_inputs(workspace.path()).unwrap();
+        let selected = build_apply_selection(
+            &proposal(vec![proposal_item("work-1", "Senior Engineer")]),
+            &["work-1".to_owned()],
+        )
+        .unwrap();
+        let sandbox = create_intake_sandbox(workspace.path()).unwrap();
+        write_intake_selection_file(sandbox.path(), &selected).unwrap();
+        let provider = "import { appendFileSync } from 'node:fs';\nappendFileSync('cv.md', '\\nSenior Engineer\\nFABRICATED EXTRA\\n');\n";
+        fs::write(sandbox.path().join("fake-provider.mjs"), provider).unwrap();
+        let before = fingerprint_tree(sandbox.path()).unwrap();
+        fake_provider(sandbox.path(), provider);
+
+        let pending = prepare_isolated_apply(
+            workspace.path(),
+            sandbox.path(),
+            &before,
+            &reviewed,
+            &selected,
+            &test_runtime(),
+        )
+        .expect("provider result becomes an exact review candidate");
+
+        assert!(pending.exact_changes[0]
+            .after_content
+            .contains("FABRICATED EXTRA"));
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "# CV\n\nEngineer\n"
+        );
+        assert!(!workspace.path().join("data/intake-state.json").exists());
+    }
+
+    #[test]
+    fn provider_deletion_or_rewrite_is_only_a_candidate_until_exact_confirmation() {
+        let workspace = intake_workspace("candidate-rewrite");
+        let reviewed = fingerprint_review_inputs(workspace.path()).unwrap();
+        let selected = build_apply_selection(
+            &proposal(vec![proposal_item("work-1", "Senior Engineer")]),
+            &["work-1".to_owned()],
+        )
+        .unwrap();
+        let sandbox = create_intake_sandbox(workspace.path()).unwrap();
+        write_intake_selection_file(sandbox.path(), &selected).unwrap();
+        let provider = "import { writeFileSync } from 'node:fs';\nwriteFileSync('cv.md', '# CV\\n\\nSenior Engineer\\n');\n";
+        fs::write(sandbox.path().join("fake-provider.mjs"), provider).unwrap();
+        let before = fingerprint_tree(sandbox.path()).unwrap();
+        fake_provider(sandbox.path(), provider);
+
+        let pending = prepare_isolated_apply(
+            workspace.path(),
+            sandbox.path(),
+            &before,
+            &reviewed,
+            &selected,
+            &test_runtime(),
+        )
+        .expect("rewrite becomes an exact review candidate");
+
+        assert_eq!(
+            pending.exact_changes[0].after_content,
+            "# CV\n\nSenior Engineer\n"
+        );
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "# CV\n\nEngineer\n"
+        );
+        assert!(!workspace.path().join("data/intake-state.json").exists());
+    }
+
+    #[test]
+    fn exact_confirmed_candidate_promotes_and_records_reviewed_source_hash() {
+        let workspace = intake_workspace("candidate-confirmed");
+        let reviewed = fingerprint_review_inputs(workspace.path()).unwrap();
+        let selected = build_apply_selection(
+            &proposal(vec![proposal_item("work-1", "Senior Engineer")]),
+            &["work-1".to_owned()],
+        )
+        .unwrap();
+        let sandbox = create_intake_sandbox(workspace.path()).unwrap();
+        write_intake_selection_file(sandbox.path(), &selected).unwrap();
+        let provider = "import { appendFileSync } from 'node:fs';\nappendFileSync('cv.md', '\\nSenior Engineer\\n');\n";
+        fs::write(sandbox.path().join("fake-provider.mjs"), provider).unwrap();
+        let before = fingerprint_tree(sandbox.path()).unwrap();
+        fake_provider(sandbox.path(), provider);
+        let pending = prepare_isolated_apply(
+            workspace.path(),
+            sandbox.path(),
+            &before,
+            &reviewed,
+            &selected,
+            &test_runtime(),
+        )
+        .unwrap();
+
+        let committed =
+            confirm_pending_intake_with_hook(workspace.path(), &reviewed, &pending, || {})
+                .expect("exact confirmed bytes must promote");
+
+        assert_eq!(committed, vec!["work/review.txt"]);
+        assert!(fs::read_to_string(workspace.path().join("cv.md"))
+            .unwrap()
+            .contains("Senior Engineer"));
+        let state: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(workspace.path().join("data/intake-state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            state["ingested"]["work/review.txt"]["hash"],
+            reviewed.documents["work/review.txt"]
+        );
+    }
+
+    #[test]
+    fn source_mutation_after_canonical_promotion_rolls_back_everything() {
+        let workspace = intake_workspace("confirm-source-race");
+        let reviewed = fingerprint_review_inputs(workspace.path()).unwrap();
+        let selected = build_apply_selection(
+            &proposal(vec![proposal_item("work-1", "Senior Engineer")]),
+            &["work-1".to_owned()],
+        )
+        .unwrap();
+        let sandbox = create_intake_sandbox(workspace.path()).unwrap();
+        write_intake_selection_file(sandbox.path(), &selected).unwrap();
+        let provider = "import { appendFileSync } from 'node:fs';\nappendFileSync('cv.md', '\\nSenior Engineer\\n');\n";
+        fs::write(sandbox.path().join("fake-provider.mjs"), provider).unwrap();
+        let before = fingerprint_tree(sandbox.path()).unwrap();
+        fake_provider(sandbox.path(), provider);
+        let pending = prepare_isolated_apply(
+            workspace.path(),
+            sandbox.path(),
+            &before,
+            &reviewed,
+            &selected,
+            &test_runtime(),
+        )
+        .unwrap();
+
+        let error = confirm_pending_intake_with_hook(workspace.path(), &reviewed, &pending, || {
+            fs::write(
+                workspace.path().join("documents/work/review.txt"),
+                "mutated after canonical promotion\n",
+            )
+            .unwrap();
+        })
+        .expect_err("post-promotion evidence drift must fail");
+
+        assert!(error.contains("changed") || error.contains("review"));
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "# CV\n\nEngineer\n"
+        );
+        assert!(!workspace.path().join("data/intake-state.json").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn intake_state_parent_replacement_rolls_back_canonical_and_preserves_external_state() {
+        let workspace = intake_workspace("confirm-state-parent-race");
+        let external = TempDir::new("confirm-state-parent-race-external");
+        fs::write(
+            external.path().join("intake-state.json"),
+            "external state\n",
+        )
+        .unwrap();
+        let reviewed = fingerprint_review_inputs(workspace.path()).unwrap();
+        let selected = build_apply_selection(
+            &proposal(vec![proposal_item("work-1", "Senior Engineer")]),
+            &["work-1".to_owned()],
+        )
+        .unwrap();
+        let sandbox = create_intake_sandbox(workspace.path()).unwrap();
+        write_intake_selection_file(sandbox.path(), &selected).unwrap();
+        let provider = "import { appendFileSync } from 'node:fs';\nappendFileSync('cv.md', '\\nSenior Engineer\\n');\n";
+        fs::write(sandbox.path().join("fake-provider.mjs"), provider).unwrap();
+        let before = fingerprint_tree(sandbox.path()).unwrap();
+        fake_provider(sandbox.path(), provider);
+        let pending = prepare_isolated_apply(
+            workspace.path(),
+            sandbox.path(),
+            &before,
+            &reviewed,
+            &selected,
+            &test_runtime(),
+        )
+        .unwrap();
+
+        let error = confirm_pending_intake_with_hook(workspace.path(), &reviewed, &pending, || {
+            fs::rename(
+                workspace.path().join("data"),
+                workspace.path().join("data-held"),
+            )
+            .unwrap();
+            std::os::unix::fs::symlink(external.path(), workspace.path().join("data")).unwrap();
+        })
+        .expect_err("replaced intake-state parent must fail closed");
+
+        assert!(error.contains("data") || error.contains("changed"));
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "# CV\n\nEngineer\n"
+        );
+        assert_eq!(
+            fs::read_to_string(external.path().join("intake-state.json")).unwrap(),
+            "external state\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn intake_state_file_replacement_or_symlink_rolls_back_without_overwriting_the_racer() {
+        for raced_kind in ["file", "symlink"] {
+            let workspace = intake_workspace(&format!("confirm-state-{raced_kind}-race"));
+            let external = TempDir::new(&format!("confirm-state-{raced_kind}-external"));
+            let external_state = external.path().join("intake-state.json");
+            fs::write(&external_state, "external state\n").unwrap();
+            let reviewed = fingerprint_review_inputs(workspace.path()).unwrap();
+            let selected = build_apply_selection(
+                &proposal(vec![proposal_item("work-1", "Senior Engineer")]),
+                &["work-1".to_owned()],
+            )
+            .unwrap();
+            let sandbox = create_intake_sandbox(workspace.path()).unwrap();
+            write_intake_selection_file(sandbox.path(), &selected).unwrap();
+            let provider = "import { appendFileSync } from 'node:fs';\nappendFileSync('cv.md', '\\nSenior Engineer\\n');\n";
+            fs::write(sandbox.path().join("fake-provider.mjs"), provider).unwrap();
+            let before = fingerprint_tree(sandbox.path()).unwrap();
+            fake_provider(sandbox.path(), provider);
+            let pending = prepare_isolated_apply(
+                workspace.path(),
+                sandbox.path(),
+                &before,
+                &reviewed,
+                &selected,
+                &test_runtime(),
+            )
+            .unwrap();
+            let raced_state = workspace.path().join(INTAKE_STATE_TARGET);
+
+            let error =
+                confirm_pending_intake_with_hook(workspace.path(), &reviewed, &pending, || {
+                    if raced_kind == "file" {
+                        fs::write(&raced_state, "raced state\n").unwrap();
+                    } else {
+                        std::os::unix::fs::symlink(&external_state, &raced_state).unwrap();
+                    }
+                })
+                .expect_err("replaced intake state must fail closed");
+
+            assert!(error.contains("changed") || error.contains("symbolic link"));
+            assert_eq!(
+                fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+                "# CV\n\nEngineer\n"
+            );
+            if raced_kind == "file" {
+                assert_eq!(fs::read_to_string(&raced_state).unwrap(), "raced state\n");
+            } else {
+                assert!(fs::symlink_metadata(&raced_state)
+                    .unwrap()
+                    .file_type()
+                    .is_symlink());
+            }
+            assert_eq!(
+                fs::read_to_string(&external_state).unwrap(),
+                "external state\n"
+            );
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn provider_writable_paths_overlapping_workspace_are_rejected_both_directions() {
+        let parent = TempDir::new("provider-overlap-parent");
+        let workspace = parent.path().join("workspace");
+        fs::create_dir(&workspace).unwrap();
+        fs::write(workspace.join("sentinel"), "unchanged\n").unwrap();
+        let nested = workspace.join("config");
+        fs::create_dir(&nested).unwrap();
+
+        for writable in [parent.path().to_path_buf(), nested] {
+            let error = validate_provider_writable_paths(&[writable], &workspace)
+                .expect_err("provider writable overlap must fail closed");
+            assert!(error.contains("overlap") || error.contains("workspace"));
+        }
+        assert_eq!(
+            fs::read_to_string(workspace.join("sentinel")).unwrap(),
+            "unchanged\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn canonicalized_provider_credential_symlink_into_workspace_is_rejected() {
+        let parent = TempDir::new("provider-link-overlap-parent");
+        let workspace = parent.path().join("workspace");
+        fs::create_dir_all(workspace.join("config")).unwrap();
+        fs::write(workspace.join("config/sentinel"), "unchanged\n").unwrap();
+        let credential_link = parent.path().join("credentials");
+        std::os::unix::fs::symlink(workspace.join("config"), &credential_link).unwrap();
+        let canonical = fs::canonicalize(&credential_link).unwrap();
+
+        validate_provider_writable_paths(&[canonical], &workspace)
+            .expect_err("canonical credential link into workspace must fail closed");
+        assert_eq!(
+            fs::read_to_string(workspace.join("config/sentinel")).unwrap(),
+            "unchanged\n"
         );
     }
 

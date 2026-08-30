@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { open } from '@tauri-apps/plugin-dialog';
 import { doctor, getDefaultWorkspacePath, initializeWorkspace, inspectWorkspace, listApplications } from '../api';
-import { saveWorkspacePath } from '../lib/workspace';
+import { loadWorkspacePath, saveWorkspacePath } from '../lib/workspace';
 import * as workspaceConfig from '../config';
-import { chooseWorkspace, createDefaultWorkspace, pickWorkspace } from '../config';
+import { chooseWorkspace, createDefaultWorkspace, loadActiveRoot, pickWorkspace } from '../config';
 import App from '../App';
 import Header from '../components/Header';
 import ProfileSettings from './ProfileSettings';
@@ -47,7 +47,7 @@ vi.mock('../api', () => ({
   isError: (result: { ok: boolean }) => result.ok === false,
   listApplications: vi.fn(),
 }));
-vi.mock('../lib/workspace', () => ({ saveWorkspacePath: vi.fn() }));
+vi.mock('../lib/workspace', () => ({ loadWorkspacePath: vi.fn(), saveWorkspacePath: vi.fn() }));
 
 const mockedOpen = vi.mocked(open);
 const mockedDoctor = vi.mocked(doctor);
@@ -55,6 +55,7 @@ const mockedDefaultWorkspacePath = vi.mocked(getDefaultWorkspacePath);
 const mockedInitializeWorkspace = vi.mocked(initializeWorkspace);
 const mockedInspectWorkspace = vi.mocked(inspectWorkspace);
 const mockedListApplications = vi.mocked(listApplications);
+const mockedLoadWorkspacePath = vi.mocked(loadWorkspacePath);
 const mockedSaveWorkspacePath = vi.mocked(saveWorkspacePath);
 
 afterEach(() => {
@@ -110,6 +111,29 @@ describe('WorkspaceSetup', () => {
     expect(button(tree, 'Create workspace')).toBeDefined();
     expect(button(tree, 'Choose another location')).toBeDefined();
   });
+
+  it('inspects a persisted workspace before allowing App to use it', async () => {
+    mockedLoadWorkspacePath.mockResolvedValue('/Users/Alice/CareerOps');
+    mockedInspectWorkspace.mockResolvedValue({
+      path: '/Users/Alice/CareerOps',
+      kind: 'careerops',
+    });
+
+    await expect(loadActiveRoot()).resolves.toBe('/Users/Alice/CareerOps');
+    expect(mockedInspectWorkspace).toHaveBeenCalledWith('/Users/Alice/CareerOps');
+    expect(mockedDoctor).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing', 'empty', 'nonempty-invalid'] as const)(
+    'routes a persisted %s path back to recoverable workspace setup',
+    async (kind) => {
+      mockedLoadWorkspacePath.mockResolvedValue('/Users/Alice/OldCareerOps');
+      mockedInspectWorkspace.mockResolvedValue({ path: '/Users/Alice/OldCareerOps', kind });
+
+      await expect(loadActiveRoot()).resolves.toBeNull();
+      expect(mockedDoctor).not.toHaveBeenCalled();
+    },
+  );
 
   it('creates the default workspace and awaits activation', async () => {
     let finishActivation: () => void;

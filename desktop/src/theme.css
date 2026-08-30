@@ -221,6 +221,14 @@ summary:focus-visible {
   font: 700 14px/1.2 var(--font-sans); cursor: pointer;
 }
 .intake-approval input { width: 20px; height: 20px; margin: 0; accent-color: var(--color-primary); }
+.intake-exact-card h2 { margin: 0 0 16px; font: 700 15px/1.3 var(--font-sans); }
+.intake-exact-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.intake-exact-columns h3 { margin: 0 0 8px; color: var(--color-text-secondary); font: 700 12px/1.3 var(--font-sans); }
+.intake-exact-columns pre {
+  max-height: 360px; margin: 0; padding: 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  border-radius: var(--radius-control); background: var(--color-surface-subtle);
+  color: var(--color-text-primary); font: 12px/1.5 var(--font-mono);
+}
 @media (max-width: 640px) {
   .intake-file-row { grid-template-columns: 1fr auto; }
   .intake-file-row label { grid-column: 1 / -1; }
@@ -232,6 +240,7 @@ summary:focus-visible {
   .intake-approval input { width: 24px; height: 24px; }
   .intake-review-screen .setup-actions { flex-wrap: wrap; }
   .intake-review-screen .setup-actions button { min-height: 44px; }
+  .intake-exact-columns { grid-template-columns: 1fr; }
 }
 .workspace-path-preview {
   max-width: 100%;

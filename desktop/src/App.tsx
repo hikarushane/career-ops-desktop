@@ -3,7 +3,7 @@ import {
   doctor, isError, listApplications, prepareOnboardingWorkspace,
   type Application, type DoctorResult, type ListResult,
 } from './api';
-import { loadRoot, pickWorkspace, saveRoot } from './config';
+import { loadActiveRoot, pickWorkspace, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
@@ -70,7 +70,7 @@ export default function App() {
 
   useEffect(() => {
     loadContracts().catch(() => {});
-    loadRoot()
+    loadActiveRoot()
       .then(async (p) => {
         setRoot(p);
         if (!p) return;

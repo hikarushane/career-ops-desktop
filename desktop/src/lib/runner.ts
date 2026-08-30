@@ -3,6 +3,8 @@ import {
   runTask as invokeRunTask,
   cancelTask as invokeCancelTask,
   bindIntakeProposal as invokeBindIntakeProposal,
+  getPendingIntakeChanges as invokeGetPendingIntakeChanges,
+  confirmIntakeChanges as invokeConfirmIntakeChanges,
   discardIntakeSession as invokeDiscardIntakeSession,
   type TaskType,
   type TaskOutputEvent,
@@ -10,6 +12,7 @@ import {
   type LanguageContext,
   type IntakeProposal,
   type IntakeProposalItem,
+  type IntakeExactFileChange,
 } from '../api';
 import { getPreferredProvider } from './providers';
 
@@ -22,6 +25,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  const keys = new Set(allowed);
+  return Object.keys(value).every((key) => keys.has(key));
+}
+
 function isSafeSourcePath(value: unknown): value is string {
   if (typeof value !== 'string' || value.length === 0 || value.includes('\\') || value.includes('\0')) {
     return false;
@@ -32,6 +40,7 @@ function isSafeSourcePath(value: unknown): value is string {
 
 function isProposalItem(value: unknown, sourcePaths: Set<string>): value is IntakeProposalItem {
   if (!isRecord(value)) return false;
+  if (!hasOnlyKeys(value, ['id', 'targetFile', 'field', 'proposedValue', 'sources', 'conflict'])) return false;
   if (typeof value.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.id)) return false;
   if (typeof value.targetFile !== 'string' || !TARGET_FILES.has(value.targetFile)) return false;
   if (typeof value.field !== 'string' || value.field.length === 0) return false;
@@ -40,6 +49,7 @@ function isProposalItem(value: unknown, sourcePaths: Set<string>): value is Inta
   if (!value.sources.every((source) => isSafeSourcePath(source) && sourcePaths.has(source))) return false;
   if (value.conflict !== undefined) {
     if (!isRecord(value.conflict)) return false;
+    if (!hasOnlyKeys(value.conflict, ['existingValue', 'proposedValue'])) return false;
     if (typeof value.conflict.existingValue !== 'string' || typeof value.conflict.proposedValue !== 'string') {
       return false;
     }
@@ -55,6 +65,9 @@ export function parseIntakeProposal(output: string): IntakeProposal {
   if (output.indexOf(INTAKE_PROPOSAL_START, start + INTAKE_PROPOSAL_START.length) !== -1) {
     throw new Error(INTAKE_PROTOCOL_ERROR);
   }
+  if (output.indexOf(INTAKE_PROPOSAL_END, end + INTAKE_PROPOSAL_END.length) !== -1) {
+    throw new Error(INTAKE_PROTOCOL_ERROR);
+  }
 
   let parsed: unknown;
   try {
@@ -63,7 +76,12 @@ export function parseIntakeProposal(output: string): IntakeProposal {
     throw new Error(INTAKE_PROTOCOL_ERROR);
   }
 
-  if (!isRecord(parsed) || !Array.isArray(parsed.items) || !Array.isArray(parsed.sourcePaths)) {
+  if (
+    !isRecord(parsed)
+    || !hasOnlyKeys(parsed, ['items', 'sourcePaths'])
+    || !Array.isArray(parsed.items)
+    || !Array.isArray(parsed.sourcePaths)
+  ) {
     throw new Error(INTAKE_PROTOCOL_ERROR);
   }
   if (!parsed.sourcePaths.every(isSafeSourcePath)) throw new Error(INTAKE_PROTOCOL_ERROR);
@@ -198,8 +216,8 @@ export async function applyIntakeProposal(
   root: string,
   intakeSessionId: string,
   approvedIds: string[],
-): Promise<{ applied: boolean }> {
-  if (approvedIds.length === 0) return { applied: false };
+): Promise<{ applied: boolean; exactChanges: IntakeExactFileChange[] }> {
+  if (approvedIds.length === 0) return { applied: false, exactChanges: [] };
 
   await new Promise<void>((resolve, reject) => {
     void runTask('intake-apply', {
@@ -213,5 +231,13 @@ export async function applyIntakeProposal(
     }).catch(reject);
   });
 
-  return { applied: true };
+  const exactChanges = await invokeGetPendingIntakeChanges(intakeSessionId);
+  return { applied: false, exactChanges };
+}
+
+export async function confirmIntakeProposal(
+  intakeSessionId: string,
+): Promise<{ applied: true; committedSourcePaths: string[] }> {
+  const committedSourcePaths = await invokeConfirmIntakeChanges(intakeSessionId);
+  return { applied: true, committedSourcePaths };
 }
