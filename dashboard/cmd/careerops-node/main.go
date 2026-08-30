@@ -10,18 +10,15 @@ import (
 	"strings"
 )
 
-const resourceDirEnvironment = "CAREEROPS_RESOURCE_DIR"
-
-func packagedRuntimePath(executable, resourceDir, goos string) (string, error) {
-	if resourceDir == "" {
-		switch goos {
-		case "darwin":
-			resourceDir = filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "Resources"))
-		case "windows":
-			resourceDir = filepath.Dir(executable)
-		default:
-			return "", errors.New("CAREEROPS_RESOURCE_DIR is required on this platform")
-		}
+func packagedRuntimePath(executable, goos string) (string, error) {
+	var resourceDir string
+	switch goos {
+	case "darwin":
+		resourceDir = filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "Resources"))
+	case "windows":
+		resourceDir = filepath.Dir(executable)
+	default:
+		return "", errors.New("the managed JavaScript runtime is unavailable on this packaged platform")
 	}
 	name := "careerops-node-runtime"
 	if goos == "windows" {
@@ -34,7 +31,7 @@ func runtimeArgs(args []string) []string {
 	result := make([]string, 1, len(args)+1)
 	result[0] = "--jitless"
 	for _, arg := range args {
-		if arg == "--no-jitless" || strings.HasPrefix(arg, "--jitless=") {
+		if isJitlessOption(arg) {
 			continue
 		}
 		result = append(result, arg)
@@ -42,10 +39,21 @@ func runtimeArgs(args []string) []string {
 	return result
 }
 
+func isJitlessOption(arg string) bool {
+	if !strings.HasPrefix(arg, "-") {
+		return false
+	}
+	option := strings.ReplaceAll(strings.TrimLeft(arg, "-"), "_", "-")
+	name, _, _ := strings.Cut(option, "=")
+	return name == "jitless" || name == "no-jitless"
+}
+
 func runtimeEnvironment(environment []string) []string {
 	result := make([]string, 0, len(environment)+1)
 	for _, item := range environment {
-		if !strings.HasPrefix(strings.ToUpper(item), "NODE_OPTIONS=") {
+		name, _, _ := strings.Cut(item, "=")
+		if !strings.EqualFold(name, "NODE_OPTIONS") &&
+			!strings.EqualFold(name, "CAREEROPS_RESOURCE_DIR") {
 			result = append(result, item)
 		}
 	}
@@ -57,7 +65,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("cannot locate the CareerOps launcher: %w", err)
 	}
-	runtimePath, err := packagedRuntimePath(executable, os.Getenv(resourceDirEnvironment), runtime.GOOS)
+	runtimePath, err := packagedRuntimePath(executable, runtime.GOOS)
 	if err != nil {
 		return err
 	}

@@ -1337,7 +1337,6 @@ fn commit_intake_sources(
         .arg("--commit")
         .args(source_paths)
         .current_dir(workspace)
-        .env("CAREEROPS_RESOURCE_DIR", &js_runtime.resource_dir)
         .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable")
         .output()
         .map_err(|error| {
@@ -1474,7 +1473,6 @@ fn canonical_workspace(path: &str) -> Result<PathBuf, String> {
 #[derive(Clone, Debug)]
 struct PackagedJsRuntime {
     launcher: PathBuf,
-    resource_dir: PathBuf,
     runtime: PathBuf,
 }
 
@@ -1495,11 +1493,7 @@ fn packaged_runtime_paths_for_executable(
     } else {
         "careerops-node-runtime"
     });
-    PackagedJsRuntime {
-        launcher,
-        resource_dir: resource_dir.to_path_buf(),
-        runtime,
-    }
+    PackagedJsRuntime { launcher, runtime }
 }
 
 fn packaged_js_runtime(app: &AppHandle) -> Result<PackagedJsRuntime, String> {
@@ -1637,7 +1631,6 @@ fn isolated_provider_command(
         .env("TMP", sandbox)
         .env("TEMP", sandbox)
         .env("CAREEROPS_JS_RUNTIME", &js_runtime.launcher)
-        .env("CAREEROPS_RESOURCE_DIR", &js_runtime.resource_dir)
         .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable");
     Ok(command)
 }
@@ -1690,7 +1683,6 @@ fn isolated_provider_command(
         .env("TMP", "/tmp")
         .env("TEMP", "/tmp")
         .env("CAREEROPS_JS_RUNTIME", &js_runtime.launcher)
-        .env("CAREEROPS_RESOURCE_DIR", &js_runtime.resource_dir)
         .env("CAREEROPS_DESKTOP_PDF_EXTRACTION", "unavailable");
     Ok(command)
 }
@@ -2207,7 +2199,6 @@ mod tests {
     fn test_runtime() -> PackagedJsRuntime {
         PackagedJsRuntime {
             launcher: PathBuf::from("node"),
-            resource_dir: PathBuf::from("."),
             runtime: PathBuf::from("node"),
         }
     }
