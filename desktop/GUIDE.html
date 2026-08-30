@@ -447,7 +447,7 @@
     <header class="hero">
       <p class="eyebrow">CareerOps Desktop</p>
       <h1>使用指南</h1>
-      <p class="lead">從第一次啟動到分析職缺、找工作、追蹤申請與準備面試。一般使用不需要自己操作 Markdown、YAML 或 coding-agent prompt。</p>
+      <p class="lead">從第一次啟動到匯入背景證據、分析職缺、找工作、追蹤申請與準備面試。一般使用不需要自己操作 Markdown、YAML 或 coding-agent prompt。</p>
       <div class="notice">
         <strong>目前版本範圍：</strong>這份指南只描述 <code>tauri-dashboard</code> 已有的功能。尚未合併的 release、自動更新、Homebrew 與 Windows 發佈流程不列入本指南。
       </div>
@@ -507,12 +507,25 @@
 
     <section id="first-run">
       <h2>2. 第一次啟動</h2>
-      <p class="section-intro">第一次開啟 App 時，先指定 CareerOps 根目錄。若 App 偵測到必要資料尚未完成，就會進入 onboarding。</p>
+      <p class="section-intro">第一次開啟 App 時，先建立或選擇 CareerOps workspace。這是你的私人資料夾，和已安裝的 App、App 的技術狀態，以及審閱後的 profile 是不同的概念。</p>
+
+      <div class="cards">
+        <div class="card">
+          <span class="card-label primary">Workspace</span>
+          <h3>你的求職資料放在這裡</h3>
+          <p>macOS 預設是 <code>~/Documents/CareerOps</code>；Windows 預設是 <code>Documents\CareerOps</code>。也可以改用自訂位置或既有 CareerOps workspace。</p>
+        </div>
+        <div class="card">
+          <span class="card-label teal">App 與 profile</span>
+          <h3>不要把三者混在一起</h3>
+          <p>App 安裝與其受管理 runtime 是技術狀態；背景檔案是證據；審閱後寫入 canonical files 的內容才是你的 profile。</p>
+        </div>
+      </div>
 
       <div class="steps">
         <div class="step">
-          <strong>選擇 CareerOps 資料夾</strong>
-          <p>App 會記住這個位置，之後不需要每次重新選。</p>
+          <strong>建立或選擇 workspace</strong>
+          <p>可以直接建立預設位置，或選擇自訂位置。App 會記住目前使用的 workspace。</p>
         </div>
         <div class="step">
           <strong>Welcome</strong>
@@ -520,7 +533,7 @@
         </div>
         <div class="step">
           <strong>Import your background</strong>
-          <p>選擇放有 CV、cover letter、portfolio、論文或專案資料的資料夾。</p>
+          <p>拖放檔案、確認分類，並在之後審閱 CareerOps 根據這些證據提出的 profile 更新。</p>
         </div>
         <div class="step">
           <strong>選擇 Analysis Language</strong>
@@ -539,22 +552,51 @@
 
     <section id="background">
       <h2>3. 匯入背景資料</h2>
-      <p class="section-intro">Onboarding 可以讓你選擇一個包含求職背景資料的資料夾，目標是讓 CareerOps 用既有 CV、cover letter、作品集、論文與專案資料建立更完整的個人背景。</p>
+      <p class="section-intro">Background Import 會把你的職涯資料當作證據處理，而不是建立多個彼此獨立的 profile database。這些證據會一起供單一 intake 審閱使用。</p>
 
       <div class="cards">
         <div class="card">
-          <span class="card-label">適合放進去</span>
-          <h3>背景素材</h3>
-          <p>CV / Resume、Cover Letter、Thesis、Paper、Portfolio、Project notes、Work samples。</p>
+          <span class="card-label">八個分類</span>
+          <h3>檔案送到正確位置</h3>
+          <ul>
+            <li>CV / Resume</li>
+            <li>Work records</li>
+            <li>Publications / Research</li>
+            <li>Degrees / Transcripts</li>
+            <li>LinkedIn</li>
+            <li>References</li>
+            <li>Certificates</li>
+            <li>Portfolio / Projects</li>
+          </ul>
         </div>
         <div class="card">
-          <span class="card-label amber">目前限制</span>
-          <h3>選資料夾 ≠ 已完成抽取</h3>
-          <p>目前 onboarding 會記錄你選擇的來源，但完整文件 extraction 尚未在這個畫面中完全自動化。不要把「已選取來源」理解成「AI 已經讀完全部內容」。</p>
+          <span class="card-label teal">Canonical profile</span>
+          <h3>最後只有三個權威輸出</h3>
+          <p>審閱後的 profile 寫入 <code>cv.md</code>、<code>config/profile.yml</code> 與 <code>modes/_profile.md</code>。其他匯入檔是 supporting evidence，不是第二套 profile。</p>
         </div>
       </div>
 
-      <p class="muted">CareerOps 的 canonical profile 仍以既有核心檔案為準，例如 <code>cv.md</code>、<code>config/profile.yml</code> 與 <code>modes/_profile.md</code>。進階使用者仍可以直接檢查這些檔案。</p>
+      <div class="flow" aria-label="Background Import 流程">
+        <span class="flow-node active">Drag / Add files</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Review category</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Copy to documents/&lt;category&gt;/</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">One intake review</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Explicit apply</span>
+      </div>
+
+      <p>拖放檔案或按 <strong>Add files</strong> 後，請檢查每個檔案的 category。App 會把選取檔案複製到 workspace 的 <code>documents/&lt;category&gt;/</code>。AI setup 完成後，CareerOps 會在一個整合 intake 中檢查所有新增或變更過的證據，並提出附來源的 profile 更新建議。</p>
+
+      <p>你會先看到每個 proposal、目標檔案、來源與可能的衝突。沒有任何 canonical profile 檔案會在預覽時被改寫；只有你勾選的 proposal 會在按下 <strong>Apply selected changes</strong> 後套用。</p>
+
+      <div class="callout warning">
+        <p><strong>PDF 限制：</strong>此 build 仍會 stage PDF，但不能抽取其中的文字。若要讓內容參與 profile extraction，請同時加入對應的 <code>.md</code>、<code>.txt</code> 或 <code>.tex</code> 檔。</p>
+      </div>
+
+      <p class="muted">目前 macOS release 支援審閱式 AI intake。Windows 與 self-contained Linux package 若沒有可用的安全 provider isolation，審閱式 intake 階段會 fail closed：已 stage 的證據維持不變，canonical profile 檔案不會被修改；更新到支援的 package 後再試。</p>
     </section>
 
     <section id="language">
@@ -752,7 +794,7 @@
         <tbody>
           <tr>
             <td>My Background</td>
-            <td>查看背景資料來源，進階使用者可直接檢查 <code>cv.md</code> 與 <code>config/profile.yml</code>。</td>
+            <td>查看背景證據與審閱後的 profile；進階使用者可直接檢查 <code>cv.md</code>、<code>config/profile.yml</code> 與 <code>modes/_profile.md</code>。</td>
           </tr>
           <tr>
             <td>Job Search</td>
@@ -768,6 +810,13 @@
           </tr>
         </tbody>
       </table>
+
+      <h3>Workspace</h3>
+      <p>Settings 的 Workspace 區塊會顯示目前路徑，並提供 <strong>Open Folder</strong> 與 <strong>Change Location</strong>。Open Folder 會在檔案管理器開啟目前 workspace；Change Location 只會切換 active workspace，<strong>不會搬移</strong>之前的 workspace 或其中檔案。</p>
+
+      <div class="callout success">
+        <p><strong>App 技術狀態：</strong>打包 App 已包含受管理的 JavaScript runtime 與必要 assets。一般使用不需要安裝 Git、Homebrew、Node、npm、Rust 或 Go。若 package assets 或 runtime 缺失，請重新安裝或更新 CareerOps Desktop，而不是執行 developer repair commands。</p>
+      </div>
     </section>
 
     <section id="help">
@@ -800,14 +849,14 @@
       <details>
         <summary>掃描或分析卡住怎麼辦？</summary>
         <div class="details-body">
-          <p>先看 Agent Activity 的目前階段與 Technical output。可以 Cancel 後 Retry。若 Provider 是 Error / Not authenticated，先處理 Provider 本身；若 sidecar 無法啟動，開發環境可在 <code>desktop</code> 執行既有的 sidecar build script。</p>
+          <p>先看 Agent Activity 的目前階段與 Technical output。可以 Cancel 後 Retry。若 Provider 是 Error / Not authenticated，先處理 Provider 本身；若 App 指出 package assets、managed runtime 或 data service 缺失，請重新安裝或更新 CareerOps Desktop。</p>
         </div>
       </details>
 
       <details>
-        <summary>Background Import 選完資料夾，AI 已經讀完了嗎？</summary>
+        <summary>Background Import 完成後，AI 已經改寫我的 profile 了嗎？</summary>
         <div class="details-body">
-          <p>目前沒有。現階段 UI 會記錄選取來源，但完整 extraction 尚未在這個 onboarding 畫面中完成。請以 canonical profile files 的實際內容為準。</p>
+          <p>還沒有。匯入會先把你分類過的檔案複製到 <code>documents/&lt;category&gt;/</code>，再在一個 intake 中產生建議。只有你明確核准的個別 proposal 會在你按下 Apply selected changes 後寫入 <code>cv.md</code>、<code>config/profile.yml</code> 或 <code>modes/_profile.md</code>。</p>
         </div>
       </details>
 

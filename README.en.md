@@ -28,14 +28,6 @@ Prebuilt desktop releases are the intended installation path.
 
 Download the latest DMG or `CareerOps-macOS-<version>.zip` from [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases). Open the DMG, drag CareerOps into Applications, and launch it from Applications.
 
-When the Homebrew tap is configured, install the same signed release with:
-
-```bash
-brew install --cask <owner>/<tap>/career-ops
-```
-
-`<owner>/<tap>` must match the tap repository configured by the fork operator. For a repository named `homebrew-career-ops`, the tap token is normally `career-ops`. The release workflow computes the actual DMG SHA256 and publishes a versioned cask; it never uses `sha256 :no_check`.
-
 ### Windows
 
 Download `CareerOps_<version>_Windows.exe` or `CareerOps-Windows-<version>.zip` from [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases), then run the NSIS installer.
@@ -46,11 +38,70 @@ Every release also publishes `SHA256SUMS.txt`, `release-provenance.json`, signed
 
 ## First launch
 
-1. Choose or create your CareerOps data folder. Existing `cv.md`, profile, tracker, reports, and output stay in that folder.
+The installed app, your workspace, and your profile are deliberately separate things:
+
+- **App installation** is the CareerOps Desktop application you download and update.
+- **Workspace** is your private CareerOps folder: it holds your job-search files and can be backed up or opened independently of the app.
+- **App technical state** is whether the installed package and its managed components are intact; it is not a second copy of your profile.
+- **Background evidence** is the source material you add during import.
+- **Canonical profile** is the reviewed CareerOps data that the app uses for your search.
+
+On first launch, CareerOps offers a workspace in your operating system's normal Documents location:
+
+| Platform | Default workspace |
+| --- | --- |
+| macOS | `~/Documents/CareerOps` |
+| Windows | `Documents\CareerOps` |
+
+You can choose a custom location instead, or select an existing CareerOps workspace. Existing `cv.md`, profile, tracker, reports, and output stay in that workspace.
+
+1. Create the default workspace or choose a custom location.
 2. Complete the profile prompts so evaluation uses your targets rather than shipped examples.
 3. Open **Settings → AI Provider** and select an available local provider. Sign in through that provider's own CLI; the Desktop app does not store a provider password.
-4. Use **Background Import** to bring an existing CareerOps workspace into the Desktop flow. Import preserves the user layer and reports what it discovered before running AI work.
+4. Use **Background Import** to add evidence and review any proposed profile changes.
 5. Paste a job URL or run the scanner from Home.
+
+### Manage the workspace
+
+In **Settings → Workspace**, you will see:
+
+```text
+Workspace
+<path>
+
+Open Folder    Change Location
+```
+
+**Open Folder** opens the active workspace in your file manager. **Change Location** switches which workspace the app uses. It does not move the previous workspace or any of its files.
+
+### Background Import and the canonical profile
+
+Background Import accepts these evidence categories:
+
+- CV / Resume
+- Work records
+- Publications / Research
+- Degrees / Transcripts
+- LinkedIn
+- References
+- Certificates
+- Portfolio / Projects
+
+Drag files in (or use **Add files**), check the category for each file, and continue. CareerOps copies the selected files into `documents/<category>/` in the active workspace. It then reviews all new or changed evidence in one consolidated intake session, creates source-annotated proposals, shows any conflicts, and applies only the individual changes you explicitly approve.
+
+These files are **evidence**, not separate profile databases. The canonical profile remains the reviewed content in:
+
+- `cv.md`
+- `config/profile.yml`
+- `modes/_profile.md`
+
+Nothing in Background Import changes those canonical files until you select proposals and choose **Apply selected changes**. PDFs are still staged, but this build cannot extract PDF text; add a `.md`, `.txt`, or `.tex` companion when you need its contents considered for profile extraction.
+
+Reviewed AI intake is supported in the current macOS release. On Windows and self-contained Linux packages, the reviewed-intake phase fails closed when secure provider isolation is unavailable: staged evidence remains untouched and no canonical profile files are changed. Updating to a supported package is the next step.
+
+### App technical state
+
+The packaged app includes its managed JavaScript runtime and required CareerOps assets. Normal Desktop use does not require installing Git, Homebrew, Node, npm, Rust, or Go. If the app reports missing packaged assets or its managed runtime, reinstall or update CareerOps Desktop; do not try to repair the installation with developer commands. This technical state is separate from the readiness and authentication of the AI provider you choose.
 
 ## Desktop updater
 
