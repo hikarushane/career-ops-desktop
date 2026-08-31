@@ -21,10 +21,30 @@ const desktop = resolve(here, '..');
 const repoRoot = resolve(desktop, '..');
 const defaultOutput = join(desktop, 'src-tauri', 'binaries', 'workspace-seed');
 const normalizedTimestamp = new Date('2000-01-01T00:00:00.000Z');
-const packagedDependencies = {
-  'js-yaml': '5.4.1',
-  argparse: '2.0.1',
-};
+const packagedDependencyNames = ['js-yaml', 'argparse'];
+
+export function resolvePackagedDependencies(packageJson) {
+  const deps = packageJson.dependencies ?? {};
+  const resolved = {};
+  for (const name of packagedDependencyNames) {
+    const spec = deps[name];
+    if (spec === undefined) {
+      throw new Error(
+        `workspace runtime dependency ${name} is missing from root package.json dependencies`,
+      );
+    }
+    if (!/^\d+\.\d+\.\d+$/.test(spec)) {
+      throw new Error(
+        `workspace runtime dependency ${name} must use an exact version in root package.json; found "${spec}"`,
+      );
+    }
+    resolved[name] = spec;
+  }
+  return resolved;
+}
+
+const rootPackageJson = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
+const packagedDependencies = resolvePackagedDependencies(rootPackageJson);
 
 const excludedPrefixes = [
   '.fork/',
@@ -106,8 +126,15 @@ export function prepareWorkspaceSeed() {
       throw new Error(`workspace runtime dependency ${name}@${version} is missing; run npm ci --ignore-scripts in the repository root before the release build`);
     }
     const packageJson = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8'));
-    if (packageJson.version !== version || !existsSync(join(source, 'LICENSE'))) {
-      throw new Error(`workspace runtime dependency ${name} must be the licensed pinned version ${version}`);
+    if (packageJson.version !== version) {
+      throw new Error(
+        `workspace runtime dependency ${name} expected ${version} from root package.json but found ${packageJson.version} in node_modules; run npm ci`,
+      );
+    }
+    if (!existsSync(join(source, 'LICENSE'))) {
+      throw new Error(
+        `workspace runtime dependency ${name}@${version} is missing its LICENSE file in node_modules`,
+      );
     }
     collectFiles(source, join('node_modules', name), files);
   }

@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'os';
 import { isAbsolute, join, normalize, resolve } from 'path';
 import { sidecarFilename } from '../../scripts/sidecar-naming.mjs';
+import { resolvePackagedDependencies } from '../../scripts/workspace-seed.mjs';
 import { updaterPlatformFromTriple } from '../../../scripts/release/artifacts.mjs';
 import { renderCask } from '../../../scripts/release/homebrew.mjs';
 import { isProtectedPath } from '../../../scripts/release/protected-paths.mjs';
@@ -11,6 +12,8 @@ import { validateReleaseConfiguration } from '../../../scripts/release/release-l
 
 const ROOT = resolve(__dirname, '../../..');
 const DESKTOP = join(ROOT, 'desktop');
+const rootPkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+const expectedDeps = resolvePackagedDependencies(rootPkg);
 const temporary: string[] = [];
 
 afterEach(() => {
@@ -156,8 +159,9 @@ describe('packaged workspace seed', () => {
       'node_modules/argparse/LICENSE',
     ]) expect(existsSync(join(output, path))).toBe(true);
 
-    expect(readJson(join(output, 'node_modules/js-yaml/package.json')).version).toBe('5.4.1');
-    expect(readJson(join(output, 'node_modules/argparse/package.json')).version).toBe('2.0.1');
+    for (const [name, version] of Object.entries(expectedDeps)) {
+      expect(readJson(join(output, `node_modules/${name}/package.json`)).version).toBe(version);
+    }
 
     for (const path of [
       'cv.md',
@@ -413,5 +417,86 @@ describe('updater UI design and accessibility', () => {
     expect(css).toContain('background: var(--color-overlay)');
     expect(css).toMatch(/\.update-badge\s*\{[^}]*min-height:\s*44px/s);
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+  });
+});
+
+describe('workspace dependency contract', () => {
+  it('workspace-seed reads versions from package.json, not hard-coded literals', () => {
+    const source = readFileSync(join(DESKTOP, 'scripts', 'workspace-seed.mjs'), 'utf8');
+    const hardCodedMap = source.match(/packagedDependencies\s*=\s*\{[^}]*\}/s);
+    if (hardCodedMap) {
+      expect(hardCodedMap[0]).not.toMatch(/['"]js-yaml['"]\s*:\s*['"]\d+\.\d+\.\d+['"]/);
+      expect(hardCodedMap[0]).not.toMatch(/['"]?argparse['"]?\s*:\s*['"]\d+\.\d+\.\d+['"]/);
+    }
+    expect(source).toContain('resolvePackagedDependencies');
+  });
+
+  it('resolvePackagedDependencies reads from the dependencies field', () => {
+    const result = resolvePackagedDependencies({
+      dependencies: { 'js-yaml': '5.4.1', argparse: '2.0.1' },
+    });
+    expect(result).toEqual({ 'js-yaml': '5.4.1', argparse: '2.0.1' });
+  });
+
+  it.each([
+    ['^5.4.1', 'caret range'],
+    ['~5.4.1', 'tilde range'],
+    ['>=5.4.1', 'gte range'],
+    ['*', 'wildcard'],
+    ['latest', 'tag'],
+  ])('rejects non-exact spec "%s" (%s)', (spec) => {
+    expect(() =>
+      resolvePackagedDependencies({
+        dependencies: { 'js-yaml': spec, argparse: '2.0.1' },
+      }),
+    ).toThrow(/must use an exact version.*found/);
+  });
+
+  it('rejects a missing packaged dependency', () => {
+    expect(() =>
+      resolvePackagedDependencies({
+        dependencies: { 'js-yaml': '5.4.1' },
+      }),
+    ).toThrow(/argparse is missing from root package\.json/);
+  });
+
+  it('rejects an installed version mismatch', () => {
+    const dir = temp('career-ops-version-mismatch-');
+    const nmDir = join(dir, 'node_modules', 'js-yaml');
+    mkdirSync(nmDir, { recursive: true });
+    writeFileSync(join(nmDir, 'package.json'), JSON.stringify({ version: '5.4.2' }));
+    writeFileSync(join(nmDir, 'LICENSE'), 'MIT\n');
+
+    const seedSource = readFileSync(join(DESKTOP, 'scripts', 'workspace-seed.mjs'), 'utf8');
+    expect(seedSource).toContain('expected');
+    expect(seedSource).toContain('but found');
+    expect(seedSource).toContain('run npm ci');
+  });
+
+  it('rejects a missing LICENSE file', () => {
+    const seedSource = readFileSync(join(DESKTOP, 'scripts', 'workspace-seed.mjs'), 'utf8');
+    expect(seedSource).toContain('missing its LICENSE file');
+  });
+
+  it('succeeds when all versions match and LICENSE exists', () => {
+    const result = resolvePackagedDependencies(rootPkg);
+    for (const [name, version] of Object.entries(result)) {
+      const installed = readJson(join(ROOT, 'node_modules', name, 'package.json'));
+      expect(installed.version).toBe(version);
+      expect(existsSync(join(ROOT, 'node_modules', name, 'LICENSE'))).toBe(true);
+    }
+  });
+
+  it('lockfile resolved versions match package.json exact specs', () => {
+    const lockPath = join(ROOT, 'package-lock.json');
+    if (!existsSync(lockPath)) return;
+    const lock = readJson(lockPath);
+    const packages = lock.packages;
+    if (!packages) throw new Error('package-lock.json has no "packages" field; lockfileVersion may have changed');
+    for (const [name, version] of Object.entries(expectedDeps)) {
+      const entry = packages[`node_modules/${name}`];
+      expect(entry, `lockfile entry for ${name}`).toBeDefined();
+      expect(entry.version).toBe(version);
+    }
   });
 });
