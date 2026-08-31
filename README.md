@@ -82,6 +82,8 @@ Open Folder    Change Location
 
 **Open Folder** 會在檔案管理器開啟目前的 workspace。**Change Location** 只會切換 App 使用的 workspace，**不會**搬移舊 workspace 或其中任何檔案。
 
+若已儲存的 workspace 路徑失效（例如資料夾被搬移、刪除，或所在磁碟未掛載），App 不會顯示錯誤訊息，而是直接回到 Workspace Setup 畫面，讓你重新選擇 workspace 位置。
+
 ### Background Import 與 canonical profile
 
 Background Import 提供以下八個背景證據分類：
@@ -116,7 +118,7 @@ Background Import 提供以下八個背景證據分類：
 - `config/profile.yml`
 - `modes/_profile.md`
 
-Stage 只會複製證據。**Apply selected changes** 只會把你明確核准的 proposals 寫入 canonical 檔案，並記錄已完成的 intake。**Skip for now** 會丟棄這次 review session、保留已 stage 的 documents，而且不會提交 intake fingerprints 或 canonical profile 變更。PDF 仍會被 stage，但此版本無法抽取 PDF 文字；若要讓其中內容用於 profile extraction，請同時加入 `.md`、`.txt` 或 `.tex` 版本。
+Stage 只會複製證據。審閱式 intake 採兩階段確認：先審閱並核准 AI 提出的新增或變更 proposals，再針對每個受影響的檔案查看完整的 before/after diff，確認無誤後才套用變更。**Apply selected changes** 只會把你明確核准的 proposals 寫入 canonical 檔案，並記錄已完成的 intake。**Skip for now** 會丟棄這次 review session、保留已 stage 的 documents，而且不會提交 intake fingerprints 或 canonical profile 變更。PDF 仍會被 stage，但此版本無法抽取 PDF 文字；若要讓其中內容用於 profile extraction，請同時加入 `.md`、`.txt` 或 `.tex` 版本。
 
 目前 Desktop UI 將 Background Import 放在 onboarding 流程中，並不保證有獨立的 post-onboarding import route。
 

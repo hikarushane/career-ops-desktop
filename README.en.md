@@ -82,6 +82,8 @@ Open Folder    Change Location
 
 **Open Folder** opens the active workspace in your file manager. **Change Location** switches which workspace the app uses. It does not move the previous workspace or any of its files.
 
+If the saved workspace path is invalid or missing (for example, the folder was moved, deleted, or is on an unmounted drive), the app does not show an error. It returns to the Workspace Setup screen so you can choose a new workspace location.
+
 ### Background Import and the canonical profile
 
 Background Import accepts these evidence categories:
@@ -116,7 +118,7 @@ These files are **evidence**, not separate profile databases. The canonical prof
 - `config/profile.yml`
 - `modes/_profile.md`
 
-Staging copies evidence only. **Apply selected changes** writes only the proposals you explicitly approve to the canonical files and records the completed intake. **Skip for now** discards the review session, leaves the staged documents in place, and commits neither intake fingerprints nor canonical-profile changes. PDFs are still staged, but this build cannot extract PDF text; add a `.md`, `.txt`, or `.tex` companion when you need its contents considered for profile extraction.
+Staging copies evidence only. Reviewed intake uses a two-stage confirmation: first you review and approve the proposed additions and changes, then you see the full before/after diff for each affected file, and only then confirm to apply. **Apply selected changes** writes only the proposals you explicitly approve to the canonical files and records the completed intake. **Skip for now** discards the review session, leaves the staged documents in place, and commits neither intake fingerprints nor canonical-profile changes. PDFs are still staged, but this build cannot extract PDF text; add a `.md`, `.txt`, or `.tex` companion when you need its contents considered for profile extraction.
 
 Background Import is part of onboarding in the current Desktop UI; it does not promise a separate post-onboarding import route.
 
