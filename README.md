@@ -46,6 +46,8 @@ brew install --cask <owner>/<tap>/career-ops
 
 ## 第一次啟動
 
+完整操作請見 [CareerOps Desktop 使用指南](./desktop/GUIDE.html)。
+
 已安裝的 App、workspace 與 profile 是刻意分開的概念：
 
 - **App 安裝**：你下載與更新的 CareerOps Desktop 應用程式。
