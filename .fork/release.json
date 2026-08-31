@@ -1,6 +1,6 @@
 {
-  "repository": null,
+  "repository": "hikarushane/career-ops-desktop",
   "updateEndpoint": null,
   "homebrewTap": null,
-  "_comment": "Set repository to 'owner/career-ops' once the fork GitHub repo is created. updateEndpoint and homebrewTap are derived automatically by CI when repository is set."
+  "_comment": "updateEndpoint is unused — the canonical updater endpoint lives in desktop/src-tauri/tauri.conf.json. homebrewTap requires a separate tap repo and HOMEBREW_TAP_TOKEN secret (non-blocking)."
 }

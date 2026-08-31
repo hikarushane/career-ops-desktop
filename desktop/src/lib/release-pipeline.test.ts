@@ -369,9 +369,28 @@ describe('release safety helpers', () => {
   });
 
   it('rejects placeholder production release configuration', () => {
-    const result = validateReleaseConfiguration(ROOT, { production: true });
+    const mockRoot = temp('placeholder-config-');
+    mkdirSync(join(mockRoot, '.fork'), { recursive: true });
+    mkdirSync(join(mockRoot, 'desktop', 'src-tauri'), { recursive: true });
+    writeFileSync(join(mockRoot, '.fork', 'release.json'), JSON.stringify({
+      repository: null, updateEndpoint: null, homebrewTap: null,
+    }));
+    writeFileSync(join(mockRoot, 'desktop', 'src-tauri', 'tauri.conf.json'), JSON.stringify({
+      bundle: { createUpdaterArtifacts: true },
+      plugins: { updater: {
+        endpoints: ['https://github.com/{{FORK_OWNER}}/career-ops/releases/latest/download/latest.json'],
+        pubkey: 'UPDATER_PUBKEY_PLACEHOLDER',
+      }},
+    }));
+    const result = validateReleaseConfiguration(mockRoot, { production: true });
     expect(result.ok).toBe(false);
     expect(result.errors.join('\n')).toMatch(/repository|public key|endpoint/i);
+  });
+
+  it('accepts current production release configuration', () => {
+    const result = validateReleaseConfiguration(ROOT, { production: true });
+    expect(result.ok).toBe(true);
+    expect(result.errors).toHaveLength(0);
   });
 
   it.each([
