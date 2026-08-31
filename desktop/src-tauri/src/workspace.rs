@@ -176,15 +176,14 @@ fn same_cap_directory(left: &Dir, right: &Dir) -> Result<bool, String> {
 
 #[cfg(windows)]
 fn same_cap_directory(left: &Dir, right: &Dir) -> Result<bool, String> {
-    use cap_std::fs::MetadataExt;
+    use cap_fs_ext::MetadataExt;
     let left = left
         .dir_metadata()
         .map_err(|error| format!("cannot inspect held workspace directory: {error}"))?;
     let right = right
         .dir_metadata()
         .map_err(|error| format!("cannot inspect current workspace directory: {error}"))?;
-    Ok(left.volume_serial_number() == right.volume_serial_number()
-        && left.file_index() == right.file_index())
+    Ok(left.dev() == right.dev() && left.ino() == right.ino())
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -456,6 +455,9 @@ pub fn default_workspace_path(app: tauri::AppHandle) -> Result<String, String> {
 pub fn inspect_workspace(path: String) -> Result<WorkspaceInspection, String> {
     let workspace = PathBuf::from(&path);
     let kind = inspect_workspace_path(&workspace)?;
+    if kind == WorkspaceKind::Careerops {
+        crate::runner::reconcile_intake_transactions(&workspace)?;
+    }
 
     Ok(WorkspaceInspection { path, kind })
 }
@@ -503,11 +505,8 @@ fn entry_identity(metadata: &cap_std::fs::Metadata) -> Option<EntryIdentity> {
 
 #[cfg(windows)]
 fn entry_identity(metadata: &cap_std::fs::Metadata) -> Option<EntryIdentity> {
-    use cap_std::fs::MetadataExt;
-    Some(EntryIdentity(
-        u64::from(metadata.volume_serial_number()?),
-        metadata.file_index()?,
-    ))
+    use cap_fs_ext::MetadataExt;
+    Some(EntryIdentity(metadata.dev(), metadata.ino()))
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -887,14 +886,79 @@ fn install_staging_root(
 }
 
 #[cfg(windows)]
+fn windows_directory_identity(
+    handle: windows_sys::Win32::Foundation::HANDLE,
+) -> io::Result<(u64, u64)> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+    };
+
+    let mut information = BY_HANDLE_FILE_INFORMATION::default();
+    if unsafe { GetFileInformationByHandle(handle, &mut information) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok((
+        u64::from(information.dwVolumeSerialNumber),
+        (u64::from(information.nFileIndexHigh) << 32) | u64::from(information.nFileIndexLow),
+    ))
+}
+
+#[cfg(windows)]
+fn pin_windows_parent(
+    parent: &Dir,
+    parent_path: &Path,
+) -> io::Result<std::os::windows::io::OwnedHandle> {
+    use cap_fs_ext::MetadataExt;
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::io::FromRawHandle;
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ,
+        FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+
+    let path: Vec<u16> = parent_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let raw = unsafe {
+        CreateFileW(
+            path.as_ptr(),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+            std::ptr::null_mut(),
+        )
+    };
+    if raw == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+    let handle = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(raw) };
+    let metadata = parent.dir_metadata()?;
+    let capability_identity = (metadata.dev(), metadata.ino());
+    use std::os::windows::io::AsRawHandle;
+    if windows_directory_identity(handle.as_raw_handle())? != capability_identity {
+        return Err(io::Error::other(
+            "workspace parent path does not identify the held parent capability",
+        ));
+    }
+    Ok(handle)
+}
+
+#[cfg(windows)]
 fn install_staging_root(
-    _parent: &Dir,
+    parent: &Dir,
     parent_path: &Path,
     staging: &OsStr,
     target: &OsStr,
 ) -> io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::MoveFileW;
+
+    let _parent_pin = pin_windows_parent(parent, parent_path)?;
 
     let source: Vec<u16> = parent_path
         .join(staging)
@@ -1813,6 +1877,38 @@ mod tests {
             "later root\n"
         );
         assert!(moved.join("doctor.mjs").is_file());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_parent_pin_is_identity_bound_to_the_capability_parent() {
+        let parent = TempDir::new("windows-parent-pin");
+        let workspace = parent.path().join("CareerOps");
+        let location = WorkspaceLocation::open(&workspace).unwrap();
+
+        let _pin: std::os::windows::io::OwnedHandle =
+            pin_windows_parent(&location.parent, &location.parent_path).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_pinned_install_is_explicitly_no_replace() {
+        let parent = TempDir::new("windows-pinned-no-replace");
+        let workspace = parent.path().join("CareerOps");
+        let location = WorkspaceLocation::open(&workspace).unwrap();
+        location.parent.create_dir("staged").unwrap();
+        location.parent.create_dir("CareerOps").unwrap();
+
+        install_staging_root(
+            &location.parent,
+            &location.parent_path,
+            OsStr::new("staged"),
+            OsStr::new("CareerOps"),
+        )
+        .expect_err("pinned Windows installation must not replace a destination");
+
+        assert!(location.parent.open_dir_nofollow("staged").is_ok());
+        assert!(location.parent.open_dir_nofollow("CareerOps").is_ok());
     }
 
     #[test]
