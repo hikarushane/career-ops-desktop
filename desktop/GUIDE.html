@@ -593,14 +593,16 @@
         <span class="flow-arrow">→</span>
         <span class="flow-node">Stage: copy evidence</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">One intake review</span>
+        <span class="flow-node">Review proposals</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Review file diff</span>
         <span class="flow-arrow">→</span>
         <span class="flow-node">Apply approved proposals</span>
       </div>
 
       <p>拖放檔案或按 <strong>Add files</strong> 後，請檢查每個檔案的 category。Stage 只會把選取檔案複製到上表所列的 workspace 路徑。AI setup 完成後，CareerOps 會在一個整合 intake 中檢查所有新增或變更過的證據，並提出附來源的 profile 更新建議。</p>
 
-      <p>你會先看到每個 proposal、目標檔案、來源與可能的衝突。沒有任何 canonical profile 檔案會在預覽時被改寫；<strong>Apply selected changes</strong> 只會寫入你核准的 proposals，並提交完成的 intake。<strong>Skip for now</strong> 會丟棄 review session、保留已 stage 的 documents，且不會提交 intake fingerprints 或 canonical profile 變更。</p>
+      <p>審閱式 intake 採兩階段確認：先看到每個 proposal、目標檔案、來源與可能的衝突並逐一核准；接著針對每個受影響的檔案，查看完整的 before/after diff。沒有任何 canonical profile 檔案會在這個審閱過程中被改寫；<strong>Apply selected changes</strong> 只會寫入你核准的 proposals，並提交完成的 intake。<strong>Skip for now</strong> 會丟棄 review session、保留已 stage 的 documents，且不會提交 intake fingerprints 或 canonical profile 變更。</p>
 
       <p class="muted">Background Import 目前是 onboarding 流程的一部分；本版 UI 不提供或承諾獨立的 post-onboarding import route。</p>
 
@@ -834,6 +836,8 @@
       <h3>Workspace</h3>
       <p>Settings 的 Workspace 區塊會顯示目前路徑，並提供 <strong>Open Folder</strong> 與 <strong>Change Location</strong>。Open Folder 會在檔案管理器開啟目前 workspace；Change Location 只會切換 active workspace，<strong>不會搬移</strong>之前的 workspace 或其中檔案。</p>
 
+      <p>若已儲存的 workspace 路徑失效（例如資料夾被搬移、刪除，或所在磁碟未掛載），App 不會顯示錯誤訊息，而是直接回到 Workspace Setup 畫面，讓你重新選擇 workspace 位置。</p>
+
       <div class="callout success">
         <p><strong>App 技術狀態：</strong>打包 App 已包含受管理的 JavaScript runtime 與必要 assets。一般使用不需要安裝 Git、Homebrew、Node、npm、Rust 或 Go。若 package assets 或 runtime 缺失，請重新安裝或更新 CareerOps Desktop，而不是執行 developer repair commands。</p>
       </div>
@@ -876,7 +880,7 @@
       <details>
         <summary>Background Import 完成後，AI 已經改寫我的 profile 了嗎？</summary>
         <div class="details-body">
-          <p>還沒有。Stage 只會把你分類過的檔案複製到各自的 <code>documents/</code> 路徑，再在一個 intake 中產生建議。Apply selected changes 只會寫入你明確核准的個別 proposal，並提交完成的 intake；Skip for now 會丟棄 review session、保留已 stage 的 documents，而且不提交 fingerprints 或 canonical profile 變更。</p>
+          <p>還沒有。Stage 只會把你分類過的檔案複製到各自的 <code>documents/</code> 路徑，再在一個 intake 中產生建議。審閱分兩階段：先核准 proposals，再查看每個受影響檔案的完整 before/after diff，確認無誤才套用。Apply selected changes 只會寫入你明確核准的個別 proposal，並提交完成的 intake；Skip for now 會丟棄 review session、保留已 stage 的 documents，而且不提交 fingerprints 或 canonical profile 變更。</p>
         </div>
       </details>
 
