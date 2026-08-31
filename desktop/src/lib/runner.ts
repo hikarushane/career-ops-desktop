@@ -60,12 +60,12 @@ function isProposalItem(value: unknown, sourcePaths: Set<string>): value is Inta
 
 export function parseIntakeProposal(output: string): IntakeProposal {
   const start = output.indexOf(INTAKE_PROPOSAL_START);
-  const end = output.indexOf(INTAKE_PROPOSAL_END, start + INTAKE_PROPOSAL_START.length);
-  if (start === -1 || end === -1) throw new Error(INTAKE_PROTOCOL_ERROR);
-  if (output.indexOf(INTAKE_PROPOSAL_START, start + INTAKE_PROPOSAL_START.length) !== -1) {
+  const end = output.indexOf(INTAKE_PROPOSAL_END);
+  if (start === -1 || end < start) throw new Error(INTAKE_PROTOCOL_ERROR);
+  if (output.lastIndexOf(INTAKE_PROPOSAL_START) !== start) {
     throw new Error(INTAKE_PROTOCOL_ERROR);
   }
-  if (output.indexOf(INTAKE_PROPOSAL_END, end + INTAKE_PROPOSAL_END.length) !== -1) {
+  if (output.lastIndexOf(INTAKE_PROPOSAL_END) !== end) {
     throw new Error(INTAKE_PROTOCOL_ERROR);
   }
 

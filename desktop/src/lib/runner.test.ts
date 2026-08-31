@@ -151,6 +151,15 @@ describe('intake proposal protocol', () => {
     expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
   });
 
+  it('rejects an end delimiter before an otherwise valid proposal', () => {
+    const output = `---CAREEROPS_INTAKE_PROPOSAL_END---
+---CAREEROPS_INTAKE_PROPOSAL_START---
+{"items":[],"sourcePaths":[]}
+---CAREEROPS_INTAKE_PROPOSAL_END---`;
+
+    expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
+  });
+
   it.each([
     '{"items":[],"sourcePaths":[],"unexpected":true}',
     '{"items":[{"id":"work-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"unexpected":true}],"sourcePaths":["work/review.txt"]}',

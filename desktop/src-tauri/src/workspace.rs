@@ -488,7 +488,8 @@ pub fn inspect_workspace_path(workspace: &Path) -> Result<WorkspaceKind, String>
 #[derive(Clone)]
 enum BootstrapEvent {
     BeforeEntry(PathBuf),
-    BeforeMissingRootInstall,
+    BeforeMissingRootInstall(OsString),
+    AfterMissingRootInstall,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -787,6 +788,7 @@ where
 
 struct WorkspaceLocation {
     parent: Dir,
+    parent_path: PathBuf,
     name: OsString,
 }
 
@@ -801,9 +803,13 @@ impl WorkspaceLocation {
             .ok_or_else(|| "workspace path must have a parent directory".to_owned())?;
         let canonical_parent = fs::canonicalize(parent_path)
             .map_err(|error| format!("cannot resolve workspace parent directory: {error}"))?;
-        let parent = Dir::open_ambient_dir(canonical_parent, ambient_authority())
+        let parent = Dir::open_ambient_dir(&canonical_parent, ambient_authority())
             .map_err(|error| format!("cannot open workspace parent directory: {error}"))?;
-        Ok(Self { parent, name })
+        Ok(Self {
+            parent,
+            parent_path: canonical_parent,
+            name,
+        })
     }
 
     fn inspect(&self) -> Result<(WorkspaceKind, Option<Dir>), String> {
@@ -864,7 +870,12 @@ fn create_staging_root(parent: &Dir) -> Result<(OsString, Dir), String> {
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-fn install_staging_root(parent: &Dir, staging: &OsStr, target: &OsStr) -> io::Result<()> {
+fn install_staging_root(
+    parent: &Dir,
+    _parent_path: &Path,
+    staging: &OsStr,
+    target: &OsStr,
+) -> io::Result<()> {
     rustix::fs::renameat_with(
         parent,
         staging,
@@ -876,12 +887,40 @@ fn install_staging_root(parent: &Dir, staging: &OsStr, target: &OsStr) -> io::Re
 }
 
 #[cfg(windows)]
-fn install_staging_root(parent: &Dir, staging: &OsStr, target: &OsStr) -> io::Result<()> {
-    parent.rename(staging, parent, target)
+fn install_staging_root(
+    _parent: &Dir,
+    parent_path: &Path,
+    staging: &OsStr,
+    target: &OsStr,
+) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::MoveFileW;
+
+    let source: Vec<u16> = parent_path
+        .join(staging)
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let destination: Vec<u16> = parent_path
+        .join(target)
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    if unsafe { MoveFileW(source.as_ptr(), destination.as_ptr()) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
-fn install_staging_root(_parent: &Dir, _staging: &OsStr, _target: &OsStr) -> io::Result<()> {
+fn install_staging_root(
+    _parent: &Dir,
+    _parent_path: &Path,
+    _staging: &OsStr,
+    _target: &OsStr,
+) -> io::Result<()> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
         "atomic no-replace workspace installation is unavailable",
@@ -961,10 +1000,29 @@ where
                     });
                 }
             };
-            if let Err(error) = hook(BootstrapEvent::BeforeMissingRootInstall) {
+            if let Err(error) = hook(BootstrapEvent::BeforeMissingRootInstall(
+                staging_name.clone(),
+            )) {
                 let _ = rollback_created_entries(&staged_entries);
                 let _ = rollback_created_entries(&[staging_entry]);
                 return Err(error);
+            }
+            let current_staging = match location.parent.open_dir_nofollow(&staging_name) {
+                Ok(current) => current,
+                Err(error) => {
+                    let _ = rollback_created_entries(&staged_entries);
+                    let _ = rollback_created_entries(&[staging_entry]);
+                    return Err(format!(
+                        "workspace staging directory changed before install: {error}"
+                    ));
+                }
+            };
+            if !same_cap_directory(&staging_root, &current_staging)? {
+                let _ = rollback_created_entries(&staged_entries);
+                let _ = rollback_created_entries(&[staging_entry]);
+                return Err(
+                    "workspace staging directory identity changed before install".to_owned(),
+                );
             }
             match location.parent.symlink_metadata(&location.name) {
                 Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -981,12 +1039,25 @@ where
                     ));
                 }
             }
-            if let Err(error) =
-                install_staging_root(&location.parent, &staging_name, &location.name)
-            {
+            if let Err(error) = install_staging_root(
+                &location.parent,
+                &location.parent_path,
+                &staging_name,
+                &location.name,
+            ) {
                 let _ = rollback_created_entries(&staged_entries);
                 let _ = rollback_created_entries(&[staging_entry]);
                 return Err(format!("cannot atomically install workspace: {error}"));
+            }
+            hook(BootstrapEvent::AfterMissingRootInstall)?;
+            let installed = location
+                .parent
+                .open_dir_nofollow(&location.name)
+                .map_err(|error| {
+                    format!("installed workspace changed before validation: {error}")
+                })?;
+            if !same_cap_directory(&staging_root, &installed)? {
+                return Err("installed workspace directory identity changed".to_owned());
             }
         }
     }
@@ -1001,8 +1072,14 @@ pub fn initialize_workspace_from_seed(
     seed: &Path,
 ) -> Result<WorkspaceInitResult, String> {
     initialize_workspace_from_seed_with_hook(workspace, seed, |event| {
-        if let BootstrapEvent::BeforeEntry(relative) = event {
-            let _ = relative.as_os_str();
+        match event {
+            BootstrapEvent::BeforeEntry(relative) => {
+                let _ = relative.as_os_str();
+            }
+            BootstrapEvent::BeforeMissingRootInstall(staging_name) => {
+                let _ = staging_name.as_os_str();
+            }
+            BootstrapEvent::AfterMissingRootInstall => {}
         }
         Ok(())
     })
@@ -1615,7 +1692,7 @@ mod tests {
 
             let error =
                 initialize_workspace_from_seed_with_hook(&workspace, seed.path(), |event| {
-                    if matches!(event, BootstrapEvent::BeforeMissingRootInstall) {
+                    if matches!(event, BootstrapEvent::BeforeMissingRootInstall(_)) {
                         match raced_kind {
                             "file" => fs::write(&workspace, "raced root\n").unwrap(),
                             "directory" => fs::create_dir(&workspace).unwrap(),
@@ -1646,6 +1723,96 @@ mod tests {
                 _ => unreachable!(),
             }
         }
+    }
+
+    #[test]
+    fn missing_root_install_rejects_a_replacement_of_the_staging_name() {
+        for replacement_kind in ["file", "directory"] {
+            let parent = TempDir::new(&format!("missing-stage-replaced-{replacement_kind}"));
+            let workspace = parent.path().join("CareerOps");
+            let seed = seed();
+            let mut held_staging = None;
+
+            let error =
+                initialize_workspace_from_seed_with_hook(&workspace, seed.path(), |event| {
+                    if let BootstrapEvent::BeforeMissingRootInstall(ref staging_name) = event {
+                        let staging = parent.path().join(staging_name);
+                        let held = parent.path().join(format!("held-stage-{replacement_kind}"));
+                        fs::rename(&staging, &held).unwrap();
+                        held_staging = Some(held);
+                        if replacement_kind == "file" {
+                            fs::write(&staging, "raced staging file\n").unwrap();
+                        } else {
+                            fs::create_dir(&staging).unwrap();
+                            fs::write(staging.join("raced"), "raced staging directory\n").unwrap();
+                        }
+                    }
+                    Ok(())
+                })
+                .expect_err("a replaced staging name must not be installed");
+
+            assert!(
+                error.contains("staging") || error.contains("changed"),
+                "{error}"
+            );
+            assert!(!workspace.exists());
+            let held = held_staging.expect("hook observed staging name");
+            assert!(held.is_dir());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn missing_root_install_rejects_a_symlink_replacing_the_staging_name() {
+        let parent = TempDir::new("missing-stage-replaced-symlink");
+        let external = TempDir::new("missing-stage-replaced-symlink-external");
+        let workspace = parent.path().join("CareerOps");
+        let seed = seed();
+
+        let error = initialize_workspace_from_seed_with_hook(&workspace, seed.path(), |event| {
+            if let BootstrapEvent::BeforeMissingRootInstall(ref staging_name) = event {
+                let staging = parent.path().join(staging_name);
+                fs::rename(&staging, parent.path().join("held-stage")).unwrap();
+                std::os::unix::fs::symlink(external.path(), staging).unwrap();
+            }
+            Ok(())
+        })
+        .expect_err("a staging symlink replacement must not be installed");
+
+        assert!(
+            error.contains("staging") || error.contains("changed"),
+            "{error}"
+        );
+        assert!(!workspace.exists());
+        assert_eq!(fs::read_dir(external.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn missing_root_install_validates_the_installed_directory_identity() {
+        let parent = TempDir::new("missing-install-identity-race");
+        let workspace = parent.path().join("CareerOps");
+        let moved = parent.path().join("installed-stage-moved");
+        let seed = seed();
+
+        let error = initialize_workspace_from_seed_with_hook(&workspace, seed.path(), |event| {
+            if matches!(event, BootstrapEvent::AfterMissingRootInstall) {
+                fs::rename(&workspace, &moved).unwrap();
+                fs::create_dir(&workspace).unwrap();
+                fs::write(workspace.join("raced"), "later root\n").unwrap();
+            }
+            Ok(())
+        })
+        .expect_err("a post-install replacement must fail identity validation");
+
+        assert!(
+            error.contains("identity") || error.contains("changed"),
+            "{error}"
+        );
+        assert_eq!(
+            fs::read_to_string(workspace.join("raced")).unwrap(),
+            "later root\n"
+        );
+        assert!(moved.join("doctor.mjs").is_file());
     }
 
     #[test]
