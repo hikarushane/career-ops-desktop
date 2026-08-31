@@ -1020,7 +1020,7 @@ impl CapabilityTargetWriter {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Hash, PartialEq, Eq, Serialize)]
 struct FileIdentity(u64, u64);
 
 #[cfg(unix)]
@@ -1067,32 +1067,38 @@ struct TargetBackup {
 }
 
 const INTAKE_TRANSACTION_ROOT: &str = ".careerops-intake-transactions";
+const INTAKE_TRANSACTION_PREPARATION_ROOT: &str = ".careerops-intake-preparations";
 const INTAKE_TRANSACTION_JOURNAL: &str = "journal.ndjson";
 const INTAKE_TRANSACTION_MANIFEST: &str = "manifest.json";
+const INTAKE_TRANSACTION_VERSION: u8 = 2;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct JournalTarget {
     relative: String,
     archive_name: String,
     expected_before_hash: Option<String>,
     expected_before_identity: Option<FileIdentity>,
+    reviewed_identity: Option<FileIdentity>,
     candidate_hash: String,
     candidate_identity: FileIdentity,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct JournalSnapshot {
     version: u8,
+    transaction_id: String,
     sequence: u64,
     status: String,
     phase: String,
     targets: Vec<JournalTarget>,
+    previous_record_hash: Option<String>,
+    record_hash: String,
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct TransactionManifest {
     version: u8,
     status: String,
@@ -1101,23 +1107,56 @@ struct TransactionManifest {
     archive_layout: String,
     cleanup_instructions: String,
     targets: Vec<JournalTarget>,
+    terminal_snapshot: JournalSnapshot,
 }
 
 struct IntakeTransaction {
     path: PathBuf,
     name: String,
+    namespace: String,
     transactions: Dir,
     directory: Dir,
     staged: Dir,
     original: Dir,
     displaced: Dir,
+    reviewed: Dir,
+    preserved: Dir,
     journal: cap_std::fs::File,
     journal_identity: FileIdentity,
     journal_healthy: bool,
     snapshot: JournalSnapshot,
+    history: Vec<JournalSnapshot>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TransactionCreationEvent {
+    BeforeInitialJournal,
+    BeforePublish,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JournalHashPayload<'a> {
+    version: u8,
+    transaction_id: &'a str,
+    sequence: u64,
+    status: &'a str,
+    phase: &'a str,
+    targets: &'a [JournalTarget],
+    previous_record_hash: &'a Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum JournalTargetState {
+    Prepared,
+    MovedAside,
+    Installed,
+    Archived,
+    Reviewed,
 }
 
 static NEXT_INTAKE_TRANSACTION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static NEXT_INTAKE_ARCHIVE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn rename_between_noreplace(
@@ -1252,6 +1291,204 @@ fn archive_name(relative: &str) -> Result<String, String> {
         INTAKE_STATE_TARGET => Ok("data_intake-state.json".to_owned()),
         _ => Err(format!("not a canonical intake target: {relative}")),
     }
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn journal_record_hash(snapshot: &JournalSnapshot) -> Result<String, String> {
+    let payload = JournalHashPayload {
+        version: snapshot.version,
+        transaction_id: &snapshot.transaction_id,
+        sequence: snapshot.sequence,
+        status: &snapshot.status,
+        phase: &snapshot.phase,
+        targets: &snapshot.targets,
+        previous_record_hash: &snapshot.previous_record_hash,
+    };
+    serde_json::to_vec(&payload)
+        .map(|bytes| hash_bytes(&bytes))
+        .map_err(|error| format!("failed to bind intake transaction journal: {error}"))
+}
+
+fn seal_journal_snapshot(snapshot: &mut JournalSnapshot) -> Result<(), String> {
+    snapshot.record_hash = journal_record_hash(snapshot)?;
+    Ok(())
+}
+
+fn target_phase<'a>(phase: &'a str, prefix: &str) -> Option<&'a str> {
+    phase
+        .strip_prefix(prefix)
+        .filter(|relative| !relative.is_empty())
+}
+
+fn validate_initial_journal_snapshot(name: &str, snapshot: &JournalSnapshot) -> Result<(), String> {
+    if snapshot.version != INTAKE_TRANSACTION_VERSION
+        || snapshot.transaction_id != name
+        || snapshot.sequence != 0
+        || snapshot.status != "active"
+        || snapshot.phase != "prepared"
+        || snapshot.previous_record_hash.is_some()
+        || snapshot.targets.is_empty()
+        || snapshot.targets.len() > 4
+    {
+        return Err("intake transaction journal sequence zero is invalid".to_owned());
+    }
+    let mut previous_relative: Option<&str> = None;
+    let mut staged_identities = HashSet::new();
+    for target in &snapshot.targets {
+        if previous_relative.is_some_and(|previous| previous >= target.relative.as_str())
+            || archive_name(&target.relative).as_deref() != Ok(target.archive_name.as_str())
+            || !is_sha256(&target.candidate_hash)
+            || target.expected_before_hash.is_some() != target.expected_before_identity.is_some()
+            || target.expected_before_hash.is_some() != target.reviewed_identity.is_some()
+            || target
+                .expected_before_hash
+                .as_deref()
+                .is_some_and(|hash| !is_sha256(hash))
+            || !staged_identities.insert(target.candidate_identity)
+            || target
+                .reviewed_identity
+                .is_some_and(|identity| !staged_identities.insert(identity))
+        {
+            return Err("intake transaction journal target binding is invalid".to_owned());
+        }
+        previous_relative = Some(&target.relative);
+    }
+    if snapshot.record_hash != journal_record_hash(snapshot)? {
+        return Err("intake transaction journal hash chain is invalid".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_journal_history(name: &str, history: &[JournalSnapshot]) -> Result<(), String> {
+    let Some(initial) = history.first() else {
+        return Err("intake transaction journal has no durable snapshot".to_owned());
+    };
+    validate_initial_journal_snapshot(name, initial)?;
+    let mut states = initial
+        .targets
+        .iter()
+        .map(|target| (target.relative.clone(), JournalTargetState::Prepared))
+        .collect::<BTreeMap<_, _>>();
+    let has_reviewed_before = initial
+        .targets
+        .iter()
+        .map(|target| {
+            (
+                target.relative.clone(),
+                target.expected_before_hash.is_some(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut terminal = false;
+
+    for (index, snapshot) in history.iter().enumerate().skip(1) {
+        let previous = &history[index - 1];
+        if terminal {
+            return Err("intake transaction journal has a record after terminal status".to_owned());
+        }
+        if snapshot.version != INTAKE_TRANSACTION_VERSION
+            || snapshot.transaction_id != name
+            || snapshot.sequence != index as u64
+            || snapshot.targets != initial.targets
+            || snapshot.previous_record_hash.as_deref() != Some(&previous.record_hash)
+            || snapshot.record_hash != journal_record_hash(snapshot)?
+        {
+            return Err("intake transaction journal binding or hash chain is invalid".to_owned());
+        }
+
+        match (snapshot.status.as_str(), snapshot.phase.as_str()) {
+            ("active", "prepared") => {
+                return Err(
+                    "intake transaction prepared phase is legal only at sequence zero".to_owned(),
+                );
+            }
+            ("active", phase) => {
+                let (relative, next_state) = if let Some(relative) =
+                    target_phase(phase, "moved-aside:")
+                {
+                    if has_reviewed_before.get(relative) != Some(&true)
+                        || states.get(relative) != Some(&JournalTargetState::Prepared)
+                    {
+                        return Err(
+                            "intake transaction journal moved-aside transition is invalid"
+                                .to_owned(),
+                        );
+                    }
+                    (relative, JournalTargetState::MovedAside)
+                } else if let Some(relative) = target_phase(phase, "candidate-installed:") {
+                    let expected = if has_reviewed_before.get(relative) == Some(&true) {
+                        JournalTargetState::MovedAside
+                    } else {
+                        JournalTargetState::Prepared
+                    };
+                    if states.get(relative) != Some(&expected) {
+                        return Err(
+                            "intake transaction journal candidate-install transition is invalid"
+                                .to_owned(),
+                        );
+                    }
+                    (relative, JournalTargetState::Installed)
+                } else if let Some(relative) = target_phase(phase, "rolled-back:") {
+                    if states.get(relative) != Some(&JournalTargetState::Installed) {
+                        return Err(
+                            "intake transaction journal rollback transition is invalid".to_owned()
+                        );
+                    }
+                    (relative, JournalTargetState::Reviewed)
+                } else if let Some(relative) = target_phase(phase, "recovery-archived:") {
+                    if !states.contains_key(relative) {
+                        return Err(
+                            "intake transaction journal recovery target is invalid".to_owned()
+                        );
+                    }
+                    (relative, JournalTargetState::Archived)
+                } else if let Some(relative) = target_phase(phase, "recovery-restored:") {
+                    if !states.contains_key(relative) {
+                        return Err(
+                            "intake transaction journal recovery target is invalid".to_owned()
+                        );
+                    }
+                    (relative, JournalTargetState::Reviewed)
+                } else {
+                    return Err("intake transaction journal phase is invalid".to_owned());
+                };
+                states.insert(relative.to_owned(), next_state);
+            }
+            ("committed", "committed") => {
+                if states
+                    .values()
+                    .any(|state| *state != JournalTargetState::Installed)
+                {
+                    return Err(
+                        "intake transaction journal committed before every target was installed"
+                            .to_owned(),
+                    );
+                }
+                terminal = true;
+            }
+            ("rolledBack", "rolledBack") => {
+                if states
+                    .values()
+                    .any(|state| *state != JournalTargetState::Reviewed)
+                {
+                    return Err(
+                        "intake transaction journal rolled back before every target was restored"
+                            .to_owned(),
+                    );
+                }
+                terminal = true;
+            }
+            _ => {
+                return Err(
+                    "intake transaction journal status/phase transition is invalid".to_owned(),
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 impl CapabilityTargetWriter {
@@ -1413,6 +1650,79 @@ impl CapabilityTargetWriter {
         }))
     }
 
+    fn move_target_to_unique_directory(
+        &self,
+        relative: &str,
+        destination: &Dir,
+        archive_base: &str,
+    ) -> Result<Option<HeldNamedEntry>, String> {
+        let (source, filename) = self.directories.target(relative)?;
+        match source.symlink_metadata(filename) {
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => {
+                return Err(format!(
+                    "cannot inspect canonical intake target {relative}: {error}"
+                ));
+            }
+        }
+        loop {
+            let name = format!(
+                "{archive_base}.preserved-{}-{}",
+                std::process::id(),
+                NEXT_INTAKE_ARCHIVE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            );
+            match rename_between_noreplace(source, filename, destination, &name) {
+                Ok(()) => {
+                    sync_rename(source, destination)?;
+                    let metadata = destination.symlink_metadata(&name).map_err(|error| {
+                        format!("cannot inspect preserved target {relative}: {error}")
+                    })?;
+                    return Ok(Some(HeldNamedEntry {
+                        name,
+                        identity: file_identity(&metadata)?,
+                    }));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => {
+                    return Err(format!(
+                        "failed to preserve canonical target {relative}: {error}"
+                    ));
+                }
+            }
+        }
+    }
+
+    fn stage_unique_in_directory(
+        &self,
+        relative: &str,
+        contents: &[u8],
+        directory: &Dir,
+        archive_base: &str,
+    ) -> Result<StagedTarget, String> {
+        loop {
+            let name = format!(
+                "{archive_base}.restore-{}-{}",
+                std::process::id(),
+                NEXT_INTAKE_ARCHIVE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            );
+            match self.stage_in_directory(relative, contents, directory, &name) {
+                Ok(staged) => return Ok(staged),
+                Err(error) => match directory.symlink_metadata(&name) {
+                    Ok(_) => continue,
+                    Err(inspect_error) if inspect_error.kind() == std::io::ErrorKind::NotFound => {
+                        return Err(error);
+                    }
+                    Err(inspect_error) => {
+                        return Err(format!(
+                            "{error}; cannot inspect unique recovery staging name: {inspect_error}"
+                        ));
+                    }
+                },
+            }
+        }
+    }
+
     fn move_directory_entry_to_target(
         &self,
         relative: &str,
@@ -1490,6 +1800,19 @@ impl IntakeTransaction {
         expected: &BTreeMap<String, TargetSnapshot>,
         changes: &BTreeMap<String, Vec<u8>>,
     ) -> Result<Self, String> {
+        Self::create_with_event_hook(workspace, writer, expected, changes, |_| Ok(()))
+    }
+
+    fn create_with_event_hook<F>(
+        workspace: &Path,
+        writer: &CapabilityTargetWriter,
+        expected: &BTreeMap<String, TargetSnapshot>,
+        changes: &BTreeMap<String, Vec<u8>>,
+        mut hook: F,
+    ) -> Result<Self, String>
+    where
+        F: FnMut(TransactionCreationEvent) -> Result<(), String>,
+    {
         if expected.len() != changes.len()
             || changes
                 .keys()
@@ -1502,11 +1825,17 @@ impl IntakeTransaction {
         writer.validate_layout()?;
         let transactions =
             open_or_create_real_directory(&writer.directories.root, INTAKE_TRANSACTION_ROOT)?;
-        let (name, directory) = create_exclusive_real_directory(&transactions, "transaction")?;
+        let preparations = open_or_create_real_directory(
+            &writer.directories.root,
+            INTAKE_TRANSACTION_PREPARATION_ROOT,
+        )?;
+        let (name, directory) = create_exclusive_real_directory(&preparations, "transaction")?;
         let staged = open_or_create_real_directory(&directory, "staged")?;
         let archive = open_or_create_real_directory(&directory, "archive")?;
         let original = open_or_create_real_directory(&archive, "original")?;
         let displaced = open_or_create_real_directory(&archive, "displaced")?;
+        let reviewed = open_or_create_real_directory(&archive, "reviewed")?;
+        let preserved = open_or_create_real_directory(&archive, "preserved")?;
         sync_directory(&directory)?;
 
         let mut targets = Vec::with_capacity(changes.len());
@@ -1517,15 +1846,27 @@ impl IntakeTransaction {
             let before = expected
                 .get(relative)
                 .expect("transaction key sets were compared");
+            let reviewed_identity = match before.contents.as_deref() {
+                Some(contents) => Some(
+                    writer
+                        .stage_in_directory(relative, contents, &reviewed, &archive_name)?
+                        .entry
+                        .identity,
+                ),
+                None => None,
+            };
             targets.push(JournalTarget {
                 relative: relative.clone(),
                 archive_name,
                 expected_before_hash: before.contents.as_deref().map(hash_bytes),
                 expected_before_identity: before.identity,
+                reviewed_identity,
                 candidate_hash: hash_bytes(contents),
                 candidate_identity: staged_target.entry.identity,
             });
         }
+
+        hook(TransactionCreationEvent::BeforeInitialJournal)?;
 
         let mut options = CapOpenOptions::new();
         options
@@ -1543,29 +1884,51 @@ impl IntakeTransaction {
                 .map_err(|error| format!("cannot inspect intake transaction journal: {error}"))?,
         )?;
         lock_transaction_journal(&journal)?;
-        let snapshot = JournalSnapshot {
-            version: 1,
+        let mut snapshot = JournalSnapshot {
+            version: INTAKE_TRANSACTION_VERSION,
+            transaction_id: name.clone(),
             sequence: 0,
             status: "active".to_owned(),
             phase: "prepared".to_owned(),
             targets,
+            previous_record_hash: None,
+            record_hash: String::new(),
         };
+        seal_journal_snapshot(&mut snapshot)?;
         let path = workspace.join(INTAKE_TRANSACTION_ROOT).join(&name);
         let mut transaction = Self {
             path,
             name,
-            transactions,
+            namespace: INTAKE_TRANSACTION_PREPARATION_ROOT.to_owned(),
+            transactions: preparations
+                .try_clone()
+                .map_err(|error| format!("cannot retain preparation root: {error}"))?,
             directory,
             staged,
             original,
             displaced,
+            reviewed,
+            preserved,
             journal,
             journal_identity,
             journal_healthy: true,
-            snapshot,
+            snapshot: snapshot.clone(),
+            history: Vec::new(),
         };
-        transaction.write_snapshot(writer)?;
-        sync_directory(&transaction.transactions)?;
+        transaction.append_snapshot(writer, snapshot)?;
+        sync_directory(&preparations)?;
+        hook(TransactionCreationEvent::BeforePublish)?;
+        rename_between_noreplace(
+            &preparations,
+            &transaction.name,
+            &transactions,
+            &transaction.name,
+        )
+        .map_err(|error| format!("failed to publish intake transaction: {error}"))?;
+        sync_rename(&preparations, &transactions)?;
+        transaction.transactions = transactions;
+        transaction.namespace = INTAKE_TRANSACTION_ROOT.to_owned();
+        transaction.validate(writer)?;
         Ok(transaction)
     }
 
@@ -1574,7 +1937,7 @@ impl IntakeTransaction {
         let transactions = writer
             .directories
             .root
-            .open_dir_nofollow(INTAKE_TRANSACTION_ROOT)
+            .open_dir_nofollow(&self.namespace)
             .map_err(|error| format!("intake transaction root changed: {error}"))?;
         if !same_directory(&transactions, &self.transactions)? {
             return Err("intake transaction root identity changed".to_owned());
@@ -1590,6 +1953,8 @@ impl IntakeTransaction {
             ("staged", &self.staged),
             ("archive/original", &self.original),
             ("archive/displaced", &self.displaced),
+            ("archive/reviewed", &self.reviewed),
+            ("archive/preserved", &self.preserved),
         ] {
             let current = if let Some(child) = name.strip_prefix("archive/") {
                 let archive = self
@@ -1658,6 +2023,12 @@ impl IntakeTransaction {
         let displaced = archive.open_dir_nofollow("displaced").map_err(|error| {
             format!("cannot open intake transaction displaced archive: {error}")
         })?;
+        let reviewed = archive
+            .open_dir_nofollow("reviewed")
+            .map_err(|error| format!("cannot open intake transaction reviewed archive: {error}"))?;
+        let preserved = archive.open_dir_nofollow("preserved").map_err(|error| {
+            format!("cannot open intake transaction preserved archive: {error}")
+        })?;
         let journal_metadata = directory
             .symlink_metadata(INTAKE_TRANSACTION_JOURNAL)
             .map_err(|error| format!("cannot inspect intake transaction journal: {error}"))?;
@@ -1686,22 +2057,22 @@ impl IntakeTransaction {
         journal
             .read_to_end(&mut bytes)
             .map_err(|error| format!("cannot read intake transaction journal: {error}"))?;
-        let mut snapshot = None;
+        let mut history = Vec::new();
         let mut durable_len = 0_usize;
-        for (expected_sequence, line) in bytes.split_inclusive(|byte| *byte == b'\n').enumerate() {
+        for line in bytes.split_inclusive(|byte| *byte == b'\n') {
             if !line.ends_with(b"\n") {
                 break;
             }
             let value = serde_json::from_slice::<JournalSnapshot>(&line[..line.len() - 1])
                 .map_err(|error| format!("invalid intake transaction journal: {error}"))?;
-            if value.version != 1 || value.sequence != expected_sequence as u64 {
-                return Err("intake transaction journal sequence is invalid".to_owned());
-            }
             durable_len += line.len();
-            snapshot = Some(value);
+            history.push(value);
         }
-        let snapshot = snapshot
-            .ok_or_else(|| "intake transaction journal has no durable snapshot".to_owned())?;
+        validate_journal_history(name, &history)?;
+        let snapshot = history
+            .last()
+            .cloned()
+            .expect("validated journal history is nonempty");
         if durable_len != bytes.len() {
             journal
                 .set_len(durable_len as u64)
@@ -1715,6 +2086,7 @@ impl IntakeTransaction {
         let transaction = Self {
             path: workspace.join(INTAKE_TRANSACTION_ROOT).join(name),
             name: name.to_owned(),
+            namespace: INTAKE_TRANSACTION_ROOT.to_owned(),
             transactions: transactions
                 .try_clone()
                 .map_err(|error| format!("cannot retain transaction root capability: {error}"))?,
@@ -1722,21 +2094,31 @@ impl IntakeTransaction {
             staged,
             original,
             displaced,
+            reviewed,
+            preserved,
             journal,
             journal_identity,
             journal_healthy: true,
             snapshot,
+            history,
         };
         transaction.validate(writer)?;
         Ok(transaction)
     }
 
-    fn write_snapshot(&mut self, writer: &CapabilityTargetWriter) -> Result<(), String> {
+    fn append_snapshot(
+        &mut self,
+        writer: &CapabilityTargetWriter,
+        snapshot: JournalSnapshot,
+    ) -> Result<(), String> {
         if !self.journal_healthy {
             return Err("intake transaction journal is unhealthy; recovery is required".to_owned());
         }
+        let mut next_history = self.history.clone();
+        next_history.push(snapshot.clone());
+        validate_journal_history(&self.name, &next_history)?;
         self.validate(writer)?;
-        let mut encoded = serde_json::to_vec(&self.snapshot)
+        let mut encoded = serde_json::to_vec(&snapshot)
             .map_err(|error| format!("failed to encode intake transaction journal: {error}"))?;
         encoded.push(b'\n');
         if let Err(error) = self
@@ -1753,7 +2135,24 @@ impl IntakeTransaction {
             self.journal_healthy = false;
             return Err(error);
         }
+        self.snapshot = snapshot;
+        self.history = next_history;
         Ok(())
+    }
+
+    fn next_snapshot(&self, status: &str, phase: String) -> Result<JournalSnapshot, String> {
+        let mut snapshot = JournalSnapshot {
+            version: INTAKE_TRANSACTION_VERSION,
+            transaction_id: self.name.clone(),
+            sequence: self.snapshot.sequence + 1,
+            status: status.to_owned(),
+            phase,
+            targets: self.snapshot.targets.clone(),
+            previous_record_hash: Some(self.snapshot.record_hash.clone()),
+            record_hash: String::new(),
+        };
+        seal_journal_snapshot(&mut snapshot)?;
+        Ok(snapshot)
     }
 
     fn record_phase(
@@ -1761,31 +2160,46 @@ impl IntakeTransaction {
         writer: &CapabilityTargetWriter,
         phase: impl Into<String>,
     ) -> Result<(), String> {
-        self.snapshot.sequence += 1;
-        self.snapshot.phase = phase.into();
-        self.write_snapshot(writer)
+        let snapshot = self.next_snapshot("active", phase.into())?;
+        self.append_snapshot(writer, snapshot)
     }
 
     fn finish(&mut self, writer: &CapabilityTargetWriter, status: &str) -> Result<(), String> {
-        self.snapshot.sequence += 1;
-        self.snapshot.status = status.to_owned();
-        self.snapshot.phase = status.to_owned();
-        self.write_snapshot(writer)?;
-        self.write_manifest(status)
+        if !matches!(status, "committed" | "rolledBack") {
+            return Err("intake transaction terminal status is invalid".to_owned());
+        }
+        let snapshot = self.next_snapshot(status, status.to_owned())?;
+        let mut history = self.history.clone();
+        history.push(snapshot.clone());
+        validate_journal_history(&self.name, &history)?;
+        self.write_manifest_for(&snapshot)?;
+        self.append_snapshot(writer, snapshot)
     }
 
-    fn write_manifest(&self, status: &str) -> Result<(), String> {
-        let manifest = TransactionManifest {
-            version: 1,
-            status: status.to_owned(),
+    fn manifest_for(&self, terminal_snapshot: &JournalSnapshot) -> TransactionManifest {
+        TransactionManifest {
+            version: INTAKE_TRANSACTION_VERSION,
+            status: terminal_snapshot.status.clone(),
             cleanup_policy: "manual-only".to_owned(),
             journal: INTAKE_TRANSACTION_JOURNAL.to_owned(),
-            archive_layout: "staged/<archiveName>, archive/original/<archiveName>, and archive/displaced/<archiveName>"
+            archive_layout: "staged/<archiveName>, archive/original/<archiveName>, archive/displaced/<archiveName>, archive/reviewed/<archiveName>, and unique archive/preserved/* versions"
                 .to_owned(),
             cleanup_instructions: "Review every archived path, close editors holding these files, and delete this transaction directory manually only after no retained version is needed. CareerOps never auto-deletes transaction archives because another process may still hold and modify an archived inode."
                 .to_owned(),
-            targets: self.snapshot.targets.clone(),
-        };
+            targets: terminal_snapshot.targets.clone(),
+            terminal_snapshot: terminal_snapshot.clone(),
+        }
+    }
+
+    fn write_manifest_for(&self, terminal_snapshot: &JournalSnapshot) -> Result<(), String> {
+        let manifest = self.manifest_for(terminal_snapshot);
+        if let Some(existing) = self.read_manifest()? {
+            return if existing == manifest {
+                Ok(())
+            } else {
+                Err("intake recovery manifest conflicts with journal".to_owned())
+            };
+        }
         let bytes = serde_json::to_vec_pretty(&manifest)
             .map_err(|error| format!("failed to encode intake recovery manifest: {error}"))?;
         let mut options = CapOpenOptions::new();
@@ -1793,48 +2207,124 @@ impl IntakeTransaction {
             .write(true)
             .create_new(true)
             .follow(FollowSymlinks::No);
-        match self
+        let temporary_name = format!(
+            ".manifest-preparation-{}-{}",
+            std::process::id(),
+            NEXT_INTAKE_ARCHIVE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        );
+        let mut file = self
             .directory
-            .open_with(INTAKE_TRANSACTION_MANIFEST, &options)
-        {
-            Ok(mut file) => {
-                file.write_all(&bytes)
-                    .and_then(|()| file.sync_all())
-                    .map_err(|error| {
-                        format!("failed to durably write intake recovery manifest: {error}")
-                    })?;
-                sync_directory(&self.directory)
-            }
+            .open_with(&temporary_name, &options)
+            .map_err(|error| format!("failed to stage intake recovery manifest: {error}"))?;
+        file.write_all(&bytes)
+            .and_then(|()| file.sync_all())
+            .map_err(|error| {
+                format!("failed to durably stage intake recovery manifest: {error}")
+            })?;
+        drop(file);
+        sync_directory(&self.directory)?;
+        match rename_between_noreplace(
+            &self.directory,
+            &temporary_name,
+            &self.directory,
+            INTAKE_TRANSACTION_MANIFEST,
+        ) {
+            Ok(()) => sync_directory(&self.directory),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                let metadata = self
-                    .directory
-                    .symlink_metadata(INTAKE_TRANSACTION_MANIFEST)
-                    .map_err(|error| format!("cannot inspect intake recovery manifest: {error}"))?;
-                if metadata.file_type().is_symlink() || !metadata.is_file() {
-                    return Err("intake recovery manifest was replaced".to_owned());
+                match self.read_manifest()? {
+                    Some(existing) if existing == manifest => Ok(()),
+                    _ => Err("intake recovery manifest conflicts with journal".to_owned()),
                 }
-                let mut read_options = CapOpenOptions::new();
-                read_options.read(true).follow(FollowSymlinks::No);
-                let mut file = self
-                    .directory
-                    .open_with(INTAKE_TRANSACTION_MANIFEST, &read_options)
-                    .map_err(|error| format!("cannot read intake recovery manifest: {error}"))?;
-                let mut existing = Vec::new();
-                file.read_to_end(&mut existing)
-                    .map_err(|error| format!("cannot read intake recovery manifest: {error}"))?;
-                let existing: TransactionManifest = serde_json::from_slice(&existing)
-                    .map_err(|error| format!("invalid intake recovery manifest: {error}"))?;
-                if existing.status != status
-                    || existing.cleanup_policy != "manual-only"
-                    || existing.targets.len() != self.snapshot.targets.len()
-                {
-                    return Err("intake recovery manifest conflicts with journal".to_owned());
-                }
-                Ok(())
             }
             Err(error) => Err(format!(
-                "failed to create intake recovery manifest: {error}"
+                "failed to publish intake recovery manifest: {error}"
             )),
+        }
+    }
+
+    fn read_manifest(&self) -> Result<Option<TransactionManifest>, String> {
+        let metadata = match self.directory.symlink_metadata(INTAKE_TRANSACTION_MANIFEST) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(format!("cannot inspect intake recovery manifest: {error}")),
+        };
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("intake recovery manifest must be a regular file".to_owned());
+        }
+        let identity = file_identity(&metadata)?;
+        let mut options = CapOpenOptions::new();
+        options.read(true).follow(FollowSymlinks::No);
+        let mut file = self
+            .directory
+            .open_with(INTAKE_TRANSACTION_MANIFEST, &options)
+            .map_err(|error| format!("cannot open intake recovery manifest: {error}"))?;
+        if file_identity(
+            &file
+                .metadata()
+                .map_err(|error| format!("cannot inspect intake recovery manifest: {error}"))?,
+        )? != identity
+        {
+            return Err("intake recovery manifest changed while opened".to_owned());
+        }
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)
+            .map_err(|error| format!("cannot read intake recovery manifest: {error}"))?;
+        let current = self
+            .directory
+            .symlink_metadata(INTAKE_TRANSACTION_MANIFEST)
+            .map_err(|error| format!("intake recovery manifest changed while read: {error}"))?;
+        if file_identity(&current)? != identity {
+            return Err("intake recovery manifest changed while read".to_owned());
+        }
+        serde_json::from_slice(&bytes)
+            .map(Some)
+            .map_err(|error| format!("invalid intake recovery manifest: {error}"))
+    }
+
+    fn complete_or_validate_terminal(
+        &mut self,
+        writer: &CapabilityTargetWriter,
+    ) -> Result<bool, String> {
+        let manifest = self.read_manifest()?;
+        match self.snapshot.status.as_str() {
+            "committed" | "rolledBack" => {
+                let expected = self.manifest_for(&self.snapshot);
+                if manifest.as_ref() != Some(&expected) {
+                    return Err(
+                        "terminal intake journal is not bound to its durable manifest".to_owned(),
+                    );
+                }
+                Ok(true)
+            }
+            "active" => {
+                let Some(manifest) = manifest else {
+                    return Ok(false);
+                };
+                let terminal = manifest.terminal_snapshot.clone();
+                if manifest != self.manifest_for(&terminal)
+                    || terminal.previous_record_hash.as_deref()
+                        != Some(self.snapshot.record_hash.as_str())
+                {
+                    return Err(
+                        "intake recovery manifest does not bind the next journal record".to_owned(),
+                    );
+                }
+                let mut history = self.history.clone();
+                history.push(terminal.clone());
+                validate_journal_history(&self.name, &history)?;
+                match terminal.status.as_str() {
+                    "committed" => verify_candidate_live_set(writer, &terminal.targets)?,
+                    "rolledBack" => verify_reviewed_live_set(writer, &terminal.targets)?,
+                    _ => {
+                        return Err(
+                            "intake recovery manifest terminal status is invalid".to_owned()
+                        );
+                    }
+                }
+                self.append_snapshot(writer, terminal)?;
+                Ok(true)
+            }
+            _ => Err("intake transaction journal status is invalid".to_owned()),
         }
     }
 
@@ -1915,182 +2405,196 @@ fn entry_matches(
     }
 }
 
+fn verify_candidate_live_set(
+    writer: &CapabilityTargetWriter,
+    targets: &[JournalTarget],
+) -> Result<(), String> {
+    for target in targets {
+        writer.validate_target_layout(&target.relative)?;
+        let (directory, name) = writer.directories.target(&target.relative)?;
+        let current = observe_named_entry(directory, name, &target.relative)?;
+        if !entry_matches(
+            current.as_ref(),
+            Some(target.candidate_identity),
+            Some(&target.candidate_hash),
+        ) {
+            return Err(format!(
+                "committed intake target does not match its journal binding: {}",
+                target.relative
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn reviewed_entry_matches(entry: Option<&ObservedEntry>, target: &JournalTarget) -> bool {
+    match target.expected_before_hash.as_deref() {
+        Some(hash) => entry.is_some_and(|entry| entry.hash.as_deref() == Some(hash)),
+        None => entry.is_none(),
+    }
+}
+
+fn verify_reviewed_live_set(
+    writer: &CapabilityTargetWriter,
+    targets: &[JournalTarget],
+) -> Result<(), String> {
+    for target in targets {
+        writer.validate_target_layout(&target.relative)?;
+        let (directory, name) = writer.directories.target(&target.relative)?;
+        let current = observe_named_entry(directory, name, &target.relative)?;
+        if !reviewed_entry_matches(current.as_ref(), target) {
+            return Err(format!(
+                "reviewed intake target set is incomplete at {}",
+                target.relative
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn install_reviewed_snapshot(
+    writer: &CapabilityTargetWriter,
+    transaction: &mut IntakeTransaction,
+    target: &JournalTarget,
+) -> Result<(), String> {
+    let expected_hash = target
+        .expected_before_hash
+        .as_deref()
+        .ok_or_else(|| format!("{} has no reviewed bytes to restore", target.relative))?;
+    let reviewed_identity = target.reviewed_identity.ok_or_else(|| {
+        format!(
+            "{} journal has no reviewed snapshot identity",
+            target.relative
+        )
+    })?;
+    let reviewed_entry = HeldNamedEntry {
+        name: target.archive_name.clone(),
+        identity: reviewed_identity,
+    };
+    let snapshot = writer.snapshot_directory_entry(
+        &target.relative,
+        &transaction.reviewed,
+        &reviewed_entry,
+    )?;
+    let bytes = snapshot
+        .contents
+        .ok_or_else(|| format!("{} durable reviewed snapshot is missing", target.relative))?;
+    if hash_bytes(&bytes) != expected_hash {
+        return Err(format!(
+            "{} durable reviewed snapshot changed",
+            target.relative
+        ));
+    }
+    let staged = writer.stage_unique_in_directory(
+        &target.relative,
+        &bytes,
+        &transaction.preserved,
+        &target.archive_name,
+    )?;
+    writer.move_directory_entry_to_target(&target.relative, &transaction.preserved, &staged.entry)
+}
+
 fn reconcile_transaction_target(
     writer: &CapabilityTargetWriter,
     transaction: &mut IntakeTransaction,
     target: &JournalTarget,
-) -> Result<Vec<String>, String> {
+) -> Result<(), String> {
     writer.validate_target_layout(&target.relative)?;
     let (target_directory, target_name) = writer.directories.target(&target.relative)?;
-    let mut ambiguity = Vec::new();
-    let mut current = observe_named_entry(target_directory, target_name, &target.relative)?;
+    let current = observe_named_entry(target_directory, target_name, &target.relative)?;
+    if reviewed_entry_matches(current.as_ref(), target) {
+        return Ok(());
+    }
+
+    if current.is_some() {
+        writer
+            .move_target_to_unique_directory(
+                &target.relative,
+                &transaction.preserved,
+                &target.archive_name,
+            )?
+            .ok_or_else(|| format!("{} disappeared during recovery", target.relative))?;
+        transaction.record_phase(writer, format!("recovery-archived:{}", target.relative))?;
+    }
+
+    if target.expected_before_hash.is_none() {
+        let current = observe_named_entry(target_directory, target_name, &target.relative)?;
+        if current.is_some() {
+            return Err(format!(
+                "{} was recreated while recovery was restoring an absent reviewed target",
+                target.relative
+            ));
+        }
+        return Ok(());
+    }
+
     let original = observe_named_entry(
         &transaction.original,
         &target.archive_name,
         &format!("original archive for {}", target.relative),
     )?;
-    let mut displaced = observe_named_entry(
-        &transaction.displaced,
-        &target.archive_name,
-        &format!("displaced archive for {}", target.relative),
-    )?;
-
-    let current_is_original = entry_matches(
-        current.as_ref(),
+    let restored_original = match (
+        original.as_ref(),
         target.expected_before_identity,
         target.expected_before_hash.as_deref(),
-    );
-    let current_is_candidate = entry_matches(
-        current.as_ref(),
-        Some(target.candidate_identity),
-        Some(&target.candidate_hash),
-    );
-    if current_is_candidate {
-        if displaced.is_some() {
-            ambiguity.push(format!(
-                "{} has both an installed and displaced candidate",
-                target.relative
-            ));
-        } else {
-            let moved = writer
-                .move_target_to_directory(
-                    &target.relative,
-                    &transaction.displaced,
-                    &target.archive_name,
-                )?
-                .ok_or_else(|| format!("{} disappeared during recovery", target.relative))?;
-            if moved.identity != target.candidate_identity {
-                return Err(format!(
-                    "{} changed while its candidate was archived",
-                    target.relative
-                ));
-            }
-            transaction.record_phase(
-                writer,
-                format!("recovery-candidate-archived:{}", target.relative),
+    ) {
+        (Some(original), Some(identity), Some(hash))
+            if original.identity == identity && original.hash.as_deref() == Some(hash) =>
+        {
+            writer.move_directory_entry_to_target(
+                &target.relative,
+                &transaction.original,
+                &HeldNamedEntry {
+                    name: target.archive_name.clone(),
+                    identity: original.identity,
+                },
             )?;
-            current = None;
-            displaced = observe_named_entry(
-                &transaction.displaced,
-                &target.archive_name,
-                &format!("displaced archive for {}", target.relative),
-            )?;
+            true
         }
-    } else if !current_is_original {
-        if let Some(entry) = &current {
-            if entry.identity == target.candidate_identity {
-                ambiguity.push(format!(
-                    "{} candidate was modified through another handle and remains canonical",
-                    target.relative
-                ));
-            } else if target.expected_before_identity == Some(entry.identity) {
-                ambiguity.push(format!(
-                    "{} original was modified through another handle and remains canonical",
-                    target.relative
-                ));
-            } else {
-                ambiguity.push(format!(
-                    "{} contains an unknown later entry that was preserved",
-                    target.relative
-                ));
-            }
-        }
+        _ => false,
+    };
+    if !restored_original {
+        install_reviewed_snapshot(writer, transaction, target)?;
     }
 
-    if current.is_none() {
-        if let Some(entry) = displaced.as_ref() {
-            let displaced_is_candidate = entry_matches(
-                Some(entry),
-                Some(target.candidate_identity),
-                Some(&target.candidate_hash),
-            );
-            if !displaced_is_candidate {
-                writer.move_directory_entry_to_target(
-                    &target.relative,
-                    &transaction.displaced,
-                    &HeldNamedEntry {
-                        name: target.archive_name.clone(),
-                        identity: entry.identity,
-                    },
-                )?;
-                transaction.record_phase(
-                    writer,
-                    format!("recovery-later-entry-restored:{}", target.relative),
-                )?;
-                ambiguity.push(format!(
-                    "{} displaced later entry was restored and preserved",
-                    target.relative
-                ));
-                current = observe_named_entry(target_directory, target_name, &target.relative)?;
-            }
-        }
+    let current = observe_named_entry(target_directory, target_name, &target.relative)?;
+    if !reviewed_entry_matches(current.as_ref(), target) {
+        return Err(format!(
+            "{} could not be restored to its reviewed bytes",
+            target.relative
+        ));
     }
+    Ok(())
+}
 
-    if current.is_none() {
-        match (
-            target.expected_before_identity,
-            target.expected_before_hash.as_deref(),
-        ) {
-            (None, None) => {}
-            (Some(expected_identity), Some(expected_hash)) => {
-                let Some(original) = original else {
-                    ambiguity.push(format!(
-                        "{} original archive is missing while the canonical target is absent",
-                        target.relative
-                    ));
-                    return Ok(ambiguity);
-                };
-                if original.identity != expected_identity {
-                    ambiguity.push(format!(
-                        "{} original archive identity is not the reviewed inode",
-                        target.relative
-                    ));
-                    return Ok(ambiguity);
-                }
-                if original.hash.as_deref() != Some(expected_hash) {
-                    ambiguity.push(format!(
-                        "{} original archive has later open-handle edits; they were restored",
-                        target.relative
-                    ));
-                }
-                writer.move_directory_entry_to_target(
-                    &target.relative,
-                    &transaction.original,
-                    &HeldNamedEntry {
-                        name: target.archive_name.clone(),
-                        identity: original.identity,
-                    },
-                )?;
-                transaction.record_phase(
-                    writer,
-                    format!("recovery-original-restored:{}", target.relative),
-                )?;
-            }
-            _ => ambiguity.push(format!(
-                "{} journal before-state is incomplete",
-                target.relative
-            )),
-        }
+fn finish_reviewed_rollback(
+    writer: &CapabilityTargetWriter,
+    transaction: &mut IntakeTransaction,
+) -> Result<(), String> {
+    let targets = transaction.snapshot.targets.clone();
+    verify_reviewed_live_set(writer, &targets)?;
+    for target in &targets {
+        transaction.record_phase(writer, format!("recovery-restored:{}", target.relative))?;
     }
+    verify_reviewed_live_set(writer, &targets)?;
+    transaction.finish(writer, "rolledBack")
+}
 
-    let staged = observe_named_entry(
-        &transaction.staged,
-        &target.archive_name,
-        &format!("staged candidate for {}", target.relative),
-    )?;
-    if let Some(staged) = staged {
-        if !entry_matches(
-            Some(&staged),
-            Some(target.candidate_identity),
-            Some(&target.candidate_hash),
-        ) {
-            ambiguity.push(format!(
-                "{} staged candidate changed and was retained",
-                target.relative
-            ));
+fn recover_transaction_to_reviewed(
+    writer: &CapabilityTargetWriter,
+    transaction: &mut IntakeTransaction,
+) -> Result<(), String> {
+    let targets = transaction.snapshot.targets.clone();
+    let mut failures = Vec::new();
+    for target in targets.iter().rev() {
+        if let Err(error) = reconcile_transaction_target(writer, transaction, target) {
+            failures.push(format!("{}: {error}", target.relative));
         }
     }
-    Ok(ambiguity)
+    if !failures.is_empty() {
+        return Err(failures.join("; "));
+    }
+    finish_reviewed_rollback(writer, transaction)
 }
 
 pub(crate) fn reconcile_intake_transactions(workspace: &Path) -> Result<(), String> {
@@ -2126,45 +2630,13 @@ pub(crate) fn reconcile_intake_transactions(workspace: &Path) -> Result<(), Stri
     for name in names {
         let mut transaction =
             IntakeTransaction::open_existing(workspace, &writer, &transactions, &name)?;
-        match transaction.snapshot.status.as_str() {
-            "committed" | "rolledBack" => {
-                transaction.write_manifest(&transaction.snapshot.status)?;
-                continue;
-            }
-            "recoveryRequired" => {
-                transaction.write_manifest("recoveryRequired")?;
-                return Err(format!(
-                    "Intake recovery requires review. Every version is retained at {}.",
-                    transaction.path().display()
-                ));
-            }
-            "active" => {}
-            status => {
-                return Err(format!(
-                    "unknown intake transaction status {status} at {}",
-                    transaction.path().display()
-                ));
-            }
+        if transaction.complete_or_validate_terminal(&writer)? {
+            continue;
         }
-        let targets = transaction.snapshot.targets.clone();
-        let mut ambiguity = Vec::new();
-        for target in targets.iter().rev() {
-            match reconcile_transaction_target(&writer, &mut transaction, target) {
-                Ok(mut findings) => ambiguity.append(&mut findings),
-                Err(error) => ambiguity.push(error),
-            }
-        }
-        let status = if ambiguity.is_empty() {
-            "rolledBack"
-        } else {
-            "recoveryRequired"
-        };
-        transaction.finish(&writer, status)?;
-        if !ambiguity.is_empty() {
+        if let Err(error) = recover_transaction_to_reviewed(&writer, &mut transaction) {
             return Err(format!(
-                "Intake recovery preserved an ambiguous transaction at {}: {}",
-                transaction.path().display(),
-                ambiguity.join("; ")
+                "Intake recovery remains nonterminal at {}. Every reachable version is retained and the workspace is fail-closed until the reviewed live set can be restored: {error}",
+                transaction.path().display()
             ));
         }
     }
@@ -2193,7 +2665,7 @@ impl std::fmt::Display for PromotionFailure {
         match &self.recovery_path {
             Some(path) => write!(
                 formatter,
-                "{}. Transaction archive retained at {}; see manifest.json before retrying.",
+                "{}. Transaction archive retained at {}; archives are manual-only and any nonterminal recovery will retry before the next task.",
                 self.message,
                 path.display()
             ),
@@ -2814,15 +3286,11 @@ where
     F: FnMut(ConfirmationEvent) -> Result<(), String>,
 {
     let mut failures = restore_target_changes(writer, transaction, backups, hook);
-    let status = if failures.failures.is_empty() {
-        "rolledBack"
-    } else {
-        "recoveryRequired"
-    };
-    if let Err(error) = transaction.finish(writer, status) {
-        failures
+    match recover_transaction_to_reviewed(writer, transaction) {
+        Ok(()) => failures.failures.clear(),
+        Err(error) => failures
             .failures
-            .push(format!("transaction finalization: {error}"));
+            .push(format!("nonterminal recovery: {error}")),
     }
     promotion_failure(original, transaction, failures).to_string()
 }
@@ -2861,8 +3329,14 @@ where
     let mut backups = match promotion {
         Ok(backups) => backups,
         Err(error) => {
-            let _ = transaction.finish(&writer, "recoveryRequired");
-            return Err(error.to_string());
+            let mut recovery = RollbackReport::default();
+            if let Err(recovery_error) = recover_transaction_to_reviewed(&writer, &mut transaction)
+            {
+                recovery
+                    .failures
+                    .push(format!("nonterminal recovery: {recovery_error}"));
+            }
+            return Err(promotion_failure(error.to_string(), &transaction, recovery).to_string());
         }
     };
 
@@ -2919,18 +3393,18 @@ where
             Err(error) => {
                 let mut rollback =
                     restore_target_changes(&writer, &mut transaction, &backups, &mut hook);
-                let status = if rollback.failures.is_empty() {
-                    "rolledBack"
-                } else {
-                    "recoveryRequired"
-                };
-                if let Err(finish_error) = transaction.finish(&writer, status) {
-                    rollback
+                match recover_transaction_to_reviewed(&writer, &mut transaction) {
+                    Ok(()) => rollback.failures.clear(),
+                    Err(recovery_error) => rollback
                         .failures
-                        .push(format!("transaction finalization: {finish_error}"));
+                        .push(format!("nonterminal recovery: {recovery_error}")),
                 }
                 if rollback.failures.is_empty() {
                     return Err(error.to_string());
+                } else {
+                    rollback
+                        .failures
+                        .push("transaction remains active and retryable".to_owned());
                 }
                 return Err(
                     promotion_failure(error.to_string(), &transaction, rollback).to_string()
@@ -2957,7 +3431,7 @@ where
         }
     }
     transaction.finish(&writer, "committed").map_err(|error| {
-        fail_after_promotion(error, &writer, &mut transaction, &backups, &mut hook)
+        promotion_failure(error, &transaction, RollbackReport::default()).to_string()
     })?;
     Ok(pending.commit_source_paths.clone())
 }
@@ -4004,7 +4478,7 @@ mod tests {
         error
             .split("Transaction archive retained at ")
             .nth(1)
-            .and_then(|suffix| suffix.split("; see manifest.json").next())
+            .and_then(|suffix| suffix.split("; archives are").next())
             .map(PathBuf::from)
             .expect("error must report a transaction archive")
     }
@@ -4026,6 +4500,132 @@ mod tests {
             ),
             None => assert!(!workspace.join(INTAKE_STATE_TARGET).exists()),
         }
+    }
+
+    fn prepared_all_target_candidate(
+        label: &str,
+    ) -> (TempDir, ReviewFingerprints, PendingIntakeApply) {
+        let original_state = "{\"ingested\":{\"older.txt\":{\"hash\":\"old\"}}}\n";
+        let (workspace, reviewed, mut pending) =
+            prepared_exact_candidate(label, Some(original_state));
+        let writer = CapabilityTargetWriter::open(workspace.path()).unwrap();
+        for (relative, contents) in [
+            ("config/profile.yml", b"name: Reviewed Candidate\n".to_vec()),
+            (
+                "modes/_profile.md",
+                b"# Target profile\n\nReviewed target\n".to_vec(),
+            ),
+        ] {
+            pending
+                .expected_target_snapshots
+                .insert(relative.to_owned(), writer.snapshot(relative).unwrap());
+            pending.target_bytes.insert(relative.to_owned(), contents);
+        }
+        (workspace, reviewed, pending)
+    }
+
+    fn crash_after_all_targets_install(label: &str) -> TempDir {
+        let (workspace, reviewed, pending) = prepared_all_target_candidate(label);
+        let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = confirm_pending_intake_with_event_hook(
+                workspace.path(),
+                &reviewed,
+                &pending,
+                |event| {
+                    if event == ConfirmationEvent::AfterStatePromotion {
+                        panic!("simulated crash after the complete candidate set was installed");
+                    }
+                    Ok(())
+                },
+            );
+        }));
+        assert!(crashed.is_err());
+        workspace
+    }
+
+    fn assert_complete_reviewed_live_set(workspace: &Path) {
+        for (relative, expected) in [
+            ("cv.md", "# CV\n\nEngineer\n"),
+            ("config/profile.yml", "name: Example\n"),
+            ("modes/_profile.md", "# Target profile\n"),
+            (
+                INTAKE_STATE_TARGET,
+                "{\"ingested\":{\"older.txt\":{\"hash\":\"old\"}}}\n",
+            ),
+        ] {
+            assert_eq!(
+                fs::read_to_string(workspace.join(relative)).unwrap(),
+                expected,
+                "reviewed set mismatch at {relative}"
+            );
+        }
+    }
+
+    fn retained_tree_contains(root: &Path, expected: &[u8]) -> bool {
+        let Ok(entries) = fs::read_dir(root) else {
+            return false;
+        };
+        entries.filter_map(Result::ok).any(|entry| {
+            let path = entry.path();
+            if path.is_dir() {
+                retained_tree_contains(&path, expected)
+            } else {
+                fs::read(path).is_ok_and(|bytes| bytes == expected)
+            }
+        })
+    }
+
+    #[cfg(unix)]
+    fn retained_tree_contains_symlink(root: &Path) -> bool {
+        let Ok(entries) = fs::read_dir(root) else {
+            return false;
+        };
+        entries.filter_map(Result::ok).any(|entry| {
+            let path = entry.path();
+            let Ok(metadata) = fs::symlink_metadata(&path) else {
+                return false;
+            };
+            metadata.file_type().is_symlink()
+                || (metadata.is_dir() && retained_tree_contains_symlink(&path))
+        })
+    }
+
+    fn append_complete_journal_record<F>(transaction: &Path, mutate: F)
+    where
+        F: FnOnce(&mut super::JournalSnapshot),
+    {
+        use std::io::Write;
+
+        let journal_path = transaction.join("journal.ndjson");
+        let bytes = fs::read(&journal_path).unwrap();
+        let line = bytes
+            .split(|byte| *byte == b'\n')
+            .rev()
+            .find(|line| !line.is_empty())
+            .unwrap();
+        let mut snapshot: super::JournalSnapshot = serde_json::from_slice(line).unwrap();
+        snapshot.previous_record_hash = Some(snapshot.record_hash.clone());
+        snapshot.sequence += 1;
+        mutate(&mut snapshot);
+        super::seal_journal_snapshot(&mut snapshot).unwrap();
+        let mut encoded = serde_json::to_vec(&snapshot).unwrap();
+        encoded.push(b'\n');
+        let mut journal = fs::OpenOptions::new()
+            .append(true)
+            .open(journal_path)
+            .unwrap();
+        journal.write_all(&encoded).unwrap();
+        journal.sync_all().unwrap();
+    }
+
+    #[allow(dead_code)] // test helper for future journal-level assertions
+    fn durable_journal_history(transaction: &Path) -> Vec<super::JournalSnapshot> {
+        fs::read(transaction.join("journal.ndjson"))
+            .unwrap()
+            .split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice(line).unwrap())
+            .collect()
     }
 
     #[test]
@@ -4649,7 +5249,7 @@ mod tests {
         assert_eq!(manifest["cleanupPolicy"], "manual-only");
         assert_eq!(
             manifest["archiveLayout"],
-            "staged/<archiveName>, archive/original/<archiveName>, and archive/displaced/<archiveName>"
+            "staged/<archiveName>, archive/original/<archiveName>, archive/displaced/<archiveName>, archive/reviewed/<archiveName>, and unique archive/preserved/* versions"
         );
         assert!(manifest["cleanupInstructions"]
             .as_str()
@@ -4878,7 +5478,7 @@ mod tests {
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
-    fn crash_recovery_preserves_an_ambiguous_open_handle_edit_and_fails_closed() {
+    fn crash_recovery_archives_an_open_handle_edit_and_restores_reviewed_bytes() {
         use std::io::{Seek, SeekFrom, Write};
 
         let (workspace, reviewed, pending) =
@@ -4912,20 +5512,258 @@ mod tests {
         open_candidate.sync_all().unwrap();
         drop(candidate.take());
 
-        let error = reconcile_intake_transactions(workspace.path())
-            .expect_err("ambiguous candidate mutation must fail closed");
-        assert!(error.contains("ambiguous") || error.contains("open-handle"));
-        assert!(fs::read_to_string(workspace.path().join("cv.md"))
-            .unwrap()
-            .ends_with("later editor bytes\n"));
-        let transaction = only_transaction(workspace.path());
+        reconcile_intake_transactions(workspace.path())
+            .expect("the later version is retained before restoring reviewed bytes");
         assert_eq!(
-            fs::read_to_string(transaction.join("archive/original/cv.md")).unwrap(),
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
             "# CV\n\nEngineer\n"
         );
+        let transaction = only_transaction(workspace.path());
+        assert!(retained_tree_contains(
+            &transaction,
+            b"# CV\n\nEngineer\n\nSenior Engineer\nlater editor bytes\n"
+        ));
         let manifest: serde_json::Value =
             serde_json::from_slice(&fs::read(transaction.join("manifest.json")).unwrap()).unwrap();
-        assert_eq!(manifest["status"], "recoveryRequired");
+        assert_eq!(manifest["status"], "rolledBack");
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn recovery_archives_a_later_live_version_and_restores_the_complete_reviewed_set() {
+        use std::io::Write;
+
+        let workspace = crash_after_all_targets_install("recovery-complete-later-live");
+        let later = b"# CV\n\nEngineer\n\nSenior Engineer\nlater editor bytes\n";
+        let mut candidate = fs::OpenOptions::new()
+            .append(true)
+            .open(workspace.path().join("cv.md"))
+            .unwrap();
+        candidate.write_all(b"later editor bytes\n").unwrap();
+        candidate.sync_all().unwrap();
+        drop(candidate);
+
+        reconcile_intake_transactions(workspace.path())
+            .expect("a retained later version must not leave the reviewed live set split");
+        assert_complete_reviewed_live_set(workspace.path());
+        let transaction = only_transaction(workspace.path());
+        assert!(retained_tree_contains(&transaction, later));
+        let before_retry = fingerprint_tree(&transaction).unwrap();
+
+        reconcile_intake_transactions(workspace.path()).expect("terminal retry is idempotent");
+        assert_complete_reviewed_live_set(workspace.path());
+        assert_eq!(fingerprint_tree(&transaction).unwrap(), before_retry);
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn recovery_uses_the_reviewed_snapshot_when_current_and_bound_original_are_missing() {
+        let workspace = crash_after_all_targets_install("recovery-missing-current-original");
+        let transaction = only_transaction(workspace.path());
+        fs::rename(
+            workspace.path().join("cv.md"),
+            transaction.join("archive/displaced/cv.md"),
+        )
+        .unwrap();
+        fs::rename(
+            transaction.join("archive/original/cv.md"),
+            transaction.join("archive/original/cv.md.unbound-retained"),
+        )
+        .unwrap();
+
+        reconcile_intake_transactions(workspace.path())
+            .expect("the durable reviewed snapshot restores a missing canonical name");
+        assert_complete_reviewed_live_set(workspace.path());
+        assert_eq!(
+            fs::read_to_string(transaction.join("archive/displaced/cv.md")).unwrap(),
+            "# CV\n\nEngineer\n\nSenior Engineer\n"
+        );
+        assert_eq!(
+            fs::read_to_string(transaction.join("archive/original/cv.md.unbound-retained"))
+                .unwrap(),
+            "# CV\n\nEngineer\n"
+        );
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn crash_before_sequence_zero_is_unpublished_and_retryable() {
+        use super::{IntakeTransaction, TransactionCreationEvent, INTAKE_TRANSACTION_ROOT};
+
+        let (workspace, reviewed, pending) =
+            prepared_exact_candidate("crash-before-sequence-zero", None);
+        let writer = CapabilityTargetWriter::open(workspace.path()).unwrap();
+        let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = IntakeTransaction::create_with_event_hook(
+                workspace.path(),
+                &writer,
+                &pending.expected_target_snapshots,
+                &pending.target_bytes,
+                |event| {
+                    if event == TransactionCreationEvent::BeforeInitialJournal {
+                        panic!("simulated crash before sequence zero");
+                    }
+                    Ok(())
+                },
+            );
+        }));
+        assert!(crashed.is_err());
+        let published = workspace.path().join(INTAKE_TRANSACTION_ROOT);
+        assert!(
+            !published.exists() || fs::read_dir(&published).unwrap().next().is_none(),
+            "a preparation without sequence zero must never be published"
+        );
+        reconcile_intake_transactions(workspace.path())
+            .expect("an unpublished preparation cannot block workspace startup");
+
+        confirm_pending_intake_with_hook(workspace.path(), &reviewed, &pending, || {})
+            .expect("the exact confirmation can be retried after a preparation crash");
+        assert!(fs::read_to_string(workspace.path().join("cv.md"))
+            .unwrap()
+            .contains("Senior Engineer"));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn complete_forged_terminal_record_cannot_skip_reconciliation() {
+        let (workspace, reviewed, pending) =
+            prepared_exact_candidate("forged-terminal-record", None);
+        let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = confirm_pending_intake_with_event_hook(
+                workspace.path(),
+                &reviewed,
+                &pending,
+                |event| {
+                    if matches!(event, ConfirmationEvent::AfterTargetMovedAside(ref relative) if relative == "cv.md")
+                    {
+                        panic!("simulated crash with a missing canonical target");
+                    }
+                    Ok(())
+                },
+            );
+        }));
+        assert!(crashed.is_err());
+        let transaction = only_transaction(workspace.path());
+        append_complete_journal_record(&transaction, |snapshot| {
+            snapshot.status = "committed".to_owned();
+            snapshot.phase = "committed".to_owned();
+        });
+
+        let error = reconcile_intake_transactions(workspace.path())
+            .expect_err("a forged terminal record must fail closed");
+        assert!(
+            error.contains("journal") || error.contains("transition"),
+            "{error}"
+        );
+        assert!(!workspace.path().join("cv.md").exists());
+        assert!(transaction.join("archive/original/cv.md").exists());
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn changed_journal_target_bindings_are_rejected_before_recovery_mutates_files() {
+        let (workspace, reviewed, pending) =
+            prepared_exact_candidate("forged-target-binding", None);
+        let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = confirm_pending_intake_with_event_hook(
+                workspace.path(),
+                &reviewed,
+                &pending,
+                |event| {
+                    if matches!(event, ConfirmationEvent::AfterTargetInstalled(ref relative) if relative == "cv.md")
+                    {
+                        panic!("simulated crash before a forged binding");
+                    }
+                    Ok(())
+                },
+            );
+        }));
+        assert!(crashed.is_err());
+        let transaction = only_transaction(workspace.path());
+        append_complete_journal_record(&transaction, |snapshot| {
+            let target = snapshot
+                .targets
+                .iter_mut()
+                .find(|target| target.relative == "cv.md")
+                .unwrap();
+            target.archive_name = "forged-cv.md".to_owned();
+        });
+        let live_before = fs::read(workspace.path().join("cv.md")).unwrap();
+
+        let error = reconcile_intake_transactions(workspace.path())
+            .expect_err("immutable target bindings must reject an appended replacement");
+        assert!(
+            error.contains("journal") || error.contains("binding"),
+            "{error}"
+        );
+        assert_eq!(
+            fs::read(workspace.path().join("cv.md")).unwrap(),
+            live_before
+        );
+        assert!(transaction.join("archive/original/cv.md").exists());
+        assert!(!transaction.join("archive/displaced/forged-cv.md").exists());
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn illegal_journal_phase_transition_is_rejected_before_recovery() {
+        let (workspace, reviewed, pending) =
+            prepared_exact_candidate("illegal-journal-phase", None);
+        let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = confirm_pending_intake_with_event_hook(
+                workspace.path(),
+                &reviewed,
+                &pending,
+                |event| {
+                    if matches!(event, ConfirmationEvent::AfterTargetInstalled(ref relative) if relative == "cv.md")
+                    {
+                        panic!("simulated crash before an illegal phase");
+                    }
+                    Ok(())
+                },
+            );
+        }));
+        assert!(crashed.is_err());
+        let transaction = only_transaction(workspace.path());
+        append_complete_journal_record(&transaction, |snapshot| {
+            snapshot.status = "active".to_owned();
+            snapshot.phase = "prepared".to_owned();
+        });
+        let live_before = fs::read(workspace.path().join("cv.md")).unwrap();
+
+        let error = reconcile_intake_transactions(workspace.path())
+            .expect_err("prepared is legal only for sequence zero");
+        assert!(
+            error.contains("journal") || error.contains("phase"),
+            "{error}"
+        );
+        assert_eq!(
+            fs::read(workspace.path().join("cv.md")).unwrap(),
+            live_before
+        );
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn journal_record_after_terminal_is_rejected_without_rolling_back_committed_files() {
+        let (workspace, reviewed, pending) =
+            prepared_exact_candidate("record-after-terminal", None);
+        confirm_pending_intake_with_hook(workspace.path(), &reviewed, &pending, || {})
+            .expect("commit exact candidate");
+        let transaction = only_transaction(workspace.path());
+        append_complete_journal_record(&transaction, |snapshot| {
+            snapshot.status = "active".to_owned();
+            snapshot.phase = "prepared".to_owned();
+        });
+        let committed = fs::read(workspace.path().join("cv.md")).unwrap();
+
+        let error = reconcile_intake_transactions(workspace.path())
+            .expect_err("no record may follow a terminal record");
+        assert!(
+            error.contains("journal") || error.contains("terminal"),
+            "{error}"
+        );
+        assert_eq!(fs::read(workspace.path().join("cv.md")).unwrap(), committed);
     }
 
     #[cfg(unix)]
@@ -5247,7 +6085,7 @@ mod tests {
     }
 
     #[test]
-    fn canonical_edit_after_final_verification_is_preserved_and_not_promoted_over() {
+    fn canonical_edit_after_final_verification_is_archived_before_reviewed_restore() {
         let (workspace, reviewed, pending) =
             prepared_exact_candidate("confirm-canonical-pre-promotion-race", None);
 
@@ -5272,13 +6110,17 @@ mod tests {
         );
         assert_eq!(
             fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
-            "concurrent user edit\n"
+            "# CV\n\nEngineer\n"
         );
         assert!(!workspace.path().join(INTAKE_STATE_TARGET).exists());
+        assert!(retained_tree_contains(
+            &only_transaction(workspace.path()),
+            b"concurrent user edit\n"
+        ));
     }
 
     #[test]
-    fn intake_state_edit_after_verification_is_preserved_and_canonical_rolls_back() {
+    fn intake_state_edit_after_verification_is_archived_and_canonical_rolls_back() {
         let (workspace, reviewed, pending) =
             prepared_exact_candidate("confirm-state-pre-promotion-race", None);
 
@@ -5309,14 +6151,15 @@ mod tests {
             fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
             "# CV\n\nEngineer\n"
         );
-        assert_eq!(
-            fs::read_to_string(workspace.path().join(INTAKE_STATE_TARGET)).unwrap(),
-            "concurrent state edit\n"
-        );
+        assert!(!workspace.path().join(INTAKE_STATE_TARGET).exists());
+        assert!(retained_tree_contains(
+            &only_transaction(workspace.path()),
+            b"concurrent state edit\n"
+        ));
     }
 
     #[test]
-    fn canonical_edit_after_promotion_is_not_clobbered_by_rollback() {
+    fn canonical_edit_after_promotion_is_archived_before_reviewed_rollback() {
         let (workspace, reviewed, pending) =
             prepared_exact_candidate("confirm-canonical-rollback-race", None);
         let mut force_rollback = false;
@@ -5351,9 +6194,13 @@ mod tests {
         assert!(error.contains("Transaction archive retained"));
         assert_eq!(
             fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
-            "later canonical edit\n"
+            "# CV\n\nEngineer\n"
         );
         assert!(!workspace.path().join(INTAKE_STATE_TARGET).exists());
+        assert!(retained_tree_contains(
+            &only_transaction(workspace.path()),
+            b"later canonical edit\n"
+        ));
     }
 
     #[test]
@@ -5392,16 +6239,14 @@ mod tests {
         let recovery = transaction_path_from_error(&error);
         assert_eq!(
             fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
-            "second later edit\n"
+            "# CV\n\nEngineer\n"
         );
         assert_eq!(
             fs::read_to_string(recovery.join("archive/displaced/cv.md")).unwrap(),
             "first later edit\n"
         );
-        assert_eq!(
-            fs::read_to_string(recovery.join("archive/original/cv.md")).unwrap(),
-            "# CV\n\nEngineer\n"
-        );
+        assert!(retained_tree_contains(&recovery, b"second later edit\n"));
+        assert!(retained_tree_contains(&recovery, b"# CV\n\nEngineer\n"));
         fs::remove_dir_all(recovery).unwrap();
     }
 
@@ -5439,10 +6284,11 @@ mod tests {
         let recovery = transaction_path_from_error(&error);
         assert_eq!(
             fs::read_to_string(workspace.path().join(INTAKE_STATE_TARGET)).unwrap(),
-            "later state edit\n"
+            original_state
         );
+        assert!(retained_tree_contains(&recovery, b"later state edit\n"));
         assert_eq!(
-            fs::read_to_string(recovery.join("archive/original/data_intake-state.json")).unwrap(),
+            fs::read_to_string(recovery.join("archive/reviewed/data_intake-state.json")).unwrap(),
             original_state
         );
         fs::remove_dir_all(recovery).unwrap();
@@ -5547,13 +6393,12 @@ mod tests {
                 fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
                 "# CV\n\nEngineer\n"
             );
+            let transaction = only_transaction(workspace.path());
+            assert!(!raced_state.exists());
             if raced_kind == "file" {
-                assert_eq!(fs::read_to_string(&raced_state).unwrap(), "raced state\n");
+                assert!(retained_tree_contains(&transaction, b"raced state\n"));
             } else {
-                assert!(fs::symlink_metadata(&raced_state)
-                    .unwrap()
-                    .file_type()
-                    .is_symlink());
+                assert!(retained_tree_contains_symlink(&transaction));
             }
             assert_eq!(
                 fs::read_to_string(&external_state).unwrap(),
