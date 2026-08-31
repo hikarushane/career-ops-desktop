@@ -447,9 +447,9 @@
     <header class="hero">
       <p class="eyebrow">CareerOps Desktop</p>
       <h1>使用指南</h1>
-      <p class="lead">從第一次啟動到匯入背景證據、分析職缺、找工作、追蹤申請與準備面試。一般使用不需要自己操作 Markdown、YAML 或 coding-agent prompt。</p>
+      <p class="lead">從第一次啟動、匯入履歷，到分析職缺、追蹤申請與準備面試。這份指南只介紹你在 App 裡需要做的事。</p>
       <div class="notice">
-        <strong>目前版本範圍：</strong>這份指南描述目前 Desktop UI。安裝 package 與各版本的簽章資訊請以 GitHub Releases 為準；App 可從 header 的更新 badge 或 Profile &amp; Settings → About 檢查已設定的更新。
+        <strong>保持最新：</strong>看到 App 的更新提示時，依照畫面說明更新即可；也可以到 Profile &amp; Settings → About 選擇 <strong>Check Now</strong>。
       </div>
     </header>
 
@@ -459,8 +459,8 @@
         <a href="#overview">1. CareerOps Desktop 是什麼</a>
         <a href="#first-run">2. 第一次啟動</a>
         <a href="#background">3. 匯入背景資料</a>
-        <a href="#language">4. Analysis Language 與 Job Language</a>
-        <a href="#ai">5. 選擇 AI Provider</a>
+        <a href="#language">4. 選擇語言</a>
+        <a href="#ai">5. 連接 AI</a>
         <a href="#home">6. Home：從這裡開始</a>
         <a href="#evaluate">7. 分析單一職缺</a>
         <a href="#scanner">8. 找符合條件的職缺</a>
@@ -473,179 +473,135 @@
 
     <section id="overview">
       <h2>1. CareerOps Desktop 是什麼</h2>
-      <p class="section-intro">CareerOps Desktop 是建立在 CareerOps 核心上的原生桌面介面。Desktop 負責 UX 與流程編排；CareerOps 上游仍負責 tracker、report、scanner、batch、文件產生與其他 domain logic。</p>
-
-      <div class="flow" aria-label="CareerOps Desktop 架構流程">
-        <span class="flow-node active">Desktop UI</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-node">AgentRunner / Tauri</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-node">AI Provider</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-node">CareerOps Core</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-node">Canonical files</span>
-      </div>
+      <p class="section-intro">CareerOps Desktop 是你的求職助手：集中整理背景資料、分析職缺、尋找新機會、追蹤申請進度，並協助你準備面試。</p>
 
       <div class="cards">
         <div class="card">
-          <span class="card-label primary">Desktop 負責</span>
-          <h3>讓流程可以直接操作</h3>
-          <p>Onboarding、Home、Evaluate、Scanner、Jobs、Interview、Progress、Profile 與 Help 都可從 App 進入。</p>
+          <span class="card-label primary">幫你整理</span>
+          <h3>所有求職工作放在同一處</h3>
+          <p>從履歷資料、職缺分析到申請和面試進度，都可以直接在 App 中處理。</p>
         </div>
         <div class="card">
-          <span class="card-label teal">CareerOps Core 負責</span>
-          <h3>維持真正的求職邏輯</h3>
-          <p>評估、tracker、狀態、報告、職缺掃描、batch 與文件格式仍以上游為準，Desktop 不另外複製一套規則。</p>
+          <span class="card-label teal">決定權在你</span>
+          <h3>先看建議，再採用</h3>
+          <p>AI 可以幫你分析與起草，但不會替你送出申請、寄信或修改你的資料；每一步都由你確認。</p>
         </div>
       </div>
 
       <div class="callout success">
-        <p><strong>Human in the loop：</strong>AI 可以分析、起草與建議，但不會替你直接送出申請或寄出 outreach。最後決定仍由你控制。</p>
+        <p><strong>你的資料，你作主：</strong>匯入資料與 AI 建議都需要你的確認。CareerOps 不會自行代表你申請工作或聯絡他人。</p>
       </div>
     </section>
 
     <section id="first-run">
       <h2>2. 第一次啟動</h2>
-      <p class="section-intro">第一次開啟 App 時，先建立或選擇 CareerOps workspace。這是你的私人資料夾，和已安裝的 App、App 的技術狀態，以及審閱後的 profile 是不同的概念。</p>
+      <p class="section-intro">第一次開啟 App 時，先選擇一個資料夾來保存你的求職資料。建議使用預設位置；你也可以選擇自己的資料夾。</p>
 
       <div class="cards">
         <div class="card">
-          <span class="card-label primary">Workspace</span>
+          <span class="card-label primary">求職資料夾</span>
           <h3>你的求職資料放在這裡</h3>
-          <p>macOS 預設是 <code>~/Documents/CareerOps</code>；Windows 預設是 <code>Documents\CareerOps</code>。也可以改用自訂位置或既有 CareerOps workspace。</p>
+          <p>macOS 和 Windows 預設都在「文件」中的 CareerOps 資料夾。也可以改用自己的資料夾。</p>
         </div>
         <div class="card">
-          <span class="card-label teal">App 與 profile</span>
-          <h3>不要把三者混在一起</h3>
-          <p>App 安裝與其受管理 runtime 是技術狀態；背景檔案是證據；審閱後寫入 canonical files 的內容才是你的 profile。</p>
+          <span class="card-label teal">安心使用</span>
+          <h3>App 和資料分開保存</h3>
+          <p>你的履歷、偏好與申請紀錄都保存在你選擇的資料夾。更換或更新 App 不會自動刪除這些資料。</p>
         </div>
       </div>
 
       <div class="steps">
         <div class="step">
-          <strong>建立或選擇 workspace</strong>
-          <p>可以直接建立預設位置，或選擇自訂位置。App 會記住目前使用的 workspace。</p>
+          <strong>選擇資料夾</strong>
+          <p>直接建立預設資料夾，或選擇你想使用的位置。</p>
         </div>
         <div class="step">
-          <strong>Welcome</strong>
-          <p>開始 onboarding；若在 Background Import 選擇 <strong>Skip for now</strong>，setup 會繼續進行而不匯入任何文件。</p>
+          <strong>開始設定</strong>
+          <p>依照畫面一步一步完成。若暫時沒有文件可匯入，可選 <strong>Skip for now</strong>，之後再補上。</p>
         </div>
         <div class="step">
-          <strong>Import your background</strong>
-          <p>拖放檔案、確認分類，並在之後審閱 CareerOps 根據這些證據提出的 profile 更新。</p>
+          <strong>匯入背景資料</strong>
+          <p>加入履歷與其他職涯資料，確認每份資料的類型。</p>
         </div>
         <div class="step">
-          <strong>選擇 Analysis Language</strong>
-          <p>決定你閱讀 Dashboard 與分析報告時使用的語言。</p>
+          <strong>選擇閱讀語言</strong>
+          <p>決定你想用哪種語言閱讀分析結果與進度摘要。</p>
         </div>
         <div class="step">
-          <strong>Set up AI</strong>
-          <p>App 偵測本機已安裝並可使用的 AI CLI，選一個作為預設 Provider。</p>
+          <strong>連接 AI</strong>
+          <p>從畫面列出的可用選項中選擇一個，讓 CareerOps 為你進行分析與起草。</p>
         </div>
         <div class="step">
           <strong>Ready</strong>
-          <p>進入 Home，開始分析單一職缺或掃描符合條件的工作。</p>
+          <p>進入 Home，開始分析一個職缺，或尋找符合條件的新工作。</p>
         </div>
       </div>
     </section>
 
     <section id="background">
       <h2>3. 匯入背景資料</h2>
-      <p class="section-intro">Background Import 會把你的職涯資料當作證據處理，而不是建立多個彼此獨立的 profile database。這些證據會一起供單一 intake 審閱使用。</p>
+      <p class="section-intro">加入能幫助 CareerOps 了解你的資料，例如履歷、作品集、證書、LinkedIn 匯出檔或工作經歷。資料越完整，建議會越貼近你的情況。</p>
 
       <div class="cards">
         <div class="card">
-          <span class="card-label">八個分類</span>
-          <h3>檔案送到正確位置</h3>
-          <p>你先為每個檔案確認分類；下方表格列出每個使用者分類實際對應的 workspace 路徑。</p>
+          <span class="card-label">選擇類型</span>
+          <h3>幫每份資料標記用途</h3>
+          <p>加入檔案後，確認它是履歷、作品集、證書或其他類型；這能幫助 CareerOps 正確理解內容。</p>
         </div>
         <div class="card">
-          <span class="card-label teal">Canonical profile</span>
-          <h3>最後只有三個權威輸出</h3>
-          <p>審閱後的 profile 寫入 <code>cv.md</code>、<code>config/profile.yml</code> 與 <code>modes/_profile.md</code>。其他匯入檔是 supporting evidence，不是第二套 profile。</p>
+          <span class="card-label teal">先審閱</span>
+          <h3>你決定是否更新資料</h3>
+          <p>CareerOps 會根據你加入的資料提出建議。你可以逐項查看，只有你選擇採用的內容才會更新你的求職資料。</p>
         </div>
       </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>證據分類</th>
-            <th>實際儲存路徑</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>CV / Resume</td><td><code>documents/cv/</code></td></tr>
-          <tr><td>Work records</td><td><code>documents/work/</code></td></tr>
-          <tr><td>Publications / Research</td><td><code>documents/research/</code></td></tr>
-          <tr><td>Degrees / Transcripts</td><td><code>documents/diplomas/</code></td></tr>
-          <tr><td>LinkedIn</td><td><code>documents/linkedin/</code></td></tr>
-          <tr><td>References</td><td><code>documents/references/</code></td></tr>
-          <tr><td>Certificates</td><td><code>documents/certificates/</code></td></tr>
-          <tr><td>Portfolio / Projects</td><td><code>documents/portfolio/</code></td></tr>
-        </tbody>
-      </table>
-
-      <div class="flow" aria-label="Background Import 流程">
-        <span class="flow-node active">Drag / Add files</span>
+      <div class="flow" aria-label="匯入資料流程">
+        <span class="flow-node active">加入檔案</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Review category</span>
+        <span class="flow-node">確認類型</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Stage: copy evidence</span>
+        <span class="flow-node">查看建議</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Review proposals</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-node">Review file diff</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-node">Apply approved proposals</span>
+        <span class="flow-node">選擇採用</span>
       </div>
 
-      <p>拖放檔案或按 <strong>Add files</strong> 後，請檢查每個檔案的 category。Stage 只會把選取檔案複製到上表所列的 workspace 路徑。AI setup 完成後，CareerOps 會在一個整合 intake 中檢查所有新增或變更過的證據，並提出附來源的 profile 更新建議。</p>
+      <p>拖放檔案或按 <strong>Add files</strong>。確認每份資料的類型後繼續設定。AI 連接完成後，CareerOps 會整理內容並顯示可更新的建議與資料來源。</p>
 
-      <p>審閱式 intake 採兩階段確認：先看到每個 proposal、目標檔案、來源與可能的衝突並逐一核准；接著針對每個受影響的檔案，查看完整的 before/after diff。沒有任何 canonical profile 檔案會在這個審閱過程中被改寫；<strong>Apply selected changes</strong> 只會寫入你核准的 proposals，並提交完成的 intake。<strong>Skip for now</strong> 會丟棄 review session、保留已 stage 的 documents，且不會提交 intake fingerprints 或 canonical profile 變更。</p>
-
-      <p class="muted">Background Import 目前是 onboarding 流程的一部分；本版 UI 不提供或承諾獨立的 post-onboarding import route。</p>
+      <p>請先看每一項建議，再決定是否採用。採用前，你也可以查看將會變更的內容。選擇 <strong>Skip for now</strong> 不會更新你的求職資料。</p>
 
       <div class="callout warning">
-        <p><strong>PDF 限制：</strong>此 build 仍會 stage PDF，但不能抽取其中的文字。若要讓內容參與 profile extraction，請同時加入對應的 <code>.md</code>、<code>.txt</code> 或 <code>.tex</code> 檔。</p>
+        <p><strong>PDF 提醒：</strong>目前版本可能無法讀取 PDF 裡的文字。若要讓內容用於建立個人資料，請同時提供可選取文字的版本，例如文字檔或文件檔。</p>
       </div>
-
-      <p class="muted">目前 macOS release 支援審閱式 AI intake。Windows 與 self-contained Linux package 若沒有可用的安全 provider isolation，審閱式 intake 階段會 fail closed：已 stage 的證據維持不變，canonical profile 檔案不會被修改；更新到支援的 package 後再試。</p>
     </section>
 
     <section id="language">
-      <h2>4. Analysis Language 與 Job Language</h2>
-      <p class="section-intro">CareerOps Desktop 不再用同一個語言設定控制所有輸出。你閱讀分析的語言，和每份職缺實際使用的文件語言，是兩件不同的事。</p>
+      <h2>4. 選擇語言</h2>
+      <p class="section-intro">你閱讀分析結果的語言，和履歷、求職信等文件的語言可以不同；這樣更符合跨國求職的需求。</p>
 
       <div class="language-example">
         <div class="language-box">
-          <strong>Analysis Language</strong>
-          <p>你用什麼語言閱讀 Dashboard 與 report。可在 onboarding 或 Profile → Job Search 中修改。</p>
+          <strong>閱讀語言</strong>
+          <p>用來顯示分析結果、進度摘要與建議。可在初始設定或 Profile → Job Search 修改。</p>
         </div>
         <div class="language-arrow">≠</div>
         <div class="language-box">
-          <strong>Job Language</strong>
-          <p>每個職缺各自從 JD 判斷。CV、cover letter 與 interview material 跟著這個語言。</p>
+          <strong>求職文件語言</strong>
+          <p>CareerOps 會依職缺內容判斷，並用這個語言準備履歷、求職信與面試材料。</p>
         </div>
       </div>
 
       <div class="callout success">
-        <p><strong>例子：</strong>Analysis Language 選繁體中文，貼入德文 JD → 分析內容可以是繁中，但 CV、cover letter 與面試材料仍使用德文。</p>
+        <p><strong>例子：</strong>你可以用繁體中文閱讀分析結果，同時為德文職缺準備德文履歷與面試材料。</p>
       </div>
 
-      <h3>Job Language 怎麼決定？</h3>
-      <p>CareerOps 會優先使用你對該職缺的手動 override；沒有 override 時，再從 JD 或可靠的職缺內容判斷。若信心偏低，Evaluate 畫面會顯示偵測結果與 <code>[Change]</code>，讓你直接改。</p>
-
-      <div class="callout warning">
-        <p><strong>Market mode 是第三件事。</strong>它處理市場詞彙與地方規則，不等於 Analysis Language，也不等於 Job Language。</p>
-      </div>
+      <p>通常 CareerOps 會自動判斷職缺的文件語言。若判斷不正確，可在分析職缺前用 <strong>Document language</strong> 手動調整。</p>
     </section>
 
     <section id="ai">
-      <h2>5. 選擇 AI Provider</h2>
-      <p class="section-intro">CareerOps Desktop 透過本機 AI CLI 執行需要 reasoning 的工作，不需要另外設定一個 localhost port。你可以在 onboarding 選 Provider，也可以之後到 Profile → AI 切換。</p>
+      <h2>5. 連接 AI</h2>
+      <p class="section-intro">CareerOps 需要連接一個 AI 服務，才能分析職缺、整理資料與產生準備材料。初始設定時選擇可用服務；之後也能在 Profile → AI 更換。</p>
 
-      <div class="status-list" aria-label="AI Provider 狀態">
+      <div class="status-list" aria-label="AI 服務狀態">
         <span class="status ready">Ready</span>
         <span class="status warn">Not installed</span>
         <span class="status warn">Not authenticated</span>
@@ -654,25 +610,25 @@
 
       <div class="cards">
         <div class="card">
-          <span class="card-label primary">想用 Codex</span>
-          <h3>先讓 Codex 本機可用</h3>
-          <p>如果 App 偵測到 Codex 為 <strong>Ready</strong>，直接選它即可。選擇會保存成 preferred provider。</p>
+          <span class="card-label primary">選擇可用服務</span>
+          <h3>看到 Ready 就可以使用</h3>
+          <p>從狀態顯示為 <strong>Ready</strong> 的選項中選一個，即可繼續設定。</p>
         </div>
         <div class="card">
-          <span class="card-label">Provider 切換</span>
+          <span class="card-label">日後更換</span>
           <h3>不用重跑 onboarding</h3>
-          <p>之後可在 Profile → AI 選其他已 Ready 的 Provider。AgentRunner 會使用目前偏好的 Provider。</p>
+          <p>之後可在 Profile → AI 改選其他顯示為 <strong>Ready</strong> 的服務。</p>
         </div>
       </div>
 
       <div class="callout warning">
-        <p>如果 Provider 顯示 <strong>Not authenticated</strong> 或 <strong>Error</strong>，先回到該 CLI 自己的登入／驗證流程處理，再重新開啟或重新偵測。</p>
+        <p>如果顯示 <strong>Not authenticated</strong>，請依該服務的登入說明完成登入後再試；若顯示 <strong>Error</strong>，先重新開啟 App。問題持續時，請查看 Help 頁。</p>
       </div>
     </section>
 
     <section id="home">
       <h2>6. Home：從這裡開始</h2>
-      <p class="section-intro">Home 是日常入口。上方會顯示 tracked、interviewing、applied 與平均分數；主要有兩條工作流。</p>
+      <p class="section-intro">Home 是日常入口。上方會顯示你追蹤中的職缺、已申請與面試中的職缺，以及平均匹配分數。主要有兩種開始方式。</p>
 
       <div class="cards">
         <div class="card">
@@ -687,79 +643,75 @@
         </div>
       </div>
 
-      <p class="muted">Home 下方也會顯示最近活動，方便快速回到 Jobs 查看申請。</p>
+      <p class="muted">Home 下方會顯示最近活動，方便你回到 Jobs 查看職缺與申請進度。</p>
     </section>
 
     <section id="evaluate">
       <h2>7. 分析單一職缺</h2>
-      <p class="section-intro">在 Home 貼上職缺 URL 或 JD 後，Evaluate 會透過 AgentRunner 執行 CareerOps 的評估流程。</p>
+      <p class="section-intro">在 Home 貼上職缺網址或職缺說明後，選擇 Evaluate。CareerOps 會將職缺需求與你的背景、偏好和薪資條件一起分析。</p>
 
       <div class="flow">
-        <span class="flow-node active">Read posting</span>
+        <span class="flow-node active">讀取職缺</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Match background</span>
+        <span class="flow-node">比對你的背景</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Role requirements</span>
+        <span class="flow-node">整理工作需求</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Compensation</span>
+        <span class="flow-node">查看薪資資訊</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Evaluation</span>
+        <span class="flow-node">提供建議</span>
       </div>
 
-      <h3>開始前可以調整文件語言</h3>
-      <p>預設讓 CareerOps 從 JD 判斷。若你已經知道應該使用哪個語言，可以直接在 <strong>Document language</strong> 手動指定。</p>
+      <h3>需要時調整文件語言</h3>
+      <p>預設由 CareerOps 根據職缺內容判斷。若你已知道該使用哪種語言，可直接在 <strong>Document language</strong> 手動指定。</p>
 
-      <h3>Agent Activity</h3>
-      <p>執行期間會顯示階段、輸出與錯誤資訊。你可以 Cancel；失敗後可以 Retry。完成後回到 Jobs 查看結果與 report。</p>
+      <h3>查看進度</h3>
+      <p>執行期間可在 <strong>Agent Activity</strong> 查看進度。你可以選擇 Cancel 停止；若失敗，可選 Retry 再試一次。完成後到 Jobs 查看結果與完整分析。</p>
     </section>
 
     <section id="scanner">
       <h2>8. 找符合條件的職缺</h2>
-      <p class="section-intro">Scanner 會讀取已設定的求職來源，先找新職缺，再去重複、預篩，最後評估符合條件的候選工作。</p>
+      <p class="section-intro">Scanner 會從你設定的求職來源尋找新職缺，略過重複項目，優先挑出較符合你條件的機會。</p>
 
       <div class="flow">
-        <span class="flow-node active">Scanning sources</span>
+        <span class="flow-node active">搜尋職缺來源</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Deduplicating</span>
+        <span class="flow-node">略過重複職缺</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Pre-screening</span>
+        <span class="flow-node">初步篩選</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">Evaluating matches</span>
+        <span class="flow-node">分析符合的職缺</span>
       </div>
 
       <div class="callout success">
-        <p>掃描完成後按 <strong>View results</strong> 回到 Jobs。CareerOps 的 scanner / batch domain logic 仍由核心處理，Desktop 主要負責啟動、顯示進度與結果。</p>
+        <p>掃描完成後按 <strong>View results</strong> 回到 Jobs，查看找到的職缺與分析結果。</p>
       </div>
     </section>
 
     <section id="jobs">
       <h2>9. Jobs：管理申請</h2>
-      <p class="section-intro">Jobs 是原本 Pipeline 的產品化介面。你可以篩選、排序、搜尋、切換檢視方式、閱讀 report，並更新申請狀態。</p>
+      <p class="section-intro">Jobs 是管理所有職缺與申請的地方。你可以搜尋、篩選、排序、查看分析結果，並更新目前進度。</p>
 
       <div class="cards">
         <div class="card">
-          <span class="card-label">Grouped / Kanban</span>
+          <span class="card-label">按進度分組</span>
           <h3>按狀態整理</h3>
-          <p>以 board 方式瀏覽申請。點選項目時，report 會在 drawer 中顯示。</p>
+          <p>用看板方式瀏覽職缺。選擇一個職缺後，可直接查看它的分析結果。</p>
         </div>
         <div class="card">
-          <span class="card-label">Table / Split</span>
+          <span class="card-label">表格檢視</span>
           <h3>快速比較</h3>
-          <p>用表格排序與搜尋，選取後可在旁邊閱讀 report。</p>
+          <p>用表格快速比較、排序與搜尋；選擇後可在旁邊閱讀分析結果。</p>
         </div>
       </div>
 
-      <h3>狀態修改有保護</h3>
-      <p>Desktop 不會直接任意重寫 tracker。它使用目前讀到的狀態作 optimistic lock；如果檔案已被別的流程改過，會拒絕 stale write，要求 Reload。</p>
-
-      <div class="callout warning">
-        <p>狀態選項來自 CareerOps 的 canonical contracts，不要把某一組固定狀態視為 Desktop 自己的硬編碼規則。</p>
-      </div>
+      <h3>更新申請進度</h3>
+      <p>當你送出履歷、收到回覆或進入面試時，記得在這裡更新進度，讓 CareerOps 的統計與後續建議保持正確。若資料剛被其他地方更新，請先重新整理再修改。</p>
     </section>
 
     <section id="interview">
       <h2>10. Interview：準備、練習、複盤</h2>
-      <p class="section-intro">Jobs 中狀態為 Interview 的申請會自動出現在 Interview 頁。每一個 active interview 都有三種工作流。</p>
+      <p class="section-intro">當職缺進入面試階段後，會出現在 Interview 頁。你可以依面試進度使用三種工具。</p>
 
       <div class="cards">
         <div class="card">
@@ -770,16 +722,16 @@
         <div class="card">
           <span class="card-label teal">Practice</span>
           <h3>模擬練習</h3>
-          <p>準備面試題目與練習材料，透過 AgentRunner 執行。</p>
+          <p>產生可能的面試題目與練習材料，幫助你事先演練。</p>
         </div>
         <div class="card">
           <span class="card-label amber">Debrief</span>
           <h3>面試後複盤</h3>
-          <p>整理面試筆記、找出缺口，並讓 CareerOps 更新可重用的知識資料。</p>
+          <p>整理面試筆記、找出待加強的地方，為下一輪做準備。</p>
         </div>
       </div>
 
-      <p>Interview 畫面也可以設定 <strong>Interview language</strong>。Practice、planning 與 debrief material 使用 Job Language；Analysis Language 仍維持你選擇的閱讀語言。</p>
+      <p>Interview 畫面可設定 <strong>Interview language</strong>。若你要用特定語言面試，請在開始前確認設定。</p>
     </section>
 
     <section id="progress">
@@ -789,12 +741,12 @@
         <div class="card">
           <span class="card-label">Progress</span>
           <h3>看求職漏斗</h3>
-          <p>用 CareerOps 已有資料查看追蹤數量、各狀態分布與進度統計，不另外建立 Desktop-only database。</p>
+          <p>查看追蹤中的職缺數量、各階段分布與求職進度統計。</p>
         </div>
         <div class="card">
           <span class="card-label">Profile</span>
           <h3>調整你的設定</h3>
-          <p>Profile &amp; Settings 分成 My Background、Job Search、Search Sources、Workspace、AI 與 About 六個區域。</p>
+          <p>在 Profile &amp; Settings 調整背景資料、求職偏好、職缺來源、資料夾位置、AI 與 App 更新。</p>
         </div>
       </div>
 
@@ -808,23 +760,23 @@
         <tbody>
           <tr>
             <td>My Background</td>
-            <td>查看背景證據與審閱後的 profile；進階使用者可直接檢查 <code>cv.md</code>、<code>config/profile.yml</code> 與 <code>modes/_profile.md</code>。</td>
+            <td>查看你匯入的資料，以及 CareerOps 根據這些資料整理出的個人資料。</td>
           </tr>
           <tr>
             <td>Job Search</td>
-            <td>目標職位、地點、remote、薪資等偏好，以及 Analysis Language。</td>
+            <td>目標職位、地點、是否接受遠端工作、薪資等偏好，以及閱讀語言。</td>
           </tr>
           <tr>
             <td>Search Sources</td>
-            <td>CareerOps 要掃描的公司與 job board，對應 <code>portals.yml</code>。</td>
+            <td>設定要搜尋的公司與求職網站。</td>
           </tr>
           <tr>
             <td>Workspace</td>
-            <td>查看目前 workspace 路徑、開啟資料夾，或切換到另一個 workspace。</td>
+            <td>查看目前求職資料夾、在檔案管理器開啟它，或切換到另一個資料夾。</td>
           </tr>
           <tr>
             <td>AI</td>
-            <td>查看 Provider 狀態並切換 preferred AI Provider。</td>
+            <td>查看 AI 服務的連線狀態，並更換目前使用的服務。</td>
           </tr>
           <tr>
             <td>About</td>
@@ -833,71 +785,64 @@
         </tbody>
       </table>
 
-      <h3>Workspace</h3>
-      <p>Settings 的 Workspace 區塊會顯示目前路徑，並提供 <strong>Open Folder</strong> 與 <strong>Change Location</strong>。Open Folder 會在檔案管理器開啟目前 workspace；Change Location 只會切換 active workspace，<strong>不會搬移</strong>之前的 workspace 或其中檔案。</p>
+      <h3>求職資料夾</h3>
+      <p>Settings 的 Workspace 區塊會顯示目前位置，並提供 <strong>Open Folder</strong> 與 <strong>Change Location</strong>。Open Folder 會在檔案管理器開啟資料夾；Change Location 只會改用另一個資料夾，<strong>不會搬移</strong>原本的資料。</p>
 
-      <p>若已儲存的 workspace 路徑失效（例如資料夾被搬移、刪除，或所在磁碟未掛載），App 不會顯示錯誤訊息，而是直接回到 Workspace Setup 畫面，讓你重新選擇 workspace 位置。</p>
+      <p>如果找不到原本的資料夾，例如它被搬移、刪除，或外接硬碟尚未連接，App 會請你重新選擇資料夾。</p>
 
       <div class="callout success">
-        <p><strong>App 技術狀態：</strong>打包 App 已包含受管理的 JavaScript runtime 與必要 assets。一般使用不需要安裝 Git、Homebrew、Node、npm、Rust 或 Go。若 package assets 或 runtime 缺失，請重新安裝或更新 CareerOps Desktop，而不是執行 developer repair commands。</p>
+        <p><strong>一般使用不需要技術設定：</strong>不需要安裝額外的程式工具。若 App 無法正常啟動或功能持續出錯，請重新安裝或更新 CareerOps Desktop。</p>
       </div>
     </section>
 
     <section id="help">
       <h2>12. Help 與疑難排解</h2>
-      <p class="section-intro">Help 頁提供 scores、scanner、AI 能做什麼／不能做什麼、privacy、troubleshooting 與 advanced 等快速說明，也可以載入完整 README 文件。</p>
+      <p class="section-intro">Help 頁提供分數、職缺搜尋、AI 使用方式、隱私與常見問題的快速說明。</p>
 
       <h3>常見問題</h3>
 
       <details>
-        <summary>我需要一直開 Codex / Claude 的 Terminal 嗎？</summary>
+        <summary>我需要另外開啟其他程式嗎？</summary>
         <div class="details-body">
-          <p>一般 Desktop 工作流不需要你手動留在 coding-agent session 裡操作。App 透過 AgentRunner 呼叫你已設定好的本機 Provider。</p>
-        </div>
-      </details>
-
-      <details>
-        <summary>我想固定使用 Codex，要改 port 嗎？</summary>
-        <div class="details-body">
-          <p>不用。這個架構使用本機 CLI provider，不是連 localhost HTTP server。只要 Codex 被偵測為 Ready，於 onboarding 或 Profile → AI 選 Codex 即可。</p>
+          <p>不需要。一般情況下，直接在 CareerOps Desktop 裡完成操作即可。</p>
         </div>
       </details>
 
       <details>
         <summary>為什麼職缺語言和分析語言不同？</summary>
         <div class="details-body">
-          <p>這是刻意設計。Analysis Language 是你閱讀分析的語言；Job Language 是該職缺的工作文件語言。兩者分開，才能例如用繁中看分析、同時產生德文履歷。</p>
+          <p>這是刻意設計。閱讀語言是你看分析結果時使用的語言；求職文件語言則依職缺而定。這讓你可以用繁體中文看分析，同時為德文職缺準備德文履歷。</p>
         </div>
       </details>
 
       <details>
         <summary>掃描或分析卡住怎麼辦？</summary>
         <div class="details-body">
-          <p>先看 Agent Activity 的目前階段與 Technical output。可以 Cancel 後 Retry。若 Provider 是 Error / Not authenticated，先處理 Provider 本身；若 App 指出 package assets、managed runtime 或 data service 缺失，請重新安裝或更新 CareerOps Desktop。</p>
+          <p>先在 <strong>Agent Activity</strong> 查看目前進度。你可以選 Cancel 後再選 Retry。若仍無法完成，重新開啟 App、確認 AI 服務已登入，或將 App 更新至最新版本。</p>
         </div>
       </details>
 
       <details>
-        <summary>Background Import 完成後，AI 已經改寫我的 profile 了嗎？</summary>
+        <summary>匯入資料後，AI 會直接改掉我的資料嗎？</summary>
         <div class="details-body">
-          <p>還沒有。Stage 只會把你分類過的檔案複製到各自的 <code>documents/</code> 路徑，再在一個 intake 中產生建議。審閱分兩階段：先核准 proposals，再查看每個受影響檔案的完整 before/after diff，確認無誤才套用。Apply selected changes 只會寫入你明確核准的個別 proposal，並提交完成的 intake；Skip for now 會丟棄 review session、保留已 stage 的 documents，而且不提交 fingerprints 或 canonical profile 變更。</p>
+          <p>不會。AI 只會提出建議。你先逐項查看並選擇要採用的內容，只有你確認的項目才會更新。</p>
         </div>
       </details>
 
       <details>
         <summary>資料會傳到 CareerOps 的雲端嗎？</summary>
         <div class="details-body">
-          <p>CareerOps Desktop 本身不是 hosted backend。資料主要保存在本機 CareerOps files；需要 AI 分析時，實際傳送範圍與處理由你選擇的 AI Provider 決定。</p>
+          <p>你的求職資料保存在你選擇的資料夾。需要 AI 分析時，資料的傳送與處理方式取決於你選擇的 AI 服務。</p>
         </div>
       </details>
 
       <div class="callout danger">
-        <p><strong>安裝與更新：</strong>從 GitHub Releases 取得 macOS DMG/ZIP 或 Windows installer/ZIP。已設定的 Homebrew tap 可作為 macOS 的可選安裝方式，不是 onboarding 或 runtime 的必要條件；日常更新請使用 App 的更新 badge 或 About → Check Now。</p>
+        <p><strong>安裝與更新：</strong>請從 CareerOps 的官方發布頁下載 App。日常更新請使用 App 內的更新提示，或到 About 選擇 <strong>Check Now</strong>。</p>
       </div>
     </section>
 
     <footer>
-      CareerOps Desktop guide · downstream fork based on santifer/career-ops · UI structure follows this repository's DESIGN.md.
+      CareerOps Desktop 使用指南
     </footer>
   </main>
 </body>

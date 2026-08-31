@@ -46,6 +46,8 @@ Every release also publishes `SHA256SUMS.txt`, `release-provenance.json`, signed
 
 ## First launch
 
+For step-by-step instructions, see the [CareerOps Desktop user guide (Traditional Chinese)](./desktop/GUIDE.html).
+
 The installed app, your workspace, and your profile are deliberately separate things:
 
 - **App installation** is the CareerOps Desktop application you download and update.
