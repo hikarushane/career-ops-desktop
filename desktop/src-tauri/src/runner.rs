@@ -108,8 +108,20 @@ pub struct IntakeExactFileChange {
 struct PendingIntakeApply {
     exact_changes: Vec<IntakeExactFileChange>,
     target_bytes: BTreeMap<String, Vec<u8>>,
+    expected_target_snapshots: BTreeMap<String, TargetSnapshot>,
     intake_state_bytes: Option<Vec<u8>>,
+    expected_intake_state: Option<TargetSnapshot>,
     commit_source_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ConfirmationEvent {
+    BeforeCanonicalPromotion,
+    AfterCanonicalPromotion,
+    BeforeStatePromotion,
+    AfterStatePromotion,
+    BeforeRollback(String),
+    AfterRollbackCapture(String),
 }
 
 struct IntakeSession {
@@ -951,18 +963,6 @@ fn capture_verified_target_bytes(
     Ok(captured)
 }
 
-trait CanonicalTargetWriter {
-    fn validate_layout(&self) -> Result<(), String> {
-        Ok(())
-    }
-    fn validate_target_layout(&self, _relative: &str) -> Result<(), String> {
-        self.validate_layout()
-    }
-    fn read(&self, relative: &str) -> Result<Option<Vec<u8>>, String>;
-    fn replace(&mut self, relative: &str, contents: &[u8]) -> Result<(), String>;
-    fn remove(&mut self, relative: &str) -> Result<(), String>;
-}
-
 struct CapabilityTargetWriter {
     directories: CanonicalDirectories,
 }
@@ -975,9 +975,81 @@ impl CapabilityTargetWriter {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FileIdentity(u64, u64);
+
+#[cfg(unix)]
+fn file_identity(metadata: &cap_std::fs::Metadata) -> Result<FileIdentity, String> {
+    use cap_std::fs::MetadataExt;
+    Ok(FileIdentity(metadata.dev(), metadata.ino()))
+}
+
+#[cfg(windows)]
+fn file_identity(metadata: &cap_std::fs::Metadata) -> Result<FileIdentity, String> {
+    use cap_std::fs::MetadataExt;
+    let volume = metadata
+        .volume_serial_number()
+        .ok_or_else(|| "cannot determine canonical target volume identity".to_owned())?;
+    let index = metadata
+        .file_index()
+        .ok_or_else(|| "cannot determine canonical target file identity".to_owned())?;
+    Ok(FileIdentity(u64::from(volume), index))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn file_identity(_metadata: &cap_std::fs::Metadata) -> Result<FileIdentity, String> {
+    Err("canonical target identity checks are unavailable on this platform".to_owned())
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct TargetSnapshot {
+    contents: Option<Vec<u8>>,
+    identity: Option<FileIdentity>,
+}
+
+#[derive(Clone, Debug)]
+struct HeldNamedEntry {
+    name: String,
+    identity: FileIdentity,
+}
+
+#[derive(Clone, Debug)]
+struct StagedTarget {
+    entry: HeldNamedEntry,
+    contents: Vec<u8>,
+}
+
+#[derive(Clone, Debug)]
+struct TargetBackup {
+    relative: String,
+    original: TargetSnapshot,
+    original_entry: Option<HeldNamedEntry>,
+    promoted: TargetSnapshot,
+}
+
 static NEXT_ATOMIC_TARGET: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-impl CanonicalTargetWriter for CapabilityTargetWriter {
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn rename_target_noreplace(directory: &Dir, source: &str, target: &str) -> std::io::Result<()> {
+    rustix::fs::renameat_with(
+        directory,
+        source,
+        directory,
+        target,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(Into::into)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn rename_target_noreplace(_directory: &Dir, _source: &str, _target: &str) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "conditional intake promotion is unavailable on this platform",
+    ))
+}
+
+impl CapabilityTargetWriter {
     fn validate_layout(&self) -> Result<(), String> {
         self.directories.validate_parent_entries()
     }
@@ -986,11 +1058,66 @@ impl CanonicalTargetWriter for CapabilityTargetWriter {
         self.directories.validate_target_parent(relative)
     }
 
-    fn read(&self, relative: &str) -> Result<Option<Vec<u8>>, String> {
-        self.directories.read_target(relative)
+    fn snapshot(&self, relative: &str) -> Result<TargetSnapshot, String> {
+        let (directory, filename) = self.directories.target(relative)?;
+        let metadata = match directory.symlink_metadata(filename) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(format!(
+                    "canonical intake target became a symbolic link: {relative}"
+                ));
+            }
+            Ok(metadata) if metadata.is_file() => metadata,
+            Ok(_) => {
+                return Err(format!(
+                    "canonical intake target is not a regular file: {relative}"
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(TargetSnapshot {
+                    contents: None,
+                    identity: None,
+                });
+            }
+            Err(error) => {
+                return Err(format!(
+                    "cannot inspect canonical intake target {relative}: {error}"
+                ));
+            }
+        };
+        let expected_identity = file_identity(&metadata)?;
+        let mut options = CapOpenOptions::new();
+        options.read(true).follow(FollowSymlinks::No);
+        let mut file = directory
+            .open_with(filename, &options)
+            .map_err(|error| format!("cannot open canonical intake target {relative}: {error}"))?;
+        let opened_identity = file_identity(
+            &file
+                .metadata()
+                .map_err(|error| format!("cannot inspect open target {relative}: {error}"))?,
+        )?;
+        if opened_identity != expected_identity {
+            return Err(format!(
+                "canonical intake target changed while it was opened: {relative}"
+            ));
+        }
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents)
+            .map_err(|error| format!("cannot read canonical intake target {relative}: {error}"))?;
+        let current = directory.symlink_metadata(filename).map_err(|error| {
+            format!("canonical intake target changed while it was read {relative}: {error}")
+        })?;
+        if file_identity(&current)? != opened_identity {
+            return Err(format!(
+                "canonical intake target changed while it was read: {relative}"
+            ));
+        }
+        Ok(TargetSnapshot {
+            contents: Some(contents),
+            identity: Some(opened_identity),
+        })
     }
 
-    fn replace(&mut self, relative: &str, contents: &[u8]) -> Result<(), String> {
+    fn stage(&self, relative: &str, contents: &[u8]) -> Result<StagedTarget, String> {
         let (directory, filename) = self.directories.target(relative)?;
         let existing_permissions = match directory.symlink_metadata(filename) {
             Ok(metadata) if metadata.file_type().is_symlink() => {
@@ -1011,19 +1138,27 @@ impl CanonicalTargetWriter for CapabilityTargetWriter {
                 ));
             }
         };
-        let temporary = format!(
-            ".careerops-intake-{}-{}",
-            std::process::id(),
-            NEXT_ATOMIC_TARGET.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        );
-        let mut options = CapOpenOptions::new();
-        options
-            .write(true)
-            .create_new(true)
-            .follow(FollowSymlinks::No);
-        let mut staged = directory.open_with(&temporary, &options).map_err(|error| {
-            format!("failed to stage canonical intake target {relative}: {error}")
-        })?;
+        let (temporary, mut staged) = loop {
+            let temporary = format!(
+                ".careerops-intake-{}-{}",
+                std::process::id(),
+                NEXT_ATOMIC_TARGET.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            );
+            let mut options = CapOpenOptions::new();
+            options
+                .write(true)
+                .create_new(true)
+                .follow(FollowSymlinks::No);
+            match directory.open_with(&temporary, &options) {
+                Ok(staged) => break (temporary, staged),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => {
+                    return Err(format!(
+                        "failed to stage canonical intake target {relative}: {error}"
+                    ));
+                }
+            }
+        };
         if let Err(error) = staged.write_all(contents).and_then(|_| staged.sync_all()) {
             drop(staged);
             directory.remove_file(&temporary).ok();
@@ -1031,7 +1166,6 @@ impl CanonicalTargetWriter for CapabilityTargetWriter {
                 "failed to stage canonical intake target {relative}: {error}"
             ));
         }
-        let target_existed = existing_permissions.is_some();
         if let Some(permissions) = existing_permissions {
             if let Err(error) = directory.set_permissions(&temporary, permissions) {
                 drop(staged);
@@ -1041,68 +1175,177 @@ impl CanonicalTargetWriter for CapabilityTargetWriter {
                 ));
             }
         }
+        let identity = file_identity(
+            &staged
+                .metadata()
+                .map_err(|error| format!("cannot inspect staged target {relative}: {error}"))?,
+        )?;
         drop(staged);
+        Ok(StagedTarget {
+            entry: HeldNamedEntry {
+                name: temporary,
+                identity,
+            },
+            contents: contents.to_vec(),
+        })
+    }
+
+    fn entry_is_current(&self, relative: &str, entry: &HeldNamedEntry) -> Result<bool, String> {
+        let (directory, _) = self.directories.target(relative)?;
+        match directory.symlink_metadata(&entry.name) {
+            Ok(metadata) => Ok(file_identity(&metadata)? == entry.identity),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(format!("cannot inspect held intake entry: {error}")),
+        }
+    }
+
+    fn remove_held(&self, relative: &str, entry: &HeldNamedEntry) -> Result<(), String> {
+        let (directory, _) = self.directories.target(relative)?;
+        if !self.entry_is_current(relative, entry)? {
+            return Err(format!(
+                "held intake entry changed before cleanup: {relative}"
+            ));
+        }
+        directory
+            .remove_file(&entry.name)
+            .map_err(|error| format!("failed to clean up intake entry {relative}: {error}"))
+    }
+
+    fn move_target_aside(
+        &self,
+        relative: &str,
+        purpose: &str,
+    ) -> Result<Option<HeldNamedEntry>, String> {
+        let (directory, filename) = self.directories.target(relative)?;
         match directory.symlink_metadata(filename) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                directory.remove_file(&temporary).ok();
-                return Err(format!(
-                    "canonical intake target became a symbolic link: {relative}"
-                ));
-            }
-            Ok(metadata) if !metadata.is_file() => {
-                directory.remove_file(&temporary).ok();
-                return Err(format!(
-                    "canonical intake target is not a regular file: {relative}"
-                ));
-            }
             Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound && !target_existed => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(error) => {
-                directory.remove_file(&temporary).ok();
                 return Err(format!(
-                    "canonical intake target changed before promotion {relative}: {error}"
+                    "cannot inspect canonical intake target {relative}: {error}"
                 ));
             }
         }
-        if let Err(error) = directory.rename(&temporary, directory, filename) {
-            directory.remove_file(&temporary).ok();
-            return Err(format!("failed to atomically promote {relative}: {error}"));
+        loop {
+            let backup_name = format!(
+                ".careerops-intake-{purpose}-{}-{}",
+                std::process::id(),
+                NEXT_ATOMIC_TARGET.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            );
+            match rename_target_noreplace(directory, filename, &backup_name) {
+                Ok(()) => {
+                    let metadata = directory.symlink_metadata(&backup_name).map_err(|error| {
+                        format!("cannot inspect moved intake target {relative}: {error}")
+                    })?;
+                    return Ok(Some(HeldNamedEntry {
+                        name: backup_name,
+                        identity: file_identity(&metadata)?,
+                    }));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                Err(error) => {
+                    return Err(format!(
+                        "failed to conditionally move canonical target {relative}: {error}"
+                    ));
+                }
+            }
+        }
+    }
+
+    fn snapshot_held(
+        &self,
+        relative: &str,
+        entry: &HeldNamedEntry,
+    ) -> Result<TargetSnapshot, String> {
+        let (directory, _) = self.directories.target(relative)?;
+        if !self.entry_is_current(relative, entry)? {
+            return Err(format!(
+                "moved intake target changed before verification: {relative}"
+            ));
+        }
+        let mut options = CapOpenOptions::new();
+        options.read(true).follow(FollowSymlinks::No);
+        let mut file = directory
+            .open_with(&entry.name, &options)
+            .map_err(|error| {
+                format!("moved intake target is not a regular file {relative}: {error}")
+            })?;
+        if file_identity(
+            &file
+                .metadata()
+                .map_err(|error| format!("cannot inspect moved target {relative}: {error}"))?,
+        )? != entry.identity
+        {
+            return Err(format!("moved intake target identity changed: {relative}"));
+        }
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents)
+            .map_err(|error| format!("cannot read moved intake target {relative}: {error}"))?;
+        if !self.entry_is_current(relative, entry)? {
+            return Err(format!(
+                "moved intake target changed while verified: {relative}"
+            ));
+        }
+        Ok(TargetSnapshot {
+            contents: Some(contents),
+            identity: Some(entry.identity),
+        })
+    }
+
+    fn install_held_noreplace(&self, relative: &str, entry: &HeldNamedEntry) -> Result<(), String> {
+        let (directory, filename) = self.directories.target(relative)?;
+        if !self.entry_is_current(relative, entry)? {
+            return Err(format!(
+                "held intake entry changed before install: {relative}"
+            ));
+        }
+        rename_target_noreplace(directory, &entry.name, filename).map_err(|error| {
+            format!("failed to conditionally install canonical target {relative}: {error}")
+        })?;
+        let installed = directory.symlink_metadata(filename).map_err(|error| {
+            format!("cannot inspect installed canonical target {relative}: {error}")
+        })?;
+        if file_identity(&installed)? != entry.identity {
+            return Err(format!(
+                "installed canonical target identity changed: {relative}"
+            ));
         }
         Ok(())
     }
 
-    fn remove(&mut self, relative: &str) -> Result<(), String> {
-        let (directory, filename) = self.directories.target(relative)?;
-        match directory.symlink_metadata(filename) {
-            Ok(metadata) if metadata.file_type().is_symlink() => Err(format!(
-                "refusing to remove canonical target symlink: {relative}"
-            )),
-            Ok(metadata) if metadata.is_file() => {
-                directory.remove_file(filename).map_err(|error| {
-                    format!("failed to remove canonical intake target {relative}: {error}")
-                })
-            }
-            Ok(_) => Err(format!(
-                "canonical intake target is not a regular file: {relative}"
-            )),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(format!(
-                "cannot inspect canonical intake target {relative}: {error}"
-            )),
-        }
+    fn restore_entry_noreplace(
+        &self,
+        relative: &str,
+        entry: &HeldNamedEntry,
+    ) -> Result<(), String> {
+        self.install_held_noreplace(relative, entry)
     }
-}
-
-#[derive(Clone, Debug)]
-struct TargetBackup {
-    relative: String,
-    contents: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
 struct PromotionFailure {
     message: String,
     recovery_path: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug)]
+struct RecoveryCopy {
+    relative: String,
+    contents: Vec<u8>,
+}
+
+#[derive(Default)]
+struct RollbackReport {
+    failures: Vec<String>,
+    recovery_copies: Vec<RecoveryCopy>,
+}
+
+impl RollbackReport {
+    fn extend(&mut self, other: Self) {
+        self.failures.extend(other.failures);
+        self.recovery_copies.extend(other.recovery_copies);
+    }
 }
 
 impl std::fmt::Display for PromotionFailure {
@@ -1119,33 +1362,131 @@ impl std::fmt::Display for PromotionFailure {
     }
 }
 
-fn restore_target_changes<W: CanonicalTargetWriter>(
-    writer: &mut W,
-    backups: &[TargetBackup],
-) -> Vec<String> {
-    let mut failures = Vec::new();
-    for backup in backups.iter().rev() {
-        let result = writer
-            .validate_target_layout(&backup.relative)
-            .and_then(|()| match &backup.contents {
-                Some(contents) => writer.replace(&backup.relative, contents),
-                None => writer.remove(&backup.relative),
-            });
-        if let Err(error) = result {
-            failures.push(format!("{}: {error}", backup.relative));
+fn restore_original(writer: &CapabilityTargetWriter, backup: &TargetBackup) -> Result<(), String> {
+    let Some(contents) = backup.original.contents.as_deref() else {
+        return Ok(());
+    };
+    if let Some(entry) = &backup.original_entry {
+        if writer.entry_is_current(&backup.relative, entry)? {
+            return writer.restore_entry_noreplace(&backup.relative, entry);
         }
     }
-    failures
+    let staged = writer.stage(&backup.relative, contents)?;
+    match writer.install_held_noreplace(&backup.relative, &staged.entry) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            if writer.entry_is_current(&backup.relative, &staged.entry)? {
+                writer.remove_held(&backup.relative, &staged.entry).ok();
+            }
+            Err(error)
+        }
+    }
 }
 
-fn preserve_recovery_artifacts(backups: &[TargetBackup]) -> Result<PathBuf, String> {
+fn restore_target_changes<F>(
+    writer: &CapabilityTargetWriter,
+    backups: &[TargetBackup],
+    hook: &mut F,
+) -> RollbackReport
+where
+    F: FnMut(ConfirmationEvent) -> Result<(), String>,
+{
+    let mut report = RollbackReport::default();
+    for backup in backups.iter().rev() {
+        if let Err(error) = hook(ConfirmationEvent::BeforeRollback(backup.relative.clone()))
+            .and_then(|()| writer.validate_target_layout(&backup.relative))
+        {
+            report
+                .failures
+                .push(format!("{}: {error}", backup.relative));
+            continue;
+        }
+        let current = match writer.move_target_aside(&backup.relative, "rollback") {
+            Ok(Some(current)) => current,
+            Ok(None) => {
+                report.failures.push(format!(
+                    "{}: current target no longer equals the promoted candidate",
+                    backup.relative
+                ));
+                continue;
+            }
+            Err(error) => {
+                report
+                    .failures
+                    .push(format!("{}: {error}", backup.relative));
+                continue;
+            }
+        };
+        if let Err(error) = hook(ConfirmationEvent::AfterRollbackCapture(
+            backup.relative.clone(),
+        )) {
+            let restore = writer.restore_entry_noreplace(&backup.relative, &current);
+            report.failures.push(match restore {
+                Ok(()) => format!("{}: {error}", backup.relative),
+                Err(restore_error) => format!(
+                    "{}: {error}; captured entry restore failed: {restore_error}",
+                    backup.relative
+                ),
+            });
+            continue;
+        }
+        let snapshot = match writer.snapshot_held(&backup.relative, &current) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                let restore = writer.restore_entry_noreplace(&backup.relative, &current);
+                report.failures.push(match restore {
+                    Ok(()) => format!("{}: {error}", backup.relative),
+                    Err(restore_error) => format!(
+                        "{}: {error}; later entry restore failed: {restore_error}",
+                        backup.relative
+                    ),
+                });
+                continue;
+            }
+        };
+        if snapshot != backup.promoted {
+            match writer.restore_entry_noreplace(&backup.relative, &current) {
+                Ok(()) => report.failures.push(format!(
+                    "{}: current target changed after promotion and was preserved",
+                    backup.relative
+                )),
+                Err(restore_error) => {
+                    if let Some(contents) = snapshot.contents {
+                        report.recovery_copies.push(RecoveryCopy {
+                            relative: backup.relative.clone(),
+                            contents,
+                        });
+                    }
+                    report.failures.push(format!(
+                        "{}: current target changed after promotion; preserving it failed: {restore_error}",
+                        backup.relative
+                    ));
+                }
+            }
+            continue;
+        }
+        if let Err(error) = restore_original(writer, backup)
+            .and_then(|()| writer.remove_held(&backup.relative, &current))
+        {
+            report
+                .failures
+                .push(format!("{}: {error}", backup.relative));
+        }
+    }
+    report
+}
+
+fn preserve_recovery_artifacts(
+    backups: &[TargetBackup],
+    recovery_copies: &[RecoveryCopy],
+) -> Result<PathBuf, String> {
     let recovery = TempBuilder::new()
         .prefix("careerops-intake-recovery-")
         .tempdir()
         .map_err(|error| format!("failed to create intake recovery directory: {error}"))?;
     let mut absent = Vec::new();
     for backup in backups {
-        match &backup.contents {
+        match &backup.original.contents {
             Some(contents) => {
                 let path = recovery.path().join(&backup.relative);
                 if let Some(parent) = path.parent() {
@@ -1159,8 +1500,17 @@ fn preserve_recovery_artifacts(backups: &[TargetBackup]) -> Result<PathBuf, Stri
             None => absent.push(backup.relative.as_str()),
         }
     }
+    for copy in recovery_copies {
+        let path = recovery.path().join("raced").join(&copy.relative);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| format!("failed to create raced recovery directory: {error}"))?;
+        }
+        fs::write(&path, &copy.contents)
+            .map_err(|error| format!("failed to retain raced recovery copy: {error}"))?;
+    }
     let instructions = format!(
-        "# CareerOps intake recovery\n\nRestore each retained file to the same relative path in the CareerOps workspace before retrying.\nOriginally absent targets (remove them if present): {}\n",
+        "# CareerOps intake recovery\n\nRestore each retained file to the same relative path in the CareerOps workspace before retrying. Files under raced/ are later editor versions that could not be put back because another entry occupied the target.\nOriginally absent targets (remove them if present): {}\n",
         if absent.is_empty() {
             "none".to_owned()
         } else {
@@ -1175,59 +1525,168 @@ fn preserve_recovery_artifacts(backups: &[TargetBackup]) -> Result<PathBuf, Stri
 fn promotion_failure(
     original: String,
     backups: &[TargetBackup],
-    rollback_failures: Vec<String>,
+    rollback: RollbackReport,
 ) -> PromotionFailure {
-    if rollback_failures.is_empty() {
+    if rollback.failures.is_empty() {
         return PromotionFailure {
             message: original,
             recovery_path: None,
         };
     }
-    match preserve_recovery_artifacts(backups) {
+    match preserve_recovery_artifacts(backups, &rollback.recovery_copies) {
         Ok(path) => PromotionFailure {
             message: format!(
                 "{original}; rollback failed: {}",
-                rollback_failures.join("; ")
+                rollback.failures.join("; ")
             ),
             recovery_path: Some(path),
         },
         Err(recovery_error) => PromotionFailure {
             message: format!(
                 "{original}; rollback failed: {}; recovery artifact retention also failed: {recovery_error}",
-                rollback_failures.join("; ")
+                rollback.failures.join("; ")
             ),
             recovery_path: None,
         },
     }
 }
 
-fn promote_target_changes<W: CanonicalTargetWriter>(
-    writer: &mut W,
+fn promote_target_changes<F>(
+    writer: &CapabilityTargetWriter,
+    expected: &BTreeMap<String, TargetSnapshot>,
     changes: &BTreeMap<String, Vec<u8>>,
-) -> Result<Vec<TargetBackup>, PromotionFailure> {
+    hook: &mut F,
+) -> Result<Vec<TargetBackup>, PromotionFailure>
+where
+    F: FnMut(ConfirmationEvent) -> Result<(), String>,
+{
     let mut backups = Vec::new();
     for (relative, contents) in changes {
+        let Some(original) = expected.get(relative).cloned() else {
+            let rollback_failures = restore_target_changes(writer, &backups, hook);
+            return Err(promotion_failure(
+                format!("missing reviewed before-state for {relative}"),
+                &backups,
+                rollback_failures,
+            ));
+        };
         if let Err(error) = writer.validate_target_layout(relative) {
-            let rollback_failures = restore_target_changes(writer, &backups);
+            let rollback_failures = restore_target_changes(writer, &backups, hook);
             return Err(promotion_failure(error, &backups, rollback_failures));
         }
-        let backup = match writer.read(relative) {
-            Ok(backup) => backup,
+        let staged = match writer.stage(relative, contents) {
+            Ok(staged) => staged,
             Err(error) => {
-                let rollback_failures = restore_target_changes(writer, &backups);
+                let rollback_failures = restore_target_changes(writer, &backups, hook);
                 return Err(promotion_failure(error, &backups, rollback_failures));
             }
         };
-        if let Err(error) = writer.replace(relative, contents) {
-            let rollback_failures = restore_target_changes(writer, &backups);
-            return Err(promotion_failure(error, &backups, rollback_failures));
-        }
-        backups.push(TargetBackup {
+        let original_entry = if original.contents.is_some() {
+            match writer.move_target_aside(relative, "original") {
+                Ok(Some(entry)) => Some(entry),
+                Ok(None) => {
+                    writer.remove_held(relative, &staged.entry).ok();
+                    let rollback_failures = restore_target_changes(writer, &backups, hook);
+                    return Err(promotion_failure(
+                        format!("canonical intake target changed before promotion: {relative}"),
+                        &backups,
+                        rollback_failures,
+                    ));
+                }
+                Err(error) => {
+                    writer.remove_held(relative, &staged.entry).ok();
+                    let rollback_failures = restore_target_changes(writer, &backups, hook);
+                    return Err(promotion_failure(error, &backups, rollback_failures));
+                }
+            }
+        } else {
+            None
+        };
+        let backup = TargetBackup {
             relative: relative.clone(),
-            contents: backup,
-        });
+            original,
+            original_entry,
+            promoted: TargetSnapshot {
+                contents: Some(staged.contents.clone()),
+                identity: Some(staged.entry.identity),
+            },
+        };
+        if let Some(entry) = &backup.original_entry {
+            let moved = writer.snapshot_held(relative, entry);
+            if moved.as_ref() != Ok(&backup.original) {
+                let mut rollback = RollbackReport::default();
+                if let Err(error) = writer.restore_entry_noreplace(relative, entry) {
+                    if let Ok(snapshot) = &moved {
+                        if let Some(contents) = snapshot.contents.clone() {
+                            rollback.recovery_copies.push(RecoveryCopy {
+                                relative: relative.clone(),
+                                contents,
+                            });
+                        }
+                    }
+                    rollback.failures.push(format!("{relative}: {error}"));
+                }
+                writer.remove_held(relative, &staged.entry).ok();
+                let mut recovery_backups = backups.clone();
+                recovery_backups.push(backup);
+                rollback.extend(restore_target_changes(writer, &backups, hook));
+                return Err(promotion_failure(
+                    format!(
+                        "canonical intake target changed from its reviewed before-state: {relative}"
+                    ),
+                    &recovery_backups,
+                    rollback,
+                ));
+            }
+        }
+        if let Err(error) = writer.install_held_noreplace(relative, &staged.entry) {
+            let mut rollback = RollbackReport::default();
+            if let Err(restore_error) = restore_original(writer, &backup) {
+                rollback
+                    .failures
+                    .push(format!("{relative}: {restore_error}"));
+            }
+            if writer
+                .entry_is_current(relative, &staged.entry)
+                .unwrap_or(false)
+            {
+                writer.remove_held(relative, &staged.entry).ok();
+            }
+            let mut recovery_backups = backups.clone();
+            recovery_backups.push(backup);
+            rollback.extend(restore_target_changes(writer, &backups, hook));
+            return Err(promotion_failure(error, &recovery_backups, rollback));
+        }
+        backups.push(backup);
     }
     Ok(backups)
+}
+
+fn cleanup_target_backups(
+    writer: &CapabilityTargetWriter,
+    backups: &[TargetBackup],
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    for backup in backups {
+        let Some(entry) = &backup.original_entry else {
+            continue;
+        };
+        let result = writer
+            .snapshot_held(&backup.relative, entry)
+            .and_then(|snapshot| {
+                if snapshot != backup.original {
+                    return Err(format!(
+                        "original backup changed before cleanup: {}",
+                        backup.relative
+                    ));
+                }
+                writer.remove_held(&backup.relative, entry)
+            });
+        if let Err(error) = result {
+            failures.push(format!("{}: {error}", backup.relative));
+        }
+    }
+    failures
 }
 
 fn changed_paths(
@@ -1345,10 +1804,13 @@ fn prepare_isolated_apply(
     }
 
     let captured = capture_verified_target_bytes(sandbox, &after, &changed)?;
-    let mut original_targets = BTreeMap::new();
+    let mut expected_target_snapshots = BTreeMap::new();
     for item in &selection.items {
-        if !original_targets.contains_key(&item.target_file) {
-            original_targets.insert(item.target_file.clone(), writer.read(&item.target_file)?);
+        if !expected_target_snapshots.contains_key(&item.target_file) {
+            expected_target_snapshots.insert(
+                item.target_file.clone(),
+                writer.snapshot(&item.target_file)?,
+            );
         }
     }
 
@@ -1360,9 +1822,9 @@ fn prepare_isolated_apply(
                 item.id
             ));
         }
-        let before_text = original_targets
+        let before_text = expected_target_snapshots
             .get(&item.target_file)
-            .and_then(Option::as_deref)
+            .and_then(|snapshot| snapshot.contents.as_deref())
             .map(std::str::from_utf8)
             .transpose()
             .map_err(|_| {
@@ -1411,8 +1873,11 @@ fn prepare_isolated_apply(
 
     let mut exact_changes = Vec::with_capacity(changed.len());
     for relative in &changed {
-        let before_content = writer
-            .read(relative)?
+        let before_content = expected_target_snapshots
+            .get(relative)
+            .ok_or_else(|| format!("missing reviewed before-state for {relative}"))?
+            .contents
+            .clone()
             .map(|bytes| {
                 String::from_utf8(bytes).map_err(|_| {
                     format!(
@@ -1445,11 +1910,17 @@ fn prepare_isolated_apply(
         &selection.commit_source_paths,
         js_runtime,
     )?;
+    let expected_intake_state = intake_state_bytes
+        .as_ref()
+        .map(|_| writer.snapshot(INTAKE_STATE_TARGET))
+        .transpose()?;
     verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
     Ok(PendingIntakeApply {
         exact_changes,
         target_bytes: captured,
+        expected_target_snapshots,
         intake_state_bytes,
+        expected_intake_state,
         commit_source_paths: selection.commit_source_paths.clone(),
     })
 }
@@ -1482,6 +1953,91 @@ fn verify_confirmation_inputs(
     Ok(())
 }
 
+fn fail_after_promotion<F>(
+    original: String,
+    writer: &CapabilityTargetWriter,
+    backups: &[TargetBackup],
+    hook: &mut F,
+) -> String
+where
+    F: FnMut(ConfirmationEvent) -> Result<(), String>,
+{
+    let failures = restore_target_changes(writer, backups, hook);
+    promotion_failure(original, backups, failures).to_string()
+}
+
+fn confirm_pending_intake_with_event_hook<F>(
+    workspace: &Path,
+    reviewed: &ReviewFingerprints,
+    pending: &PendingIntakeApply,
+    mut hook: F,
+) -> Result<Vec<String>, String>
+where
+    F: FnMut(ConfirmationEvent) -> Result<(), String>,
+{
+    let writer = CapabilityTargetWriter::open(workspace)?;
+    verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
+    hook(ConfirmationEvent::BeforeCanonicalPromotion)?;
+    let mut backups = promote_target_changes(
+        &writer,
+        &pending.expected_target_snapshots,
+        &pending.target_bytes,
+        &mut hook,
+    )
+    .map_err(|error| error.to_string())?;
+
+    if let Err(error) = hook(ConfirmationEvent::AfterCanonicalPromotion) {
+        return Err(fail_after_promotion(error, &writer, &backups, &mut hook));
+    }
+    if let Err(error) =
+        verify_confirmation_inputs(workspace, &writer.directories, reviewed, pending)
+    {
+        return Err(fail_after_promotion(error, &writer, &backups, &mut hook));
+    }
+
+    if let Some(state_bytes) = &pending.intake_state_bytes {
+        if let Err(error) = hook(ConfirmationEvent::BeforeStatePromotion) {
+            return Err(fail_after_promotion(error, &writer, &backups, &mut hook));
+        }
+        let Some(expected_state) = pending.expected_intake_state.clone() else {
+            return Err(fail_after_promotion(
+                "missing reviewed intake-state before-state".to_owned(),
+                &writer,
+                &backups,
+                &mut hook,
+            ));
+        };
+        let state_expected = BTreeMap::from([(INTAKE_STATE_TARGET.to_owned(), expected_state)]);
+        let state_change = BTreeMap::from([(INTAKE_STATE_TARGET.to_owned(), state_bytes.clone())]);
+        match promote_target_changes(&writer, &state_expected, &state_change, &mut hook) {
+            Ok(mut state_backups) => backups.append(&mut state_backups),
+            Err(error) => {
+                let rollback = restore_target_changes(&writer, &backups, &mut hook);
+                if rollback.failures.is_empty() {
+                    return Err(error.to_string());
+                }
+                return Err(promotion_failure(error.to_string(), &backups, rollback).to_string());
+            }
+        }
+        if let Err(error) = hook(ConfirmationEvent::AfterStatePromotion) {
+            return Err(fail_after_promotion(error, &writer, &backups, &mut hook));
+        }
+        if let Err(error) = writer.validate_layout() {
+            return Err(fail_after_promotion(error, &writer, &backups, &mut hook));
+        }
+    }
+
+    let cleanup_failures = cleanup_target_backups(&writer, &backups);
+    if !cleanup_failures.is_empty() {
+        let original = format!(
+            "intake backup cleanup failed: {}",
+            cleanup_failures.join("; ")
+        );
+        return Err(fail_after_promotion(original, &writer, &backups, &mut hook));
+    }
+    Ok(pending.commit_source_paths.clone())
+}
+
 fn confirm_pending_intake_with_hook<F>(
     workspace: &Path,
     reviewed: &ReviewFingerprints,
@@ -1491,42 +2047,15 @@ fn confirm_pending_intake_with_hook<F>(
 where
     F: FnOnce(),
 {
-    let mut writer = CapabilityTargetWriter::open(workspace)?;
-    verify_review_fingerprints_with_canonical(workspace, &writer.directories, reviewed)?;
-    let backups = promote_target_changes(&mut writer, &pending.target_bytes)
-        .map_err(|error| error.to_string())?;
-
-    after_canonical_promotion();
-    if let Err(error) =
-        verify_confirmation_inputs(workspace, &writer.directories, reviewed, pending)
-    {
-        let failures = restore_target_changes(&mut writer, &backups);
-        return Err(promotion_failure(error, &backups, failures).to_string());
-    }
-
-    if let Some(state_bytes) = &pending.intake_state_bytes {
-        let state_backup = match writer.read(INTAKE_STATE_TARGET) {
-            Ok(contents) => TargetBackup {
-                relative: INTAKE_STATE_TARGET.to_owned(),
-                contents,
-            },
-            Err(error) => {
-                let failures = restore_target_changes(&mut writer, &backups);
-                return Err(promotion_failure(error, &backups, failures).to_string());
+    let mut after_canonical_promotion = Some(after_canonical_promotion);
+    confirm_pending_intake_with_event_hook(workspace, reviewed, pending, |event| {
+        if event == ConfirmationEvent::AfterCanonicalPromotion {
+            if let Some(hook) = after_canonical_promotion.take() {
+                hook();
             }
-        };
-        if let Err(error) = writer
-            .validate_target_layout(INTAKE_STATE_TARGET)
-            .and_then(|()| writer.replace(INTAKE_STATE_TARGET, state_bytes))
-            .and_then(|()| writer.validate_layout())
-        {
-            let mut failures =
-                restore_target_changes(&mut writer, std::slice::from_ref(&state_backup));
-            failures.extend(restore_target_changes(&mut writer, &backups));
-            return Err(promotion_failure(error, &backups, failures).to_string());
         }
-    }
-    Ok(pending.commit_source_paths.clone())
+        Ok(())
+    })
 }
 
 fn is_language_tag(value: &str) -> bool {
@@ -2385,20 +2914,21 @@ pub fn cancel_task(state: tauri::State<'_, RunnerState>, task_id: String) -> Res
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, HashMap, HashSet};
+    use std::collections::{BTreeMap, HashMap};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        build_apply_selection, build_prompt, confirm_pending_intake_with_hook,
-        create_intake_sandbox, fingerprint_review_inputs, fingerprint_tree, get_task_def,
-        language_context_instruction, packaged_runtime_paths_for_executable,
-        prepare_isolated_apply, validate_provider_writable_paths, verify_review_fingerprints,
-        write_intake_selection_file, IntakeConflict, IntakeProposal, IntakeProposalItem,
-        LanguageContext, PackagedJsRuntime, INTAKE_APPLY_PROMPT, INTAKE_ISOLATION_UNAVAILABLE,
-        INTAKE_STATE_TARGET,
+        build_apply_selection, build_prompt, confirm_pending_intake_with_event_hook,
+        confirm_pending_intake_with_hook, create_intake_sandbox, fingerprint_review_inputs,
+        fingerprint_tree, get_task_def, language_context_instruction,
+        packaged_runtime_paths_for_executable, prepare_isolated_apply,
+        validate_provider_writable_paths, verify_review_fingerprints, write_intake_selection_file,
+        ConfirmationEvent, IntakeConflict, IntakeProposal, IntakeProposalItem, LanguageContext,
+        PackagedJsRuntime, PendingIntakeApply, ReviewFingerprints, INTAKE_APPLY_PROMPT,
+        INTAKE_ISOLATION_UNAVAILABLE, INTAKE_STATE_TARGET,
     };
 
     struct TempDir(PathBuf);
@@ -2500,6 +3030,38 @@ mod tests {
             launcher: PathBuf::from("node"),
             runtime: PathBuf::from("node"),
         }
+    }
+
+    fn prepared_exact_candidate(
+        label: &str,
+        existing_state: Option<&str>,
+    ) -> (TempDir, ReviewFingerprints, PendingIntakeApply) {
+        let workspace = intake_workspace(label);
+        if let Some(state) = existing_state {
+            fs::write(workspace.path().join(INTAKE_STATE_TARGET), state).unwrap();
+        }
+        let reviewed = fingerprint_review_inputs(workspace.path()).unwrap();
+        let selected = build_apply_selection(
+            &proposal(vec![proposal_item("work-1", "Senior Engineer")]),
+            &["work-1".to_owned()],
+        )
+        .unwrap();
+        let sandbox = create_intake_sandbox(workspace.path()).unwrap();
+        write_intake_selection_file(sandbox.path(), &selected).unwrap();
+        let provider = "import { appendFileSync } from 'node:fs';\nappendFileSync('cv.md', '\\nSenior Engineer\\n');\n";
+        fs::write(sandbox.path().join("fake-provider.mjs"), provider).unwrap();
+        let before = fingerprint_tree(sandbox.path()).unwrap();
+        fake_provider(sandbox.path(), provider);
+        let pending = prepare_isolated_apply(
+            workspace.path(),
+            sandbox.path(),
+            &before,
+            &reviewed,
+            &selected,
+            &test_runtime(),
+        )
+        .unwrap();
+        (workspace, reviewed, pending)
     }
 
     #[test]
@@ -2861,7 +3423,11 @@ mod tests {
         let workspace = intake_workspace("canonical-parent-replaced");
         let external = TempDir::new("canonical-parent-replaced-external");
         fs::write(external.path().join("profile.yml"), "external original\n").unwrap();
-        let mut writer = CapabilityTargetWriter::open(workspace.path()).unwrap();
+        let writer = CapabilityTargetWriter::open(workspace.path()).unwrap();
+        let expected = BTreeMap::from([(
+            "config/profile.yml".to_owned(),
+            writer.snapshot("config/profile.yml").unwrap(),
+        )]);
         fs::rename(
             workspace.path().join("config"),
             workspace.path().join("config-held"),
@@ -2873,7 +3439,7 @@ mod tests {
             b"unreviewed replacement\n".to_vec(),
         )]);
 
-        let error = promote_target_changes(&mut writer, &changes)
+        let error = promote_target_changes(&writer, &expected, &changes, &mut |_| Ok(()))
             .expect_err("promotion must revalidate the canonical parent entry");
 
         assert!(error.message.contains("config") || error.message.contains("link"));
@@ -2993,89 +3559,16 @@ mod tests {
             capture_verified_target_bytes(sandbox.path(), &after, &["cv.md".to_owned()]).unwrap();
 
         fs::write(sandbox.path().join("cv.md"), "LATE BACKGROUND WRITE\n").unwrap();
-        let mut writer = CapabilityTargetWriter::open(workspace.path()).unwrap();
-        promote_target_changes(&mut writer, &captured).unwrap();
+        let writer = CapabilityTargetWriter::open(workspace.path()).unwrap();
+        let expected = BTreeMap::from([("cv.md".to_owned(), writer.snapshot("cv.md").unwrap())]);
+        let backups =
+            promote_target_changes(&writer, &expected, &captured, &mut |_| Ok(())).unwrap();
+        assert!(super::cleanup_target_backups(&writer, &backups).is_empty());
 
         assert_eq!(
             fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
             "# CV\n\nEngineer\n\nSenior Engineer\n"
         );
-    }
-
-    #[test]
-    fn rollback_failure_is_surfaced_and_retains_recovery_artifacts() {
-        use super::{promote_target_changes, CanonicalTargetWriter};
-
-        struct InjectedWriter {
-            files: BTreeMap<String, Option<Vec<u8>>>,
-            call: usize,
-            failing_calls: HashSet<usize>,
-        }
-
-        impl CanonicalTargetWriter for InjectedWriter {
-            fn read(&self, relative: &str) -> Result<Option<Vec<u8>>, String> {
-                Ok(self.files.get(relative).cloned().flatten())
-            }
-
-            fn replace(&mut self, relative: &str, contents: &[u8]) -> Result<(), String> {
-                self.call += 1;
-                if self.failing_calls.contains(&self.call) {
-                    return Err(format!("injected replace failure {}", self.call));
-                }
-                self.files
-                    .insert(relative.to_owned(), Some(contents.to_vec()));
-                Ok(())
-            }
-
-            fn remove(&mut self, relative: &str) -> Result<(), String> {
-                self.call += 1;
-                if self.failing_calls.contains(&self.call) {
-                    return Err(format!("injected remove failure {}", self.call));
-                }
-                self.files.insert(relative.to_owned(), None);
-                Ok(())
-            }
-        }
-
-        let mut writer = InjectedWriter {
-            files: BTreeMap::from([
-                (
-                    "config/profile.yml".to_owned(),
-                    Some(b"old profile\n".to_vec()),
-                ),
-                ("cv.md".to_owned(), Some(b"old cv\n".to_vec())),
-            ]),
-            call: 0,
-            failing_calls: HashSet::from([2, 3]),
-        };
-        let changes = BTreeMap::from([
-            ("config/profile.yml".to_owned(), b"new profile\n".to_vec()),
-            ("cv.md".to_owned(), b"new cv\n".to_vec()),
-        ]);
-
-        let failure = promote_target_changes(&mut writer, &changes)
-            .expect_err("promotion and restoration failure must be surfaced");
-        let surfaced = failure.to_string();
-        let recovery = failure
-            .recovery_path
-            .expect("rollback failure must retain recovery artifacts");
-
-        assert!(failure.message.contains("injected replace failure 2"));
-        assert!(failure.message.contains("rollback failed"));
-        assert!(surfaced.contains(&recovery.display().to_string()));
-        assert!(surfaced.contains("Restore"));
-        assert_eq!(
-            fs::read_to_string(recovery.join("config/profile.yml")).unwrap(),
-            "old profile\n"
-        );
-        assert!(fs::read_to_string(recovery.join("RESTORE.md"))
-            .unwrap()
-            .contains("Restore"));
-        assert_eq!(
-            writer.files["config/profile.yml"],
-            Some(b"new profile\n".to_vec())
-        );
-        fs::remove_dir_all(recovery).unwrap();
     }
 
     #[cfg(unix)]
@@ -3307,6 +3800,218 @@ mod tests {
             "# CV\n\nEngineer\n"
         );
         assert!(!workspace.path().join("data/intake-state.json").exists());
+    }
+
+    #[test]
+    fn canonical_edit_after_final_verification_is_preserved_and_not_promoted_over() {
+        let (workspace, reviewed, pending) =
+            prepared_exact_candidate("confirm-canonical-pre-promotion-race", None);
+
+        let error = confirm_pending_intake_with_event_hook(
+            workspace.path(),
+            &reviewed,
+            &pending,
+            |event| {
+                if event == ConfirmationEvent::BeforeCanonicalPromotion {
+                    fs::write(workspace.path().join("cv.md"), "concurrent user edit\n").unwrap();
+                }
+                Ok(())
+            },
+        )
+        .expect_err("a raced canonical target must not be overwritten");
+
+        assert!(
+            error.contains("changed")
+                || error.contains("expected")
+                || error.contains("conditionally install"),
+            "{error}"
+        );
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "concurrent user edit\n"
+        );
+        assert!(!workspace.path().join(INTAKE_STATE_TARGET).exists());
+    }
+
+    #[test]
+    fn intake_state_edit_after_verification_is_preserved_and_canonical_rolls_back() {
+        let (workspace, reviewed, pending) =
+            prepared_exact_candidate("confirm-state-pre-promotion-race", None);
+
+        let error = confirm_pending_intake_with_event_hook(
+            workspace.path(),
+            &reviewed,
+            &pending,
+            |event| {
+                if event == ConfirmationEvent::BeforeStatePromotion {
+                    fs::write(
+                        workspace.path().join(INTAKE_STATE_TARGET),
+                        "concurrent state edit\n",
+                    )
+                    .unwrap();
+                }
+                Ok(())
+            },
+        )
+        .expect_err("a raced intake state must not be overwritten");
+
+        assert!(
+            error.contains("changed")
+                || error.contains("expected")
+                || error.contains("conditionally install"),
+            "{error}"
+        );
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "# CV\n\nEngineer\n"
+        );
+        assert_eq!(
+            fs::read_to_string(workspace.path().join(INTAKE_STATE_TARGET)).unwrap(),
+            "concurrent state edit\n"
+        );
+    }
+
+    #[test]
+    fn canonical_edit_after_promotion_is_not_clobbered_by_rollback() {
+        let (workspace, reviewed, pending) =
+            prepared_exact_candidate("confirm-canonical-rollback-race", None);
+        let mut force_rollback = false;
+
+        let error = confirm_pending_intake_with_event_hook(
+            workspace.path(),
+            &reviewed,
+            &pending,
+            |event| {
+                match event {
+                    ConfirmationEvent::AfterCanonicalPromotion => {
+                        fs::write(
+                            workspace.path().join("documents/work/review.txt"),
+                            "changed evidence\n",
+                        )
+                        .unwrap();
+                        force_rollback = true;
+                    }
+                    ConfirmationEvent::BeforeRollback(ref relative)
+                        if force_rollback && relative == "cv.md" =>
+                    {
+                        fs::write(workspace.path().join("cv.md"), "later canonical edit\n")
+                            .unwrap();
+                    }
+                    _ => {}
+                }
+                Ok(())
+            },
+        )
+        .expect_err("evidence drift must roll back conditionally");
+
+        assert!(error.contains("Recovery copies retained"));
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "later canonical edit\n"
+        );
+        assert!(!workspace.path().join(INTAKE_STATE_TARGET).exists());
+    }
+
+    #[test]
+    fn rollback_collision_retains_every_later_canonical_version() {
+        let (workspace, reviewed, pending) =
+            prepared_exact_candidate("confirm-canonical-double-rollback-race", None);
+
+        let error = confirm_pending_intake_with_event_hook(
+            workspace.path(),
+            &reviewed,
+            &pending,
+            |event| {
+                match event {
+                    ConfirmationEvent::AfterCanonicalPromotion => {
+                        fs::write(
+                            workspace.path().join("documents/work/review.txt"),
+                            "changed evidence\n",
+                        )
+                        .unwrap();
+                    }
+                    ConfirmationEvent::BeforeRollback(ref relative) if relative == "cv.md" => {
+                        fs::write(workspace.path().join("cv.md"), "first later edit\n").unwrap();
+                    }
+                    ConfirmationEvent::AfterRollbackCapture(ref relative)
+                        if relative == "cv.md" =>
+                    {
+                        fs::write(workspace.path().join("cv.md"), "second later edit\n").unwrap();
+                    }
+                    _ => {}
+                }
+                Ok(())
+            },
+        )
+        .expect_err("rollback collision must fail with recovery");
+
+        let recovery = error
+            .split("Recovery copies retained at ")
+            .nth(1)
+            .and_then(|suffix| suffix.split(". Restore").next())
+            .map(PathBuf::from)
+            .expect("error must report a recovery directory");
+        assert_eq!(
+            fs::read_to_string(workspace.path().join("cv.md")).unwrap(),
+            "second later edit\n"
+        );
+        assert_eq!(
+            fs::read_to_string(recovery.join("raced/cv.md")).unwrap(),
+            "first later edit\n"
+        );
+        assert_eq!(
+            fs::read_to_string(recovery.join("cv.md")).unwrap(),
+            "# CV\n\nEngineer\n"
+        );
+        fs::remove_dir_all(recovery).unwrap();
+    }
+
+    #[test]
+    fn failed_state_rollback_reports_the_state_backup_as_recovery() {
+        let original_state = "{\"ingested\":{\"older.txt\":{\"hash\":\"old\"}}}\n";
+        let (workspace, reviewed, pending) =
+            prepared_exact_candidate("confirm-state-rollback-recovery", Some(original_state));
+        let mut state_promoted = false;
+
+        let error = confirm_pending_intake_with_event_hook(
+            workspace.path(),
+            &reviewed,
+            &pending,
+            |event| match event {
+                ConfirmationEvent::AfterStatePromotion => {
+                    state_promoted = true;
+                    Err("injected post-state failure".to_owned())
+                }
+                ConfirmationEvent::BeforeRollback(ref relative)
+                    if state_promoted && relative == INTAKE_STATE_TARGET =>
+                {
+                    fs::write(
+                        workspace.path().join(INTAKE_STATE_TARGET),
+                        "later state edit\n",
+                    )
+                    .unwrap();
+                    Ok(())
+                }
+                _ => Ok(()),
+            },
+        )
+        .expect_err("state rollback mismatch must retain recovery");
+
+        let recovery = error
+            .split("Recovery copies retained at ")
+            .nth(1)
+            .and_then(|suffix| suffix.split(". Restore").next())
+            .map(PathBuf::from)
+            .expect("error must report a recovery directory");
+        assert_eq!(
+            fs::read_to_string(workspace.path().join(INTAKE_STATE_TARGET)).unwrap(),
+            "later state edit\n"
+        );
+        assert_eq!(
+            fs::read_to_string(recovery.join(INTAKE_STATE_TARGET)).unwrap(),
+            original_state
+        );
+        fs::remove_dir_all(recovery).unwrap();
     }
 
     #[cfg(unix)]
