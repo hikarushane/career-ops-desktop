@@ -140,4 +140,18 @@ describe('generateProfile', () => {
 
     await expect(generating).rejects.toThrow(/authentication failed/i);
   });
+
+  it('forwards feedback and previous files as task args', async () => {
+    const pending = generateProfile('/w', '- Regions: DE', 'en', undefined, {
+      instructions: 'Shorter summary',
+      previous: { 'cv.md': '# Old', 'config/profile.yml': null, 'modes/_profile.md': null, 'portals.yml': null },
+    });
+    await finishTask(true);
+    await pending;
+    expect(mocks.invokeRunTask).toHaveBeenCalledWith('profile-generate', 'claude', expect.objectContaining({
+      feedback: 'Shorter summary',
+      previous_cv: '# Old',
+      previous_profile_yml: '(not written)',
+    }), '/w', undefined);
+  });
 });

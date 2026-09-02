@@ -94,6 +94,27 @@ export type GenerateProfileCallbacks = {
   onOutput?: (stream: 'stdout' | 'stderr', data: string) => void;
 };
 
+export type GenerationFeedback = {
+  instructions: string;
+  previous: Record<GenerationTarget, string | null>;
+};
+
+const PREVIOUS_KEYS: Record<GenerationTarget, string> = {
+  'cv.md': 'previous_cv',
+  'config/profile.yml': 'previous_profile_yml',
+  'modes/_profile.md': 'previous_profile_md',
+  'portals.yml': 'previous_portals',
+};
+
+export function feedbackArgs(feedback?: GenerationFeedback): Record<string, string> {
+  if (!feedback || !feedback.instructions.trim()) return {};
+  const out: Record<string, string> = { feedback: feedback.instructions.trim() };
+  for (const [target, key] of Object.entries(PREVIOUS_KEYS) as [GenerationTarget, string][]) {
+    out[key] = feedback.previous[target] ?? '(not written)';
+  }
+  return out;
+}
+
 function describeProviderFailure(exitCode: number | null, stderr: string[], stdout: string[]): string {
   const stderrText = stderr.join('\n').trim().slice(-500);
   const stdoutText = stdout.join('\n').trim().slice(-300);
@@ -112,6 +133,7 @@ export function generateProfile(
   preferences: string,
   analysisLanguage: string,
   callbacks?: GenerateProfileCallbacks,
+  feedback?: GenerationFeedback,
 ): Promise<GenerationResult> {
   return new Promise<GenerationResult>((resolve, reject) => {
     const stdout: string[] = [];
@@ -128,7 +150,7 @@ export function generateProfile(
     void listen<GenerationProgressEvent>('generation-progress', (e) => handleProgress(e.payload))
       .then((unlisten) => { unlistenProgress = unlisten; });
 
-    void runTask('profile-generate', { preferences, analysisLanguage }, root, {
+    void runTask('profile-generate', { preferences, analysisLanguage, ...feedbackArgs(feedback) }, root, {
       onStarted: (id) => {
         taskId = id;
         callbacks?.onStarted?.(id);
