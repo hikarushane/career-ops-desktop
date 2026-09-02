@@ -396,7 +396,9 @@ fn provider_args(provider_id: &str, options: &ModelOptions) -> Option<Vec<String
             "stream-json",
             "--verbose",
         ],
-        "agy" => vec!["-p", "--dangerously-skip-permissions", "--output-format", "stream-json"],
+        // agy's `-p` takes the prompt as its value, so it must be the last flag
+        // (the prompt is appended after these args by run_task).
+        "agy" => vec!["--dangerously-skip-permissions", "--output-format", "stream-json"],
         "codex" => vec!["exec", "--skip-git-repo-check", "--full-auto", "--json"],
         "opencode" => vec!["run"],
         "copilot" | "qwen" | "grok" => vec!["-p"],
@@ -427,6 +429,7 @@ fn provider_args(provider_id: &str, options: &ModelOptions) -> Option<Vec<String
             if let Some(m) = non_empty(&options.model) {
                 args.extend(["--model".into(), m.into()]);
             }
+            args.push("-p".into());
         }
         _ => {}
     }
@@ -1456,6 +1459,9 @@ mod tests {
         assert!(codex.contains(&"--full-auto".to_owned()) && codex.contains(&"--json".to_owned()));
         let agy = provider_args("agy", &opts).unwrap();
         assert!(agy.windows(2).any(|w| w == ["--output-format", "stream-json"]));
+        // agy's -p consumes the next argument as the prompt, so it must come last.
+        assert_eq!(agy.last().map(String::as_str), Some("-p"));
+        assert_eq!(agy.iter().filter(|a| *a == "-p").count(), 1);
     }
 
     #[test]
@@ -1472,6 +1478,7 @@ mod tests {
         let agy = provider_args("agy", &opts).unwrap();
         assert!(agy.windows(2).any(|w| w == ["--model", "opus"]));
         assert!(!agy.contains(&"--effort".to_owned()));
+        assert_eq!(agy.last().map(String::as_str), Some("-p"));
         let empty = ModelOptions { model: Some(String::new()), ..ModelOptions::default() };
         assert!(!provider_args("claude", &empty).unwrap().contains(&"--model".to_owned()));
     }
