@@ -154,5 +154,33 @@ describe('ProfileGeneration', () => {
     await send?.props?.onClick?.();
     expect(api.generateProfile).toHaveBeenCalledWith('/w', expect.any(String), 'en', expect.any(Object),
       expect.objectContaining({ instructions: 'Shorter summary', previous: expect.objectContaining({ 'cv.md': '# CV' }) }));
+    // Let the success path's deferred discardGeneration(previous.taskId) settle so it
+    // cannot leak into a later test's assertions on the same shared mock.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it('keeps the reviewed draft on screen when a feedback regeneration fails', async () => {
+    const failure = new Error('AI provider authentication failed.');
+    api.discardGeneration.mockClear();
+    hooks.reset(['preview', 'task-1', [], completeResult, 'cv.md', null, false, true, 'Shorter summary']);
+    hooks.beginRender();
+    api.languageSettings.mockResolvedValue({ analysisLanguage: 'en', options: [] });
+    api.generateProfile.mockRejectedValueOnce(failure);
+    const tree = ProfileGeneration({ root: '/w', preferences: EMPTY_PREFERENCES, onComplete: vi.fn(), onSkip: vi.fn() }) as ElementNode;
+    const send = findElement(tree, (el) => textContent(el) === 'Regenerate');
+    expect(send).toBeDefined();
+    await send?.props?.onClick?.();
+    // Flush the rest of the failed generate() chain (the catch block runs one
+    // microtask tick after generateProfile's rejection is observed).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(api.discardGeneration).not.toHaveBeenCalledWith('task-1');
+
+    hooks.beginRender();
+    const restored = ProfileGeneration({ root: '/w', preferences: EMPTY_PREFERENCES, onComplete: vi.fn(), onSkip: vi.fn() }) as ElementNode;
+    const text = textContent(restored);
+    expect(text).toContain('Review your profile');
+    expect(text).toContain('# CV');
+    expect(text).toContain(failure.message);
   });
 });

@@ -28,7 +28,10 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
   const started = useRef(false);
   const activeTask = useRef<string | null>(null);
 
-  const generate = useCallback(async (feedback?: GenerationFeedback) => {
+  const generate = useCallback(async (
+    feedback?: GenerationFeedback,
+    previous?: { taskId: string; result: GenerationResult },
+  ) => {
     setPhase('running');
     setError(null);
     setWritten([]);
@@ -44,12 +47,25 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
         onStarted: (id) => { activeTask.current = id; setTaskId(id); },
         onFileWritten: (file) => setWritten((current) => (current.includes(file) ? current : [...current, file])),
       }, feedback);
+      // Only discard the previous staged draft once the new one has actually
+      // landed — a failed feedback regeneration must not destroy the reviewed
+      // draft with no way back.
+      if (previous) void discardGeneration(previous.taskId).catch(() => {});
       setResult(generated);
       setSelected(generated.files.find((file) => file.content !== null)?.path ?? 'cv.md');
       setPhase('preview');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : 'Profile generation failed.');
-      setPhase('error');
+      const message = reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : 'Profile generation failed.';
+      if (previous) {
+        setResult(previous.result);
+        setTaskId(previous.taskId);
+        activeTask.current = previous.taskId;
+        setPhase('preview');
+        setError(message);
+      } else {
+        setError(message);
+        setPhase('error');
+      }
     }
   }, [root, preferences]);
 
@@ -89,13 +105,12 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
   }, [taskId, generate]);
 
   const regenerateWithFeedback = useCallback(() => {
-    if (!result) return;
-    const previous = Object.fromEntries(result.files.map((f) => [f.path, f.content])) as Record<GenerationTarget, string | null>;
-    if (taskId) void discardGeneration(taskId).catch(() => {});
-    activeTask.current = null;
-    setTaskId(null);
+    if (!result || !taskId) return;
+    const previousFiles = Object.fromEntries(result.files.map((f) => [f.path, f.content])) as Record<GenerationTarget, string | null>;
     setFeedbackOpen(false);
-    void generate({ instructions: feedbackText, previous });
+    // Defer discarding the current staging dir until the feedback run either
+    // succeeds or fails — see `generate`'s `previous` handling.
+    void generate({ instructions: feedbackText, previous: previousFiles }, { taskId, result });
   }, [result, taskId, feedbackText, generate]);
 
   const skip = useCallback(() => {

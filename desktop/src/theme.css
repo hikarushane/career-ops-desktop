@@ -12,6 +12,11 @@
   --color-canvas: #ffffff;
   --color-surface-subtle: #f5f5f5;
   --color-surface-muted: #e4e4e4;
+  /* Derived — no dedicated border/divider token in DESIGN.md §3.1; aliases
+     the closest primitive (surface.muted #E4E4E4, the divider/track grey)
+     rather than introducing a new hue. Referenced by .ai-toggle/.ai-segment
+     and .feedback-dialog. */
+  --color-border: var(--color-surface-muted);
   --color-text-primary: #000000;
   /* Derived — DESIGN.md defines only color.text.primary (pure black) but
      repeatedly asks for "lower contrast" secondary/metadata text (e.g.
