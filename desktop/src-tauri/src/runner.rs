@@ -812,6 +812,11 @@ fn spawn_output_pump(
     Some(std::thread::spawn(move || {
         let reader = std::io::BufReader::new(pipe);
         for line in reader.lines().map_while(Result::ok) {
+            if stream == "stdout" {
+                if let Some(event) = crate::task_events::parse_line(&task_id, &line) {
+                    let _ = app.emit("task-event", event);
+                }
+            }
             let _ = app.emit(
                 "task-output",
                 TaskOutput {
