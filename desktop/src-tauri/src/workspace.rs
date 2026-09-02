@@ -426,6 +426,10 @@ pub fn list_intake_candidates(paths: Vec<String>) -> Vec<String> {
     list_intake_candidates_at(&paths)
 }
 
+/// Caps a slug at this many characters so a very long pasted title or URL
+/// doesn't produce an unwieldy (or filesystem-hostile) filename.
+const MAX_SLUG_CHARS: usize = 80;
+
 fn slugify_capture(name: &str) -> String {
     let mut out = String::new();
     for ch in name.chars() {
@@ -437,7 +441,11 @@ fn slugify_capture(name: &str) -> String {
             out.push('-');
         }
     }
-    out.trim_matches('-').trim_matches('_').to_string()
+    let out = out.trim_matches('-').trim_matches('_').to_string();
+    // `.chars().take(n)` truncates at a char boundary; every char pushed
+    // above is ASCII, but this stays correct even if that ever changes.
+    let truncated: String = out.chars().take(MAX_SLUG_CHARS).collect();
+    truncated.trim_matches('-').trim_matches('_').to_string()
 }
 
 pub fn save_job_capture_at(root: &Path, slug: &str, text: &str) -> Result<String, String> {
@@ -2413,6 +2421,16 @@ mod tests {
         assert!(rel.ends_with(".md"));
         assert_eq!(fs::read_to_string(root.path().join(&rel)).unwrap(), "JD text");
         assert!(save_job_capture_at(root.path(), "../escape", "x").unwrap().starts_with("jds/escape"));
+    }
+
+    #[test]
+    fn save_job_capture_truncates_a_very_long_slug() {
+        let root = tempfile::tempdir().unwrap();
+        let long_title = "a".repeat(300);
+        let rel = save_job_capture_at(root.path(), &long_title, "JD text").unwrap();
+        // "jds/" (4) + up to 80 slug chars + ".md" (3).
+        assert!(rel.len() <= 4 + 80 + 3, "expected a capped filename, got {rel:?} ({} chars)", rel.len());
+        assert_eq!(fs::read_to_string(root.path().join(&rel)).unwrap(), "JD text");
     }
 
     #[cfg(unix)]

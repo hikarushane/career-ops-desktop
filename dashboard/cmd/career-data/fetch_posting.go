@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/charset"
 )
 
 // FetchPostingResult is the JSON shape returned by `fetch-posting --url`.
@@ -154,11 +155,16 @@ func get(target string, client *http.Client) (*html.Node, error) {
 	if resp.StatusCode >= 400 {
 		return nil, &fetchError{"network", fmt.Sprintf("HTTP %d", resp.StatusCode)}
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	// charset.NewReader sniffs the response's declared (Content-Type header
+	// or <meta charset>) encoding and transcodes to UTF-8; without it a
+	// non-UTF-8 posting (common for legacy corporate ATS pages) comes out
+	// as mojibake once html.Parse assumes UTF-8 on the raw bytes.
+	limited := io.LimitReader(resp.Body, 4<<20)
+	utf8Reader, err := charset.NewReader(limited, resp.Header.Get("Content-Type"))
 	if err != nil {
 		return nil, &fetchError{"network", err.Error()}
 	}
-	doc, err := html.Parse(strings.NewReader(string(body)))
+	doc, err := html.Parse(utf8Reader)
 	if err != nil {
 		return nil, &fetchError{"empty", "page could not be parsed"}
 	}
