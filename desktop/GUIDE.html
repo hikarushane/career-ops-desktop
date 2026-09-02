@@ -619,6 +619,11 @@
           <h3>不用重跑 onboarding</h3>
           <p>之後可在 Profile → AI 改選其他顯示為 <strong>Ready</strong> 的服務。</p>
         </div>
+        <div class="card">
+          <span class="card-label">Model 與 Fast mode</span>
+          <h3>從清單挑 model</h3>
+          <p>Profile → AI 的 <strong>Model</strong> 是下拉選單。打開這個分頁時 CareerOps 會用一次很小的呼叫確認每個候選 model 你的帳號能不能用（結果保留 24 小時，按 <strong>Refresh</strong> 可重查）；標示「unverified」的表示暫時無法確認，仍可選用。<strong>Fast mode</strong> 只有 Claude Opus 系列能開。</p>
+        </div>
       </div>
 
       <div class="callout warning">
@@ -641,32 +646,42 @@
           <h3>讓 CareerOps 幫你找</h3>
           <p>從設定好的來源執行 Scanner，找出符合條件的新機會。</p>
         </div>
+        <div class="card">
+          <span class="card-label amber">Process pending jobs</span>
+          <h3>一次處理待辦職缺</h3>
+          <p>卡片會顯示 <code>data/pipeline.md</code> 裡還沒處理與需要注意的職缺數量。按下後會批次分析這些職缺，進度看法與單一職缺分析相同。</p>
+        </div>
       </div>
 
       <p class="muted">Home 下方會顯示最近活動，方便你回到 Jobs 查看職缺與申請進度。</p>
+
+      <div class="callout">
+        <p><strong>任務不會因為切換畫面而中斷。</strong>分析、掃描、批次或面試任務進行中時，畫面右上角會出現任務 chip（例如「Evaluating Acme · 2m」）。你可以自由切到其他頁面，點 chip 就能回到該任務；完成或失敗時 chip 會變色，按 × 可以關掉。</p>
+      </div>
     </section>
 
     <section id="evaluate">
       <h2>7. 分析單一職缺</h2>
-      <p class="section-intro">在 Home 貼上職缺網址或職缺說明後，選擇 Evaluate。CareerOps 會將職缺需求與你的背景、偏好和薪資條件一起分析。</p>
+      <p class="section-intro">在 Home 貼上職缺網址或整段職缺說明，按 Enter 或 Analyse。CareerOps 會先自己把職缺內容抓下來，再交給 AI 與你的背景、偏好和薪資條件一起分析。</p>
 
       <div class="flow">
-        <span class="flow-node active">讀取職缺</span>
+        <span class="flow-node active">抓取職缺內容</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">比對你的背景</span>
+        <span class="flow-node">AI 讀取你的資料</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">整理工作需求</span>
+        <span class="flow-node">撰寫評估報告</span>
         <span class="flow-arrow">→</span>
-        <span class="flow-node">查看薪資資訊</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-node">提供建議</span>
+        <span class="flow-node">更新追蹤清單</span>
       </div>
+
+      <h3>抓不到內容時</h3>
+      <p>有些網站會擋自動讀取。這時畫面會直接出現一個貼上框，請把職缺說明複製貼進去（至少 200 字），再按 Analyse。這一步還沒有使用 AI，不會消耗額度。LinkedIn 的職缺頁通常可以直接抓到，不需要登入。</p>
 
       <h3>需要時調整文件語言</h3>
       <p>預設由 CareerOps 根據職缺內容判斷。若你已知道該使用哪種語言，可直接在 <strong>Document language</strong> 手動指定。</p>
 
       <h3>查看進度</h3>
-      <p>執行期間可在 <strong>Agent Activity</strong> 查看進度。你可以選擇 Cancel 停止；若失敗，可選 Retry 再試一次。完成後到 Jobs 查看結果與完整分析。</p>
+      <p>執行期間活動記錄會列出 AI 實際在做的事，例如「Reading cv.md」「Writing reports/042-….md」「Updating tracker」，並顯示已經過的時間。你可以選擇 Cancel 停止；若失敗，畫面會說明原因（例如 AI 結束了但沒有產生報告），可選 Retry 再試一次。切到別的頁面不會中斷分析，點右上角的任務 chip 即可回來。完成後到 Jobs 查看結果與完整分析。</p>
     </section>
 
     <section id="scanner">
@@ -776,7 +791,7 @@
           </tr>
           <tr>
             <td>AI</td>
-            <td>查看 AI 服務的連線狀態，並更換目前使用的服務。</td>
+            <td>查看 AI 服務的連線狀態、更換目前使用的服務，並從清單選擇 model、調整 Effort 與 Fast mode。這些設定會依服務分開記住。</td>
           </tr>
           <tr>
             <td>About</td>
