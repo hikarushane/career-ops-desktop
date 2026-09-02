@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { generateProfile } from '../lib/runner';
+import { applyGeneration, discardGeneration, languageSettings, type GenerationResult, type GenerationTarget } from '../api';
+import { cancelTask, generateProfile } from '../lib/runner';
 import { preferencesToPrompt, type JobPreferences } from '../lib/jobPreferences';
 
 type Props = {
@@ -9,92 +10,165 @@ type Props = {
   onSkip: () => void;
 };
 
-const PROFILE_FILES = ['cv.md', 'config/profile.yml', 'modes/_profile.md'];
+type Phase = 'running' | 'preview' | 'error';
+
+const TARGETS: GenerationTarget[] = ['cv.md', 'config/profile.yml', 'modes/_profile.md', 'portals.yml'];
 
 export default function ProfileGeneration({ root, preferences, onComplete, onSkip }: Props) {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [phase, setPhase] = useState<Phase>('running');
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [written, setWritten] = useState<GenerationTarget[]>([]);
+  const [result, setResult] = useState<GenerationResult | null>(null);
+  const [selected, setSelected] = useState<GenerationTarget>('cv.md');
   const [error, setError] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(true);
+  const [applying, setApplying] = useState(false);
   const started = useRef(false);
+  const activeTask = useRef<string | null>(null);
 
   const generate = useCallback(async () => {
-    setGenerating(true);
+    setPhase('running');
     setError(null);
-    setActiveIndex(0);
-
-    const timer = setInterval(() => {
-      setActiveIndex((i) => (i + 1) % PROFILE_FILES.length);
-    }, 2400);
-
+    setWritten([]);
+    setResult(null);
     try {
-      await generateProfile(root, preferencesToPrompt(preferences), 'en');
-      clearInterval(timer);
-      setActiveIndex(PROFILE_FILES.length);
-      setGenerating(false);
-      setTimeout(onComplete, 500);
+      let analysisLanguage = 'en';
+      try {
+        analysisLanguage = (await languageSettings(root)).analysisLanguage || 'en';
+      } catch {
+        // Fall back to English when the language sidecar is unavailable.
+      }
+      const generated = await generateProfile(root, preferencesToPrompt(preferences), analysisLanguage, {
+        onStarted: (id) => { activeTask.current = id; setTaskId(id); },
+        onFileWritten: (file) => setWritten((current) => (current.includes(file) ? current : [...current, file])),
+      });
+      setResult(generated);
+      setSelected(generated.files.find((file) => file.content !== null)?.path ?? 'cv.md');
+      setPhase('preview');
     } catch (reason) {
-      clearInterval(timer);
-      setGenerating(false);
-      setError(
-        reason instanceof Error ? reason.message
-          : typeof reason === 'string' ? reason
-          : 'Profile generation failed.',
-      );
+      setError(reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : 'Profile generation failed.');
+      setPhase('error');
     }
-  }, [root, onComplete]);
+  }, [root, preferences]);
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
     void generate();
+    return () => {
+      const id = activeTask.current;
+      if (id) {
+        void cancelTask(id).catch(() => {});
+        void discardGeneration(id).catch(() => {});
+      }
+    };
   }, [generate]);
 
-  const isRunning = generating;
+  const apply = useCallback(async () => {
+    if (!taskId) return;
+    setApplying(true);
+    setError(null);
+    try {
+      await applyGeneration(taskId);
+      activeTask.current = null;
+      onComplete();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setApplying(false);
+    }
+  }, [taskId, onComplete]);
+
+  const regenerate = useCallback(() => {
+    if (taskId) void discardGeneration(taskId).catch(() => {});
+    activeTask.current = null;
+    setTaskId(null);
+    void generate();
+  }, [taskId, generate]);
+
+  const skip = useCallback(() => {
+    if (taskId) void discardGeneration(taskId).catch(() => {});
+    activeTask.current = null;
+    onSkip();
+  }, [taskId, onSkip]);
+
+  if (phase === 'running') {
+    return (
+      <div className="setup-screen">
+        <h1><span className="animated-dots">Generating your profile</span></h1>
+        <p className="setup-subtitle">
+          The AI is reading your documents and writing four profile files. This usually takes one to three minutes.
+        </p>
+        <div className="profile-gen-steps">
+          {TARGETS.map((file) => {
+            const done = written.includes(file);
+            const active = !done && written.length === TARGETS.indexOf(file);
+            return (
+              <div key={file} className={`agent-step ${done ? 'done' : active ? 'active' : ''}`}>
+                <span className="agent-step-dot" />
+                <span className={active ? 'animated-dots' : undefined}>{file}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="setup-actions">
+          <button className="btn-ghost" onClick={skip}>Skip for now</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'error' || !result) {
+    return (
+      <div className="setup-screen">
+        <h1>Generation failed</h1>
+        <p className="setup-subtitle">Nothing was written to your workspace. You can try again or skip this step.</p>
+        {error && <pre className="intake-error" role="alert">{error}</pre>}
+        <div className="setup-actions">
+          <button className="btn-primary" onClick={regenerate}>Try again</button>
+          <button className="btn-ghost" onClick={skip}>Skip for now</button>
+        </div>
+      </div>
+    );
+  }
+
+  const current = result.files.find((file) => file.path === selected) ?? result.files[0];
 
   return (
-    <div className="setup-screen">
-      <h1>
-        {isRunning
-          ? <span className="animated-dots">Generating your profile</span>
-          : error
-          ? 'Generation failed'
-          : 'Profile generated'}
-      </h1>
+    <div className="setup-screen generation-preview">
+      <h1>Review your profile</h1>
       <p className="setup-subtitle">
-        {isRunning
-          ? 'AI is reading your imported documents and building your career profile.'
-          : error
-          ? 'Something went wrong. You can try again or skip this step.'
-          : 'Your profile files have been created.'}
+        {result.complete
+          ? 'All four files were generated. Apply them to your workspace, or regenerate if something looks off.'
+          : 'Some files are missing or did not pass validation. You can still apply the ones that look right, or regenerate.'}
       </p>
 
-      <div className="profile-gen-steps">
-        {PROFILE_FILES.map((file, i) => (
-          <div
-            key={file}
-            className={`agent-step ${i < activeIndex ? 'done' : i === activeIndex && isRunning ? 'active' : ''}`}
+      <div className="generation-tabs" role="tablist" aria-label="Generated files">
+        {result.files.map((file) => (
+          <button
+            key={file.path}
+            role="tab"
+            aria-selected={file.path === current.path}
+            className={`generation-tab ${file.path === current.path ? 'selected' : ''} ${file.valid ? '' : 'invalid'}`}
+            onClick={() => setSelected(file.path)}
           >
-            <span className="agent-step-dot" />
-            <span className={i === activeIndex && isRunning ? 'animated-dots' : undefined}>
-              {file}
-            </span>
-          </div>
+            {file.path}
+            {!file.valid && <span className="generation-tab-flag" aria-label="Needs attention">!</span>}
+          </button>
         ))}
       </div>
 
-      {error && (
-        <>
-          <p className="intake-error" role="alert">{error}</p>
-          <div className="setup-actions">
-            <button className="btn-primary" onClick={() => { started.current = false; void generate(); }}>
-              Try again
-            </button>
-            <button className="btn-ghost" onClick={onSkip}>
-              Skip for now
-            </button>
-          </div>
-        </>
-      )}
+      {current.issue && <p className="intake-error" role="alert">{current.path}: {current.issue}</p>}
+      <pre className="generation-file" role="tabpanel">{current.content ?? '(not written)'}</pre>
+
+      {error && <p className="intake-error" role="alert">{error}</p>}
+
+      <div className="setup-actions">
+        <button className="btn-primary" onClick={apply} disabled={applying || !result.files.some((file) => file.content !== null)}>
+          {applying ? <span className="animated-dots">Applying</span> : 'Apply'}
+        </button>
+        <button className="btn-secondary" onClick={regenerate} disabled={applying}>Regenerate</button>
+        <button className="btn-ghost" onClick={skip} disabled={applying}>Skip for now</button>
+      </div>
     </div>
   );
 }
