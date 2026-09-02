@@ -147,6 +147,26 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
     }
   }, [input, jdText, fetchState, root, languages, jobLanguage, starting]);
 
+  // initialTaskId never changes across this component's lifetime (App
+  // remounts Evaluate with a fresh key whenever activeTaskId changes), so
+  // looking it up once here per render is safe and stable. Computed (and
+  // retryBatch declared) unconditionally, alongside the other hooks above,
+  // rather than after the taskId===null early return below — taskId flips
+  // from null to non-null within this same component instance once start()
+  // succeeds, so a hook declared only past that guard would be called on
+  // some renders and not others, which breaks React's Rules of Hooks.
+  const initialTask = initialTaskId ? getTask(initialTaskId) : null;
+  const isBatchTask = initialTask?.taskType === 'batch';
+
+  const retryBatch = useCallback(async () => {
+    setStartError(null);
+    try {
+      setTaskId(await startTask('batch', {}, root, initialTask?.label ?? 'Batch processing'));
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : String(err));
+    }
+  }, [root, initialTask]);
+
   const pasteReady = jdText.trim().length >= 200;
 
   if (taskId === null) {
@@ -226,10 +246,10 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
   return (
     <TaskScreen
       taskId={taskId}
-      title={initialTaskId && getTask(initialTaskId)?.taskType === 'batch' ? 'Processing pending jobs' : 'Evaluating'}
-      onRetry={start}
+      title={isBatchTask ? 'Processing pending jobs' : 'Evaluating'}
+      onRetry={isBatchTask ? retryBatch : start}
       doneAction={{ label: 'Back to pipeline', onClick: onDone }}
-      onCancelled={() => setTaskId(null)}
+      onCancelled={isBatchTask ? onDone : () => setTaskId(null)}
     />
   );
 }

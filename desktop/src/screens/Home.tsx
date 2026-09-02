@@ -6,9 +6,10 @@ type Props = {
   root: string;
   data: ListResult;
   onNavigate: (screen: string, params?: Record<string, string>) => void;
+  batchStarting?: boolean;
 };
 
-export default function Home({ root: _root, data, onNavigate }: Props) {
+export default function Home({ root: _root, data, onNavigate, batchStarting }: Props) {
   const [url, setUrl] = useState('');
   const m = data.metrics;
 
@@ -57,7 +58,7 @@ export default function Home({ root: _root, data, onNavigate }: Props) {
         <div className="action-card">
           <h2>Process pending jobs</h2>
           <p>{`${data.pipelineSummary.pending} pending in your inbox${data.pipelineSummary.failed > 0 ? ` · ${data.pipelineSummary.failed} need attention` : ''}.`}</p>
-          <button className="btn-secondary" disabled={data.pipelineSummary.pending === 0} onClick={() => onNavigate('batch')}>
+          <button className="btn-secondary" disabled={data.pipelineSummary.pending === 0 || !!batchStarting} onClick={() => onNavigate('batch')}>
             Process pending jobs
           </button>
         </div>

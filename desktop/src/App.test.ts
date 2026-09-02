@@ -43,6 +43,7 @@ vi.mock('./api', () => ({
 }));
 vi.mock('./lib/taskStore', () => ({
   useTasks: () => [],
+  useRunningTasks: () => [],
   initTaskStore: vi.fn(),
   dismiss: vi.fn(),
   startTask: vi.fn(),

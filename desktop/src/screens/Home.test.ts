@@ -37,6 +37,7 @@ type ElementNode = {
   props?: {
     children?: unknown;
     onClick?: () => void | Promise<void>;
+    disabled?: boolean;
   };
 };
 
@@ -80,5 +81,39 @@ describe('Home', () => {
     expect(textContent(tree)).toMatch(/7 pending/);
     findButton(tree, 'Process pending jobs')?.props?.onClick?.();
     expect(onNavigate).toHaveBeenCalledWith('batch');
+  });
+
+  it('disables the batch button when there is nothing pending', () => {
+    hooks.reset(['']);
+    hooks.beginRender();
+    const tree = Home({
+      root: '/w',
+      data: {
+        ok: true,
+        applications: [],
+        metrics: { Total: 0, ByStatus: {}, AvgScore: 0, TopScore: 0, WithPDF: 0, Actionable: 0 },
+        progress: {} as never,
+        pipelineSummary: { pending: 0, processed: 0, failed: 0 },
+      },
+      onNavigate: vi.fn(),
+    }) as ElementNode;
+    expect(findButton(tree, 'Process pending jobs')?.props?.disabled).toBe(true);
+  });
+
+  it('surfaces failed pipeline entries needing attention', () => {
+    hooks.reset(['']);
+    hooks.beginRender();
+    const tree = Home({
+      root: '/w',
+      data: {
+        ok: true,
+        applications: [],
+        metrics: { Total: 0, ByStatus: {}, AvgScore: 0, TopScore: 0, WithPDF: 0, Actionable: 0 },
+        progress: {} as never,
+        pipelineSummary: { pending: 5, processed: 0, failed: 2 },
+      },
+      onNavigate: vi.fn(),
+    }) as ElementNode;
+    expect(textContent(tree)).toMatch(/2 need attention/);
   });
 });

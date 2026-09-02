@@ -50,6 +50,7 @@ vi.mock('../api', () => ({
 vi.mock('../lib/workspace', () => ({ loadWorkspacePath: vi.fn(), saveWorkspacePath: vi.fn() }));
 vi.mock('../lib/taskStore', () => ({
   useTasks: () => [],
+  useRunningTasks: () => [],
   initTaskStore: vi.fn(),
   dismiss: vi.fn(),
   startTask: vi.fn(),
