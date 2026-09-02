@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { applyGeneration, discardGeneration, languageSettings, type GenerationResult, type GenerationTarget } from '../api';
 import { cancelTask, generateProfile } from '../lib/runner';
 import { preferencesToPrompt, type JobPreferences } from '../lib/jobPreferences';
+import { CheckIcon } from '../components/icons';
 
 type Props = {
   root: string;
@@ -98,13 +99,14 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
         <p className="setup-subtitle">
           The AI is reading your documents and writing four profile files. This usually takes one to three minutes.
         </p>
+        <p className="setup-hint" role="status" aria-live="polite">{`${written.length} of 4 files written`}</p>
         <div className="profile-gen-steps">
           {TARGETS.map((file) => {
             const done = written.includes(file);
             const active = !done && written.length === TARGETS.indexOf(file);
             return (
               <div key={file} className={`agent-step ${done ? 'done' : active ? 'active' : ''}`}>
-                <span className="agent-step-dot" />
+                <span className="agent-step-dot" aria-hidden="true">{done ? <CheckIcon size={10} /> : null}</span>
                 <span className={active ? 'animated-dots' : undefined}>{file}</span>
               </div>
             );
