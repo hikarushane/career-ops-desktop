@@ -10,6 +10,10 @@ function elapsed(startedAt: number, now: number) {
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
+function truncate(text: string, max: number) {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
 export default function AgentActivity({ task, onCancel, onRetry }: Props) {
   const [showDetails, setShowDetails] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -22,10 +26,14 @@ export default function AgentActivity({ task, onCancel, onRetry }: Props) {
   const activity = task.events.filter((e) => e.kind === 'status' || e.kind === 'tool');
   const lastText = [...task.events].reverse().find((e) => e.kind === 'text');
   const latest = activity[activity.length - 1];
+  const lastRawLine = task.rawLog.length > 0 ? task.rawLog[task.rawLog.length - 1] : '';
+  // Text-only providers (opencode/copilot/qwen/grok) never emit structured
+  // status/tool events, so the feed and headline fall back to raw stdout.
+  const hasStructuredActivity = activity.length > 0;
 
   const stateWord = task.state === 'running' ? 'Running' : task.state === 'done' ? 'Done' : 'Failed';
   const summaryText = task.state === 'running'
-    ? (latest ? summarize(latest) : '')
+    ? (latest ? summarize(latest) : (lastRawLine ? truncate(lastRawLine, 80) : ''))
     : task.state === 'done'
       ? (task.outcome?.detail ?? '')
       : (task.outcome?.detail ?? `exit code ${task.exitCode ?? 'unknown'}`);
@@ -42,10 +50,20 @@ export default function AgentActivity({ task, onCancel, onRetry }: Props) {
         <blockquote className="agent-last-text">{lastText.summary}</blockquote>
       )}
       <ol className="agent-feed" aria-label="Activity">
-        {activity.slice(-12).reverse().map((e, i) => (
+        {hasStructuredActivity && activity.slice(-12).reverse().map((e, i) => (
           <li key={`${e.summary}-${i}`} className={`agent-feed-item kind-${e.kind}`}>{summarize(e)}</li>
         ))}
-        {activity.length === 0 && task.state === 'running' && <li className="agent-feed-item">Waiting for the AI provider to start</li>}
+        {!hasStructuredActivity && task.rawLog.length > 0 && (
+          <>
+            <li className="agent-feed-heading">Provider output (raw)</li>
+            {task.rawLog.slice(-12).reverse().map((line, i) => (
+              <li key={`raw-${i}`} className="agent-feed-item kind-raw">{line}</li>
+            ))}
+          </>
+        )}
+        {!hasStructuredActivity && task.rawLog.length === 0 && task.state === 'running' && (
+          <li className="agent-feed-item">Waiting for the AI provider to start</li>
+        )}
       </ol>
       <div className="agent-activity-actions">
         {task.state === 'running' && <button className="btn-secondary" onClick={onCancel}>Cancel</button>}

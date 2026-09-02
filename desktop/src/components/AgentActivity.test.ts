@@ -13,7 +13,7 @@ function textContent(node: unknown): string {
 
 const base: TaskRecord = { taskId: 't', taskType: 'evaluate', label: 'Acme', startedAt: Date.now() - 65_000, state: 'running',
   events: [{ task_id: 't', kind: 'tool', summary: 'Write', tool: 'Write', target: '/w/reports/042-acme.md', is_error: null }],
-  rawLog: ['line'], outcome: null, exitCode: null };
+  rawLog: ['line'], outcome: null, exitCode: null, args: {} };
 
 describe('AgentActivity', () => {
   it('shows the latest real activity while running', () => {
@@ -28,5 +28,20 @@ describe('AgentActivity', () => {
     expect(text).toMatch(/without producing a report/);
     expect(text).toMatch(/I will use an agent/);
     expect(text).toMatch(/Retry/);
+  });
+
+  it('falls back to raw provider output when there are no structured events', () => {
+    const textOnly = { ...base, events: [], rawLog: ['starting up', 'reading job posting', 'writing report to reports/042-acme.md'] };
+    const text = textContent(AgentActivity({ task: textOnly, onCancel: vi.fn(), onRetry: vi.fn() }));
+    expect(text).toMatch(/Provider output \(raw\)/);
+    expect(text).toMatch(/writing report to reports\/042-acme\.md/);
+    expect(text).toMatch(/Running · 1m 0[45]s · writing report to reports\/042-acme\.md/);
+  });
+
+  it('truncates a long raw line to 80 characters in the headline', () => {
+    const longLine = 'x'.repeat(120);
+    const textOnly = { ...base, events: [], rawLog: [longLine] };
+    const text = textContent(AgentActivity({ task: textOnly, onCancel: vi.fn(), onRetry: vi.fn() }));
+    expect(text).toMatch(new RegExp(`· ${'x'.repeat(80)}…`));
   });
 });

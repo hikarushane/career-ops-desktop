@@ -11,7 +11,7 @@ function textContent(node: unknown): string {
 
 const t = (over: Partial<TaskRecord>): TaskRecord => ({
   taskId: 'a', taskType: 'evaluate', label: 'Acme', startedAt: Date.now() - 120_000,
-  state: 'running', events: [], rawLog: [], outcome: null, exitCode: null, ...over,
+  state: 'running', events: [], rawLog: [], outcome: null, exitCode: null, args: {}, ...over,
 });
 
 describe('TaskChip', () => {
