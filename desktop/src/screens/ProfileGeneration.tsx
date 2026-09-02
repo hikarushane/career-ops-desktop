@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { generateProfile } from '../lib/runner';
+import { preferencesToPrompt, type JobPreferences } from '../lib/jobPreferences';
 
 type Props = {
   root: string;
+  preferences: JobPreferences;
   onComplete: () => void;
+  onSkip: () => void;
 };
 
 const PROFILE_FILES = ['cv.md', 'config/profile.yml', 'modes/_profile.md'];
 
-export default function ProfileGeneration({ root, onComplete }: Props) {
+export default function ProfileGeneration({ root, preferences, onComplete, onSkip }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(true);
@@ -24,7 +27,7 @@ export default function ProfileGeneration({ root, onComplete }: Props) {
     }, 2400);
 
     try {
-      await generateProfile(root, '', 'en');
+      await generateProfile(root, preferencesToPrompt(preferences), 'en');
       clearInterval(timer);
       setActiveIndex(PROFILE_FILES.length);
       setGenerating(false);
@@ -86,7 +89,7 @@ export default function ProfileGeneration({ root, onComplete }: Props) {
             <button className="btn-primary" onClick={() => { started.current = false; void generate(); }}>
               Try again
             </button>
-            <button className="btn-ghost" onClick={onComplete}>
+            <button className="btn-ghost" onClick={onSkip}>
               Skip for now
             </button>
           </div>

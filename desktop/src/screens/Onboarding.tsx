@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import AiSetup from './AiSetup';
 import BackgroundImport, { type BackgroundImportResult } from './BackgroundImport';
+import JobPreferences from './JobPreferences';
 import ProfileGeneration from './ProfileGeneration';
 import AnalysisLanguageField from '../components/AnalysisLanguageField';
+import { EMPTY_PREFERENCES, type JobPreferences as Preferences } from '../lib/jobPreferences';
 import type { StagedIntakeFile } from '../api';
 
 type Props = { root: string; onComplete: () => void };
 
-type Step = 'welcome' | 'import' | 'language' | 'ai' | 'generating' | 'ready';
+type Step = 'welcome' | 'import' | 'language' | 'ai' | 'preferences' | 'generating' | 'ready';
 
 export default function Onboarding({ root, onComplete }: Props) {
   const [step, setStep] = useState<Step>('welcome');
   const [staged, setStaged] = useState<StagedIntakeFile[]>([]);
+  const [preferences, setPreferences] = useState<Preferences>(EMPTY_PREFERENCES);
 
   const completeBackgroundImport = (result: BackgroundImportResult) => {
     setStaged(result.staged);
@@ -22,8 +25,9 @@ export default function Onboarding({ root, onComplete }: Props) {
     import: 'welcome',
     language: 'import',
     ai: 'language',
-    generating: 'ai',
-    ready: staged.length > 0 ? 'generating' : 'ai',
+    preferences: 'ai',
+    generating: 'preferences',
+    ready: 'preferences',
   };
 
   let content: React.ReactNode;
@@ -47,9 +51,24 @@ export default function Onboarding({ root, onComplete }: Props) {
       </div>
     );
   } else if (step === 'ai') {
-    content = <AiSetup onComplete={() => setStep(staged.length > 0 ? 'generating' : 'ready')} />;
+    content = <AiSetup onComplete={() => setStep('preferences')} />;
+  } else if (step === 'preferences') {
+    content = (
+      <JobPreferences
+        value={preferences}
+        onChange={setPreferences}
+        onContinue={() => setStep(staged.length > 0 ? 'generating' : 'ready')}
+      />
+    );
   } else if (step === 'generating') {
-    content = <ProfileGeneration root={root} onComplete={() => setStep('ready')} />;
+    content = (
+      <ProfileGeneration
+        root={root}
+        preferences={preferences}
+        onComplete={() => setStep('ready')}
+        onSkip={() => setStep('ready')}
+      />
+    );
   } else {
     content = (
       <div className="setup-screen">

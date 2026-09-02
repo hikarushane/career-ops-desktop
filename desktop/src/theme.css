@@ -326,6 +326,36 @@ summary:focus-visible {
 
 .setup-actions { display: flex; gap: 8px; margin-top: 16px; }
 
+/* --- Job preferences form --- */
+.preferences-form {
+  display: grid;
+  gap: 0.9rem;
+  width: min(32rem, 100%);
+  margin: 0 auto 1.5rem;
+  text-align: left;
+}
+.preferences-form label,
+.preferences-form fieldset {
+  display: grid;
+  gap: 0.35rem;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.preferences-form label > span,
+.preferences-form legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.preferences-form input,
+.preferences-form textarea {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border, #d9d9d9);
+  border-radius: 0.6rem;
+  background: var(--surface, #fff);
+}
+
 /* --- Home screen (follows .progress-grid padding convention) --- */
 .home-screen { padding: 20px 32px; }
 .home-hero { margin-bottom: 20px; }
