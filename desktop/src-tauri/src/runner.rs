@@ -264,16 +264,19 @@ pub struct ArtifactSnapshot {
 fn list_files(dir: &Path, prefix: &str, out: &mut HashMap<String, std::time::SystemTime>) {
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
-            let path = entry.path();
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
             if name_str.starts_with('.') {
                 continue;
             }
+            let Ok(file_type) = entry.file_type() else { continue };
+            if file_type.is_symlink() {
+                continue;
+            }
             let rel = format!("{prefix}/{name_str}");
-            if path.is_dir() {
-                list_files(&path, &rel, out);
-            } else if path.is_file() {
+            if file_type.is_dir() {
+                list_files(&entry.path(), &rel, out);
+            } else if file_type.is_file() {
                 if let Ok(meta) = entry.metadata() {
                     out.insert(rel, meta.modified().unwrap_or(std::time::UNIX_EPOCH));
                 }
@@ -353,7 +356,6 @@ pub fn judge_outcome(workspace: &Path, task_type: &str, before: &ArtifactSnapsho
                 artifacts,
             }
         }
-        "profile-generate" => TaskOutcome { ok: true, detail: "Staging ready.".into(), artifacts },
         _ => {
             let ok = !artifacts.is_empty();
             TaskOutcome {
@@ -1567,6 +1569,21 @@ mod tests {
         let ok = judge_outcome(dir.path(), "evaluate", &before);
         assert!(ok.ok);
         assert_eq!(ok.artifacts, vec!["reports/002-acme-2026-09-02.md".to_owned()]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn snapshot_skips_symlinked_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("reports")).unwrap();
+        fs::write(dir.path().join("reports/001-real.md"), "x").unwrap();
+        std::os::unix::fs::symlink(dir.path().join("reports"), dir.path().join("reports/loop"))
+            .unwrap();
+
+        let snapshot = snapshot_artifacts(dir.path(), "evaluate");
+
+        assert_eq!(snapshot.files.len(), 1);
+        assert!(snapshot.files.contains_key("reports/001-real.md"));
     }
 
     #[test]
