@@ -47,6 +47,7 @@ Commands:
   install-provider --id <provider-id>
   doctor      --path <dir>
   list        --path <dir>
+  pipeline-summary --path <dir>
   report      --path <dir> --file <reportPath>
   set-status  --path <dir> --report-number <n> --expect-status <s> --status <s>
   language-settings     --path <dir>
@@ -112,6 +113,20 @@ func run(args []string) int {
 			return fail("not-found", "applications.md not found under "+*path)
 		}
 		return emit(res)
+
+	case "pipeline-summary":
+		fs := flag.NewFlagSet("pipeline-summary", flag.ContinueOnError)
+		path := fs.String("path", "", "career-ops root directory")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *path == "" {
+			return fail("usage", "--path is required")
+		}
+		return emit(struct {
+			OK bool `json:"ok"`
+			PipelineSummary
+		}{OK: true, PipelineSummary: summarizePipeline(*path)})
 
 	case "report":
 		fs := flag.NewFlagSet("report", flag.ContinueOnError)

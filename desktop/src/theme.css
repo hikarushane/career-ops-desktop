@@ -387,7 +387,7 @@ summary:focus-visible {
 .home-hero { margin-bottom: 20px; }
 .home-hero h1 { margin: 0 0 8px; font: 700 18px var(--font-sans); }
 .home-stats { display: flex; gap: 16px; font: 600 13px var(--font-sans); letter-spacing: 0.13px; color: var(--color-text-secondary); }
-.home-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+.home-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
 
 /* Action card — reuses .card pattern (§6.6: shadow.panel, 20px radius) */
 .action-card {

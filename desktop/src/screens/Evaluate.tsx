@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import TaskScreen from './TaskScreen';
-import { startTask } from '../lib/taskStore';
+import { getTask, startTask } from '../lib/taskStore';
 import {
   fetchPosting,
   isError,
@@ -226,7 +226,7 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
   return (
     <TaskScreen
       taskId={taskId}
-      title="Evaluating"
+      title={initialTaskId && getTask(initialTaskId)?.taskType === 'batch' ? 'Processing pending jobs' : 'Evaluating'}
       onRetry={start}
       doneAction={{ label: 'Back to pipeline', onClick: onDone }}
       onCancelled={() => setTaskId(null)}

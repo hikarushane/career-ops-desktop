@@ -40,10 +40,11 @@ type Application struct {
 // ListResult is the full payload the frontend loads on startup and after every
 // write.
 type ListResult struct {
-	OK           bool                  `json:"ok"`
-	Applications []Application         `json:"applications"`
-	Metrics      model.PipelineMetrics `json:"metrics"`
-	Progress     model.ProgressMetrics `json:"progress"`
+	OK              bool                  `json:"ok"`
+	Applications    []Application         `json:"applications"`
+	Metrics         model.PipelineMetrics `json:"metrics"`
+	Progress        model.ProgressMetrics `json:"progress"`
+	PipelineSummary PipelineSummary       `json:"pipelineSummary"`
 }
 
 // slugify reduces a company name to a comparable token: lowercase, with every
@@ -110,10 +111,11 @@ func runList(root string) (ListResult, error) {
 	}
 
 	out := ListResult{
-		OK:           true,
-		Applications: make([]Application, 0, len(apps)),
-		Metrics:      data.ComputeMetrics(apps),
-		Progress:     data.ComputeProgressMetrics(apps),
+		OK:              true,
+		Applications:    make([]Application, 0, len(apps)),
+		Metrics:         data.ComputeMetrics(apps),
+		Progress:        data.ComputeProgressMetrics(apps),
+		PipelineSummary: summarizePipeline(root),
 	}
 
 	manifest := data.LoadPDFManifest(root)
