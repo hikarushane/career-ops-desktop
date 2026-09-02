@@ -21,19 +21,29 @@ export default function InterviewWorkflow({ root, mode, company, role, onBack }:
   const [taskId, setTaskId] = useState<string | null>(null);
   const [languages, setLanguages] = useState<LanguageSettings | null>(null);
   const [jobLanguage, setJobLanguage] = useState('');
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   useEffect(() => {
     languageSettings(root).then(setLanguages).catch(() => setLanguages(null));
   }, [root]);
 
   const start = useCallback(async () => {
-    const languageContext = languages
-      ? {
-          analysisLanguage: languages.analysisLanguage,
-          ...(jobLanguage ? { jobLanguage, jobLanguageSource: 'manual-override', jobLanguageConfidence: 1 } : {}),
-        }
-      : undefined;
-    setTaskId(await startTask(mode as TaskType, { company, role }, root, `${TITLES[mode] ?? mode} · ${company}`, languageContext));
+    setStartError(null);
+    setStarting(true);
+    try {
+      const languageContext = languages
+        ? {
+            analysisLanguage: languages.analysisLanguage,
+            ...(jobLanguage ? { jobLanguage, jobLanguageSource: 'manual-override', jobLanguageConfidence: 1 } : {}),
+          }
+        : undefined;
+      setTaskId(await startTask(mode as TaskType, { company, role }, root, `${TITLES[mode] ?? mode} · ${company}`, languageContext));
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStarting(false);
+    }
   }, [root, mode, company, role, languages, jobLanguage]);
 
   return (
@@ -52,7 +62,8 @@ export default function InterviewWorkflow({ root, mode, company, role, onBack }:
           <small>Practice, planning, and debrief material follow the job language; analysis stays {languages.analysisLanguage}.</small>
         </label>
       )}
-      {!taskId && <button className="btn-primary" onClick={start}>Start</button>}
+      {!taskId && <button className="btn-primary" onClick={start} disabled={starting}>Start</button>}
+      {startError && <p className="intake-error" role="alert">{startError}</p>}
     </TaskScreen>
   );
 }
