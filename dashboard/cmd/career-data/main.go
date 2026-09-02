@@ -53,6 +53,7 @@ Commands:
   set-analysis-language --path <dir> --language <ISO code>
   help-document         --path <dir> --language <ISO code>
   resolve-job-language  --path <dir> --text <job description>
+  fetch-posting         --url <job posting URL>
 `
 
 func main() {
@@ -234,6 +235,25 @@ func run(args []string) int {
 		res, err := runJobLanguage(*path, *text)
 		if err != nil {
 			return fail("language-error", err.Error())
+		}
+		return emit(res)
+
+	case "fetch-posting":
+		fs := flag.NewFlagSet("fetch-posting", flag.ContinueOnError)
+		u := fs.String("url", "", "job posting URL")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *u == "" {
+			return fail("usage", "--url is required")
+		}
+		res, err := fetchPosting(*u, nil)
+		if err != nil {
+			var fe *fetchError
+			if errors.As(err, &fe) {
+				return fail(fe.code, fe.message)
+			}
+			return fail("network", err.Error())
 		}
 		return emit(res)
 

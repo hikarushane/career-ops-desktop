@@ -130,6 +130,16 @@ export type ProvidersResult = {
   providers: ProviderEntry[];
 };
 
+export type FetchPostingResult = {
+  ok: true;
+  source: 'linkedin-guest' | 'html';
+  title: string;
+  company: string;
+  location: string;
+  text: string;
+  fetchedAt: string;
+};
+
 export type SidecarError = {
   ok: false;
   error: string;
@@ -402,4 +412,8 @@ export function helpDocument(root: string, language: string) {
 
 export function resolveJobLanguage(root: string, text: string) {
   return invokeLanguageSidecar<JobLanguageResolution>('resolve_job_language', { path: root, text });
+}
+
+export function fetchPosting(url: string) {
+  return invokeSidecar<FetchPostingResult | SidecarError>('fetch_posting', { url });
 }

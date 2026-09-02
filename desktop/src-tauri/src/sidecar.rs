@@ -149,6 +149,11 @@ pub async fn resolve_job_language(
     .await
 }
 
+#[tauri::command]
+pub async fn fetch_posting(app: tauri::AppHandle, url: String) -> Result<String, String> {
+    run(&app, vec!["fetch-posting".into(), "--url".into(), url]).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::data_service_spawn_error;

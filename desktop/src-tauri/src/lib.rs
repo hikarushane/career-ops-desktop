@@ -46,6 +46,7 @@ pub fn run() {
             sidecar::language_settings,
             sidecar::help_document,
             sidecar::resolve_job_language,
+            sidecar::fetch_posting,
             runner::run_task,
             runner::cancel_task,
             runner::list_tasks,
