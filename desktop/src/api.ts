@@ -140,6 +140,20 @@ export type FetchPostingResult = {
   fetchedAt: string;
 };
 
+export type ModelEntry = {
+  id: string;
+  label: string;
+  available: boolean | null;
+  fast: boolean;
+};
+
+export type ModelsResult = {
+  ok: true;
+  provider: string;
+  models: ModelEntry[];
+  probedAt?: string;
+};
+
 export type SidecarError = {
   ok: false;
   error: string;
@@ -420,4 +434,8 @@ export function resolveJobLanguage(root: string, text: string) {
 
 export function fetchPosting(url: string) {
   return invokeSidecar<FetchPostingResult | SidecarError>('fetch_posting', { url });
+}
+
+export function models(provider: string, probe: boolean) {
+  return invokeSidecar<ModelsResult | SidecarError>('models', { provider, probe });
 }

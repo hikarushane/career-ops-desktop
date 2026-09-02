@@ -54,6 +54,7 @@ Commands:
   help-document         --path <dir> --language <ISO code>
   resolve-job-language  --path <dir> --text <job description>
   fetch-posting         --url <job posting URL>
+  models      --provider <id> [--probe]
 `
 
 func main() {
@@ -256,6 +257,18 @@ func run(args []string) int {
 			return fail("network", err.Error())
 		}
 		return emit(res)
+
+	case "models":
+		fs := flag.NewFlagSet("models", flag.ContinueOnError)
+		provider := fs.String("provider", "", "provider id")
+		probe := fs.Bool("probe", false, "probe each candidate")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *provider == "" {
+			return fail("usage", "--provider is required")
+		}
+		return emit(runModels(*provider, *probe, execRunner))
 
 	default:
 		fmt.Fprint(os.Stderr, usage)
