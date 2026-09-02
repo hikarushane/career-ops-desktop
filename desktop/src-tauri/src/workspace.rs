@@ -426,6 +426,40 @@ pub fn list_intake_candidates(paths: Vec<String>) -> Vec<String> {
     list_intake_candidates_at(&paths)
 }
 
+fn slugify_capture(name: &str) -> String {
+    let mut out = String::new();
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        } else if ch == '_' {
+            out.push('_');
+        } else if !out.ends_with('-') && !out.is_empty() {
+            out.push('-');
+        }
+    }
+    out.trim_matches('-').trim_matches('_').to_string()
+}
+
+pub fn save_job_capture_at(root: &Path, slug: &str, text: &str) -> Result<String, String> {
+    let dir = root.join("jds");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let base = slugify_capture(slug);
+    let base = if base.is_empty() { "posting".to_owned() } else { base };
+    let mut rel = format!("jds/{base}.md");
+    let mut n = 2;
+    while root.join(&rel).exists() {
+        rel = format!("jds/{base}-{n}.md");
+        n += 1;
+    }
+    fs::write(root.join(&rel), text).map_err(|e| e.to_string())?;
+    Ok(rel)
+}
+
+#[tauri::command]
+pub fn save_job_capture(root: String, slug: String, text: String) -> Result<String, String> {
+    save_job_capture_at(Path::new(&root), &slug, &text)
+}
+
 const CAREEROPS_SYSTEM_INVARIANTS: &[&str] = &[
     "doctor.mjs",
     "modes/_shared.md",
@@ -2351,5 +2385,15 @@ mod tests {
             folder.join("nested/reference.md").to_string_lossy().into_owned(),
             root.path().join("single.txt").to_string_lossy().into_owned(),
         ]);
+    }
+
+    #[test]
+    fn save_job_capture_writes_under_jds_with_a_safe_name() {
+        let root = tempfile::tempdir().unwrap();
+        let rel = save_job_capture_at(root.path(), "2026-09-02_Acme GmbH_Project/Lead", "JD text").unwrap();
+        assert!(rel.starts_with("jds/2026-09-02_acme-gmbh_project-lead"));
+        assert!(rel.ends_with(".md"));
+        assert_eq!(fs::read_to_string(root.path().join(&rel)).unwrap(), "JD text");
+        assert!(save_job_capture_at(root.path(), "../escape", "x").unwrap().starts_with("jds/escape"));
     }
 }

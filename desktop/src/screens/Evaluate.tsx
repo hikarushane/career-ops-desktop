@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import TaskScreen from './TaskScreen';
 import { startTask } from '../lib/taskStore';
 import {
+  fetchPosting,
+  isError,
+  saveJobCapture,
   languageSettings,
   resolveJobLanguage,
   type JobLanguageResolution,
@@ -11,29 +14,39 @@ import {
 type Props = {
   root: string;
   initialUrl?: string;
+  initialTaskId?: string | null;
   onDone: () => void;
 };
 
-function labelFor(url: string): string {
-  const trimmed = url.trim();
-  if (/^https?:\/\//i.test(trimmed)) {
-    try {
-      return new URL(trimmed).host;
-    } catch {
-      // fall through to generic truncation below
-    }
-  }
-  return trimmed.slice(0, 40);
+type FetchState = { kind: 'idle' } | { kind: 'fetching' } | { kind: 'blocked'; url: string; reason: string };
+
+function isUrl(value: string): boolean {
+  return /^https?:\/\/\S+$/i.test(value.trim());
 }
 
-export default function Evaluate({ root, initialUrl, onDone }: Props) {
-  const [url, setUrl] = useState(initialUrl ?? '');
-  const [taskId, setTaskId] = useState<string | null>(null);
+function hostOf(url: string): string {
+  try {
+    return new URL(url.trim()).host;
+  } catch {
+    return url.trim().slice(0, 40);
+  }
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Props) {
+  // State order: input, jdText, fetchState, taskId, startError, starting, languages, jobLanguage, detectedLanguage
+  const [input, setInput] = useState(initialUrl ?? '');
+  const [jdText, setJdText] = useState('');
+  const [fetchState, setFetchState] = useState<FetchState>({ kind: 'idle' });
+  const [taskId, setTaskId] = useState<string | null>(initialTaskId ?? null);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
   const [languages, setLanguages] = useState<LanguageSettings | null>(null);
   const [jobLanguage, setJobLanguage] = useState('');
   const [detectedLanguage, setDetectedLanguage] = useState<JobLanguageResolution | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [startError, setStartError] = useState<string | null>(null);
   const documentLanguageRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
@@ -41,18 +54,19 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
   }, [root]);
 
   useEffect(() => {
-    if (/^https?:\/\//i.test(url.trim()) || url.trim().length < 80) {
+    if (/^https?:\/\//i.test(input.trim()) || input.trim().length < 80) {
       setDetectedLanguage(null);
       return;
     }
     const timer = window.setTimeout(() => {
-      resolveJobLanguage(root, url).then(setDetectedLanguage).catch(() => setDetectedLanguage(null));
+      resolveJobLanguage(root, input).then(setDetectedLanguage).catch(() => setDetectedLanguage(null));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [root, url]);
+  }, [root, input]);
 
   const start = useCallback(async () => {
-    if (!url.trim() || starting) return;
+    const value = input.trim();
+    if (!value || starting) return;
 
     setStartError(null);
     setStarting(true);
@@ -64,31 +78,95 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
           }
         : undefined;
 
-      setTaskId(await startTask('evaluate', { url: url.trim() }, root, labelFor(url), languageContext));
+      if (fetchState.kind === 'blocked') {
+        if (jdText.trim().length < 200) return;
+        const capture = await saveJobCapture(
+          root,
+          `${today()}_pasted`,
+          `Source: ${fetchState.url}\n\n${jdText.trim()}`,
+        );
+        setTaskId(
+          await startTask(
+            'evaluate',
+            { url: fetchState.url, url_line: ` Posting URL: ${fetchState.url}.`, capture },
+            root,
+            hostOf(fetchState.url),
+            languageContext,
+          ),
+        );
+        return;
+      }
+
+      if (!isUrl(value)) {
+        const capture = await saveJobCapture(root, `${today()}_pasted`, value);
+        setTaskId(
+          await startTask(
+            'evaluate',
+            { url: '', url_line: '', capture },
+            root,
+            'Pasted job description',
+            languageContext,
+          ),
+        );
+        return;
+      }
+
+      setFetchState({ kind: 'fetching' });
+      const fetched = await fetchPosting(value);
+      if (isError(fetched)) {
+        setFetchState({ kind: 'blocked', url: value, reason: fetched.message });
+        return;
+      }
+      const capture = await saveJobCapture(
+        root,
+        `${today()}_${fetched.company || hostOf(value)}_${fetched.title || 'posting'}`,
+        `Source: ${value}\n\n${fetched.text}`,
+      );
+      setFetchState({ kind: 'idle' });
+      setTaskId(
+        await startTask(
+          'evaluate',
+          { url: value, url_line: ` Posting URL: ${value}.`, capture },
+          root,
+          fetched.company || hostOf(value),
+          languageContext,
+        ),
+      );
     } catch (err) {
       setStartError(err instanceof Error ? err.message : String(err));
     } finally {
       setStarting(false);
     }
-  }, [url, root, languages, jobLanguage, starting]);
+  }, [input, jdText, fetchState, root, languages, jobLanguage, starting]);
 
   if (taskId === null) {
     return (
       <div className="eval-screen">
         <h1>Evaluate a job</h1>
         <div className="action-input-row">
-          <input
-            type="text"
-            placeholder="Paste job URL..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !starting && start()}
+          <textarea
+            className="eval-input"
+            rows={2}
+            placeholder="Paste a job URL, or paste the full job description..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             autoFocus
           />
-          <button className="btn-primary" onClick={start} disabled={!url.trim() || starting}>
+          <button className="btn-primary" onClick={start} disabled={!input.trim() || starting}>
             Analyse
           </button>
         </div>
+        {fetchState.kind === 'blocked' && (
+          <div className="eval-blocked" role="alert">
+            <p>Could not read this page automatically ({fetchState.reason}). Paste the job description below.</p>
+            <textarea
+              rows={10}
+              value={jdText}
+              onChange={(e) => setJdText(e.target.value)}
+              placeholder="Paste the job description"
+            />
+          </div>
+        )}
         {startError && <p className="intake-error" role="alert">{startError}</p>}
         {languages && (
           <section className="document-language-picker">
@@ -125,7 +203,7 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
 
   return (
     <TaskScreen
-      taskId={taskId}
+      taskId={taskId ?? initialTaskId ?? null}
       title="Evaluating"
       onRetry={start}
       doneAction={{ label: 'Back to pipeline', onClick: onDone }}

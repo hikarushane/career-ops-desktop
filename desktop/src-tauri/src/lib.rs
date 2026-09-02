@@ -60,6 +60,7 @@ pub fn run() {
             workspace::set_analysis_language,
             workspace::stage_intake_files_for_workspace,
             workspace::list_intake_candidates,
+            workspace::save_job_capture,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

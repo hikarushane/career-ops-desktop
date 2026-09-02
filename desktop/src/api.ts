@@ -360,6 +360,10 @@ export function listIntakeCandidates(paths: string[]): Promise<string[]> {
   return invoke<string[]>('list_intake_candidates', { paths });
 }
 
+export function saveJobCapture(root: string, slug: string, text: string): Promise<string> {
+  return invoke<string>('save_job_capture', { root, slug, text });
+}
+
 export function contracts() {
   return invokeSidecar<ContractsResult | SidecarError>('contracts');
 }

@@ -431,6 +431,12 @@ summary:focus-visible {
 .eval-screen { padding: 20px 32px; }
 .eval-screen h1 { margin: 0 0 16px; font: 700 18px var(--font-sans); }
 .eval-done-actions { margin-top: 20px; }
+.eval-input {
+  width: 100%; min-height: 44px; resize: vertical;
+  font: 400 14px var(--font-sans);
+  padding: 10px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-control);
+}
+.eval-blocked textarea { width: 100%; margin-top: 8px; }
 
 /* --- Agent activity (Derived — no DESIGN.md precedent) --- */
 .agent-activity { margin-top: 20px; }

@@ -211,10 +211,7 @@ export default function App() {
       case 'progress':
         return <Progress data={data!.progress} />;
       case 'evaluate':
-        // Task 11 adds `initialTaskId` to Evaluate's props and wires
-        // `activeTaskId` through to it; until then it is tracked here only.
-        void activeTaskId;
-        return <Evaluate root={root!} initialUrl={evalUrl} onDone={evalDone} />;
+        return <Evaluate root={root!} initialUrl={evalUrl} initialTaskId={activeTaskId} onDone={evalDone} />;
       case 'scanner':
         return <Scanner root={root!} onDone={() => { reload(); setScreen('pipeline'); }} />;
       case 'interview':
