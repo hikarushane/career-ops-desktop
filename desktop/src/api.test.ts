@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  confirmIntakeChanges, getPendingIntakeChanges, languageSettings, prepareOnboardingWorkspace,
+  applyGeneration, getGenerationResult, languageSettings, prepareOnboardingWorkspace,
   resolveJobLanguage, setAnalysisLanguage, stageIntakeFiles,
 } from './api';
 
@@ -63,26 +63,22 @@ describe('sidecar JSON bridge', () => {
     });
   });
 
-  it('loads the exact full-file candidate before confirmation', async () => {
-    mockedInvoke.mockResolvedValueOnce([{
-      targetFile: 'cv.md',
-      beforeContent: '# CV\n',
-      afterContent: '# CV\nSenior Engineer\n',
-    }]);
-
-    await expect(getPendingIntakeChanges('intake-1')).resolves.toHaveLength(1);
-    expect(mockedInvoke).toHaveBeenCalledWith('pending_intake_changes', {
-      intakeSessionId: 'intake-1',
+  it('fetches the generation result by task id', async () => {
+    mockedInvoke.mockResolvedValueOnce({
+      taskId: 'task-1',
+      files: [{ path: 'cv.md', content: '# CV\n', valid: true, issue: null }],
+      complete: false,
     });
+
+    await expect(getGenerationResult('task-1')).resolves.toMatchObject({ taskId: 'task-1' });
+    expect(mockedInvoke).toHaveBeenCalledWith('generation_result', { taskId: 'task-1' });
   });
 
-  it('forwards the separate exact-change confirmation', async () => {
-    mockedInvoke.mockResolvedValueOnce(['work/review.txt']);
+  it('applies generation and returns the written paths', async () => {
+    mockedInvoke.mockResolvedValueOnce(['cv.md', 'config/profile.yml']);
 
-    await expect(confirmIntakeChanges('intake-1')).resolves.toEqual(['work/review.txt']);
-    expect(mockedInvoke).toHaveBeenCalledWith('confirm_intake_changes', {
-      intakeSessionId: 'intake-1',
-    });
+    await expect(applyGeneration('task-1')).resolves.toEqual(['cv.md', 'config/profile.yml']);
+    expect(mockedInvoke).toHaveBeenCalledWith('apply_generation', { taskId: 'task-1' });
   });
 
   it('forwards analysis-language writes to the no-follow Rust command', async () => {
