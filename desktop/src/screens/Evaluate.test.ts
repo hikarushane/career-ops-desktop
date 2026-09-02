@@ -1,0 +1,123 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import Evaluate from './Evaluate';
+
+const hooks = vi.hoisted(() => {
+  let state: unknown[] = [];
+  let cursor = 0;
+  return {
+    reset(initial: unknown[] = []) {
+      state = initial;
+      cursor = 0;
+    },
+    beginRender() {
+      cursor = 0;
+    },
+    useState(initial: unknown) {
+      const index = cursor++;
+      if (index === state.length) state.push(initial);
+      return [state[index], (value: unknown) => { state[index] = value; }];
+    },
+  };
+});
+
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react')>();
+  return {
+    ...actual,
+    useState: hooks.useState,
+    useEffect: () => {},
+    useCallback: <T,>(callback: T) => callback,
+    useRef: (v: unknown) => ({ current: v }),
+  };
+});
+
+const store = vi.hoisted(() => ({
+  startTask: vi.fn(async () => 'task-9'),
+  useTask: () => null,
+  cancel: vi.fn(),
+}));
+vi.mock('../lib/taskStore', () => store);
+
+const api = vi.hoisted(() => ({
+  fetchPosting: vi.fn(),
+  saveJobCapture: vi.fn(),
+  languageSettings: vi.fn(),
+  resolveJobLanguage: vi.fn(),
+}));
+vi.mock('../api', () => ({
+  ...api,
+  isError: (r: { ok: boolean }) => r.ok === false,
+}));
+
+afterEach(() => {
+  hooks.reset();
+  vi.clearAllMocks();
+});
+
+type ElementNode = {
+  type?: unknown;
+  props?: {
+    children?: unknown;
+    onClick?: () => void | Promise<void>;
+  };
+};
+
+function textContent(node: unknown): string {
+  if (Array.isArray(node)) return node.map(textContent).join(' ');
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (typeof node !== 'object' || node === null) return '';
+  return textContent((node as ElementNode).props?.children);
+}
+
+function findButton(node: unknown, label: string): ElementNode | undefined {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findButton(child, label);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof node !== 'object' || node === null) return undefined;
+  const element = node as ElementNode;
+  if (element.type === 'button' && textContent(element) === label) return element;
+  return findButton(element.props?.children, label);
+}
+
+// State order: input, jdText, fetchState, taskId, startError, starting, languages, jobLanguage, detectedLanguage
+
+describe('Evaluate', () => {
+  it('falls back to a JD textarea when fetching is blocked and does not start a task', async () => {
+    api.fetchPosting.mockResolvedValue({ ok: false, error: 'blocked', message: 'the page asks for a login' });
+    hooks.reset(['https://www.linkedin.com/jobs/view/1', '', { kind: 'idle' }, null, null, false, null, '', null]);
+    hooks.beginRender();
+    const tree = Evaluate({ root: '/w', onDone: vi.fn() }) as ElementNode;
+    await findButton(tree, 'Analyse')?.props?.onClick?.();
+    expect(store.startTask).not.toHaveBeenCalled();
+    expect(api.saveJobCapture).not.toHaveBeenCalled();
+    hooks.beginRender();
+    const after = Evaluate({ root: '/w', onDone: vi.fn() }) as ElementNode;
+    expect(textContent(after)).toMatch(/Paste the job description/);
+  });
+
+  it('captures a fetched posting and starts evaluate with a local capture', async () => {
+    api.fetchPosting.mockResolvedValue({ ok: true, source: 'linkedin-guest', title: 'PM', company: 'Acme', location: 'Berlin', text: 'x'.repeat(500), fetchedAt: 'now' });
+    api.saveJobCapture.mockResolvedValue('jds/2026-09-02_acme_pm.md');
+    hooks.reset(['https://www.linkedin.com/jobs/view/1', '', { kind: 'idle' }, null, null, false, null, '', null]);
+    hooks.beginRender();
+    const tree = Evaluate({ root: '/w', onDone: vi.fn() }) as ElementNode;
+    await findButton(tree, 'Analyse')?.props?.onClick?.();
+    expect(store.startTask).toHaveBeenCalledWith('evaluate',
+      { url: 'https://www.linkedin.com/jobs/view/1', url_line: ' Posting URL: https://www.linkedin.com/jobs/view/1.', capture: 'jds/2026-09-02_acme_pm.md' },
+      '/w', 'Acme', undefined);
+  });
+
+  it('treats pasted text as the JD and skips fetching', async () => {
+    api.saveJobCapture.mockResolvedValue('jds/pasted_1.md');
+    hooks.reset(['Senior PM at Acme. '.repeat(30), '', { kind: 'idle' }, null, null, false, null, '', null]);
+    hooks.beginRender();
+    const tree = Evaluate({ root: '/w', onDone: vi.fn() }) as ElementNode;
+    await findButton(tree, 'Analyse')?.props?.onClick?.();
+    expect(api.fetchPosting).not.toHaveBeenCalled();
+    expect(store.startTask).toHaveBeenCalledWith('evaluate', expect.objectContaining({ url_line: '', capture: 'jds/pasted_1.md' }), '/w', 'Pasted job description', undefined);
+  });
+});
