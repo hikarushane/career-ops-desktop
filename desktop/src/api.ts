@@ -228,6 +228,15 @@ export type TaskOutputEvent = {
   data: string;
 };
 
+export type TaskEvent = {
+  task_id: string;
+  kind: 'status' | 'tool' | 'text' | 'result';
+  summary: string;
+  tool: string | null;
+  target: string | null;
+  is_error: boolean | null;
+};
+
 export type TaskOutcome = { ok: boolean; detail: string; artifacts: string[] };
 
 export type TaskFinishedEvent = {
