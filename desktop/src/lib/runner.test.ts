@@ -1,16 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import * as runner from './runner';
-import type { IntakeExactFileChange, IntakeProposal, TaskFinishedEvent, TaskOutputEvent } from '../api';
+import { generateProfile, runTask } from './runner';
+import type { GenerationResult, TaskFinishedEvent, TaskOutputEvent } from '../api';
 
 const mocks = vi.hoisted(() => {
   const listeners = new Map<string, (event: { payload: unknown }) => void>();
   return {
     invokeRunTask: vi.fn(),
     invokeCancelTask: vi.fn(),
-    bindIntakeProposal: vi.fn(),
-    discardIntakeSession: vi.fn(),
-    getPendingIntakeChanges: vi.fn(),
-    confirmIntakeChanges: vi.fn(),
+    getGenerationResult: vi.fn(),
     getPreferredProvider: vi.fn(),
     listeners,
     listen: vi.fn(async (event: string, callback: (event: { payload: unknown }) => void) => {
@@ -26,52 +23,28 @@ vi.mock('../api', async (importOriginal) => {
     ...actual,
     runTask: mocks.invokeRunTask,
     cancelTask: mocks.invokeCancelTask,
-    bindIntakeProposal: mocks.bindIntakeProposal,
-    discardIntakeSession: mocks.discardIntakeSession,
-    getPendingIntakeChanges: mocks.getPendingIntakeChanges,
-    confirmIntakeChanges: mocks.confirmIntakeChanges,
+    getGenerationResult: mocks.getGenerationResult,
   };
 });
 vi.mock('@tauri-apps/api/event', () => ({ listen: mocks.listen }));
 vi.mock('./providers', () => ({ getPreferredProvider: mocks.getPreferredProvider }));
 
-const parseIntakeProposal = (runner as unknown as {
-  parseIntakeProposal: (output: string) => IntakeProposal;
-}).parseIntakeProposal;
-
-const applyIntakeProposal = (runner as unknown as {
-  applyIntakeProposal: (
-    root: string,
-    intakeSessionId: string,
-    approvedIds: string[],
-  ) => Promise<{ applied: boolean; exactChanges: IntakeExactFileChange[] }>;
-}).applyIntakeProposal;
-
-const confirmIntakeProposal = (runner as unknown as {
-  confirmIntakeProposal: (
-    intakeSessionId: string,
-  ) => Promise<{ applied: true; committedSourcePaths: string[] }>;
-}).confirmIntakeProposal;
-
-const previewIntakeProposal = (runner as unknown as {
-  previewIntakeProposal: (root: string) => Promise<{
-    proposal: IntakeProposal;
-    intakeSessionId: string;
-  }>;
-}).previewIntakeProposal;
+const completeResult: GenerationResult = {
+  taskId: 'task-1',
+  complete: true,
+  files: [
+    { path: 'cv.md', content: '# CV\n', valid: true, issue: null },
+    { path: 'config/profile.yml', content: 'candidate: {}\n', valid: true, issue: null },
+    { path: 'modes/_profile.md', content: '# Profile\n', valid: true, issue: null },
+    { path: 'portals.yml', content: 'title_filter: {}\n', valid: true, issue: null },
+  ],
+};
 
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.listeners.clear();
-  mocks.invokeRunTask.mockResolvedValue({ task_id: 'task-1', intake_session_id: 'intake-1' });
-  mocks.bindIntakeProposal.mockResolvedValue(undefined);
-  mocks.discardIntakeSession.mockResolvedValue(undefined);
-  mocks.getPendingIntakeChanges.mockResolvedValue([{
-    targetFile: 'cv.md',
-    beforeContent: '# CV\n',
-    afterContent: '# CV\nSenior Engineer\n',
-  }]);
-  mocks.confirmIntakeChanges.mockResolvedValue(['work/review.txt']);
+  mocks.invokeRunTask.mockResolvedValue({ task_id: 'task-1' });
+  mocks.getGenerationResult.mockResolvedValue(completeResult);
   mocks.getPreferredProvider.mockResolvedValue({
     id: 'claude',
     displayName: 'Claude Code',
@@ -81,226 +54,90 @@ beforeEach(() => {
   });
 });
 
+function emit(event: string, payload: unknown) {
+  mocks.listeners.get(event)?.({ payload });
+}
+
 async function finishTask(success = true) {
   await vi.waitFor(() => expect(mocks.listeners.has('task-finished')).toBe(true));
-  mocks.listeners.get('task-finished')?.({
-    payload: {
-      task_id: 'task-1',
-      exit_code: success ? 0 : 1,
-      success,
-    } satisfies TaskFinishedEvent,
-  });
+  emit('task-finished', { task_id: 'task-1', exit_code: success ? 0 : 1, success } satisfies TaskFinishedEvent);
 }
 
-async function emitOutput(data: string) {
+async function emitOutput(stream: 'stdout' | 'stderr', data: string) {
   await vi.waitFor(() => expect(mocks.listeners.has('task-output')).toBe(true));
-  mocks.listeners.get('task-output')?.({
-    payload: {
-      task_id: 'task-1',
-      stream: 'stdout',
-      data,
-    } satisfies TaskOutputEvent,
-  });
+  emit('task-output', { task_id: 'task-1', stream, data } satisfies TaskOutputEvent);
 }
 
-describe('intake proposal protocol', () => {
-  it('returns a validated proposal from the delimited provider response', () => {
-    const output = `provider preamble
----CAREEROPS_INTAKE_PROPOSAL_START---
-{"items":[{"id":"work-1","targetFile":"cv.md","field":"Experience","proposedValue":"Led a migration","sources":["work/review.txt"]}],"sourcePaths":["work/review.txt"]}
----CAREEROPS_INTAKE_PROPOSAL_END---`;
-
-    expect(parseIntakeProposal(output)).toEqual({
-      items: [{
-        id: 'work-1',
-        targetFile: 'cv.md',
-        field: 'Experience',
-        proposedValue: 'Led a migration',
-        sources: ['work/review.txt'],
-      }],
-      sourcePaths: ['work/review.txt'],
-    });
-  });
-
-  it('rejects malformed provider output with a retryable error', () => {
-    expect(() => parseIntakeProposal('not the intake protocol')).toThrow(/try again/i);
-  });
-
-  it('rejects source paths that could escape documents', () => {
-    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
-{"items":[{"id":"bad-1","targetFile":"cv.md","field":"Experience","proposedValue":"value","sources":["../config/profile.yml"]}],"sourcePaths":["../config/profile.yml"]}
----CAREEROPS_INTAKE_PROPOSAL_END---`;
-
-    expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
-  });
-
-  it('rejects a conflict whose proposed value disagrees with the item', () => {
-    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
-{"items":[{"id":"bad-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"conflict":{"existingValue":"Engineer","proposedValue":"Principal Engineer"}}],"sourcePaths":["work/review.txt"]}
----CAREEROPS_INTAKE_PROPOSAL_END---`;
-
-    expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
-  });
-
-  it('rejects duplicate proposal end delimiters', () => {
-    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
-{"items":[],"sourcePaths":[]}
----CAREEROPS_INTAKE_PROPOSAL_END---
----CAREEROPS_INTAKE_PROPOSAL_END---`;
-
-    expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
-  });
-
-  it('rejects an end delimiter before an otherwise valid proposal', () => {
-    const output = `---CAREEROPS_INTAKE_PROPOSAL_END---
----CAREEROPS_INTAKE_PROPOSAL_START---
-{"items":[],"sourcePaths":[]}
----CAREEROPS_INTAKE_PROPOSAL_END---`;
-
-    expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
-  });
-
-  it.each([
-    '{"items":[{"id":"work-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"unexpected":true}],"sourcePaths":["work/review.txt"]}',
-    '{"items":[{"id":"work-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"conflict":{"existingValue":"Engineer","proposedValue":"Senior Engineer","unexpected":true}}],"sourcePaths":["work/review.txt"]}',
-  ])('rejects unknown intake proposal item fields', (json) => {
-    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
-${json}
----CAREEROPS_INTAKE_PROPOSAL_END---`;
-
-    expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
-  });
-
-  it('treats an explicit null conflict as no conflict', () => {
-    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
-{"items":[{"id":"cv-1","targetFile":"cv.md","field":"Experience","proposedValue":"Led a migration","sources":["cv/cv.md"],"conflict":null}],"sourcePaths":["cv/cv.md"]}
----CAREEROPS_INTAKE_PROPOSAL_END---`;
-
-    expect(parseIntakeProposal(output)).toEqual({
-      items: [{
-        id: 'cv-1',
-        targetFile: 'cv.md',
-        field: 'Experience',
-        proposedValue: 'Led a migration',
-        sources: ['cv/cv.md'],
-      }],
-      sourcePaths: ['cv/cv.md'],
-    });
-  });
-
-  it('strips unknown top-level fields such as provider notes', () => {
-    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
-{"items":[],"sourcePaths":["cv/Resume.html"],"note":"HTML resume found but summarized here"}
----CAREEROPS_INTAKE_PROPOSAL_END---`;
-
-    expect(parseIntakeProposal(output)).toEqual({
-      items: [],
-      sourcePaths: ['cv/Resume.html'],
-    });
-  });
-});
-
-describe('reviewed intake apply gate', () => {
-  it('does not invoke intake-apply when zero proposals are approved', async () => {
-    await expect(applyIntakeProposal('/workspace', 'intake-1', [])).resolves.toEqual({
-      applied: false,
-      exactChanges: [],
-    });
-
-    expect(mocks.invokeRunTask).not.toHaveBeenCalled();
-  });
-
-  it('supplies only the bound session and selected proposal IDs to intake-apply', async () => {
-    const applying = applyIntakeProposal('/workspace', 'intake-1', ['research-1']);
-
-    await vi.waitFor(() => expect(mocks.invokeRunTask).toHaveBeenCalledOnce());
-    const input = mocks.invokeRunTask.mock.calls[0][2] as Record<string, string>;
-    expect(JSON.parse(input.approvedProposalIds)).toEqual(['research-1']);
-    expect(input.intakeSessionId).toBe('intake-1');
-    expect(input).not.toHaveProperty('selectedProposal');
-    expect(input).not.toHaveProperty('mergedSourcePaths');
-
-    await finishTask();
-    await applying;
-  });
-
-  it('returns exact candidate bytes without confirming them', async () => {
-    const applying = applyIntakeProposal('/workspace', 'intake-1', ['research-1']);
-
-    await finishTask();
-
-    await expect(applying).resolves.toEqual({
-      applied: false,
-      exactChanges: [{
-        targetFile: 'cv.md',
-        beforeContent: '# CV\n',
-        afterContent: '# CV\nSenior Engineer\n',
-      }],
-    });
-    expect(mocks.getPendingIntakeChanges).toHaveBeenCalledWith('intake-1');
-    expect(mocks.confirmIntakeChanges).not.toHaveBeenCalled();
-  });
-
-  it('promotes only through the separate exact confirmation command', async () => {
-    await expect(confirmIntakeProposal('intake-1')).resolves.toEqual({
-      applied: true,
-      committedSourcePaths: ['work/review.txt'],
-    });
-    expect(mocks.confirmIntakeChanges).toHaveBeenCalledWith('intake-1');
-  });
-});
-
-describe('intake preview session', () => {
+describe('runTask', () => {
   it('buffers provider events emitted before the task-start response resolves', async () => {
+    const output: string[] = [];
+    const finished = vi.fn();
     mocks.invokeRunTask.mockImplementationOnce(async () => {
-      if (!mocks.listeners.has('task-output') || !mocks.listeners.has('task-finished')) {
-        throw new Error('runner subscribed too late');
-      }
-      mocks.listeners.get('task-output')?.({
-        payload: {
-          task_id: 'task-1',
-          stream: 'stdout',
-          data: `---CAREEROPS_INTAKE_PROPOSAL_START---
-{"items":[],"sourcePaths":[]}
----CAREEROPS_INTAKE_PROPOSAL_END---`,
-        } satisfies TaskOutputEvent,
-      });
-      mocks.listeners.get('task-finished')?.({
-        payload: { task_id: 'task-1', exit_code: 0, success: true } satisfies TaskFinishedEvent,
-      });
-      return { task_id: 'task-1', intake_session_id: 'intake-1' };
+      emit('task-output', { task_id: 'task-1', stream: 'stdout', data: 'early' } satisfies TaskOutputEvent);
+      emit('task-finished', { task_id: 'task-1', exit_code: 0, success: true } satisfies TaskFinishedEvent);
+      return { task_id: 'task-1' };
     });
 
-    await expect(previewIntakeProposal('/workspace')).resolves.toEqual({
-      proposal: { items: [], sourcePaths: [] },
-      intakeSessionId: 'intake-1',
+    await runTask('scan', {}, '/workspace', {
+      onOutput: (_stream, data) => output.push(data),
+      onFinished: finished,
     });
-    expect(mocks.bindIntakeProposal).toHaveBeenCalledWith('intake-1', { items: [], sourcePaths: [] });
+
+    expect(output).toEqual(['early']);
+    expect(finished).toHaveBeenCalledWith(0, true);
   });
+});
 
-  it('runs one intake-preview task and returns its validated proposal', async () => {
-    const previewing = previewIntakeProposal('/workspace');
-    await emitOutput(`---CAREEROPS_INTAKE_PROPOSAL_START---
-{"items":[],"sourcePaths":[]}
----CAREEROPS_INTAKE_PROPOSAL_END---`);
+describe('generateProfile', () => {
+  it('runs one profile-generate task with the preferences and language, then returns the staging result', async () => {
+    const written: string[] = [];
+    const generating = generateProfile('/workspace', '- Regions: Germany', 'zh-TW', {
+      onFileWritten: (file) => written.push(file),
+    });
+
+    await vi.waitFor(() => expect(mocks.listeners.has('generation-progress')).toBe(true));
+    emit('generation-progress', { task_id: 'task-1', file: 'cv.md' });
+    emit('generation-progress', { task_id: 'task-9', file: 'portals.yml' });
     await finishTask();
 
-    await expect(previewing).resolves.toEqual({
-      proposal: { items: [], sourcePaths: [] },
-      intakeSessionId: 'intake-1',
-    });
+    await expect(generating).resolves.toEqual(completeResult);
     expect(mocks.invokeRunTask).toHaveBeenCalledOnce();
-    expect(mocks.invokeRunTask.mock.calls[0][0]).toBe('intake-preview');
-    expect(mocks.bindIntakeProposal).toHaveBeenCalledWith('intake-1', { items: [], sourcePaths: [] });
+    expect(mocks.invokeRunTask.mock.calls[0].slice(0, 4)).toEqual([
+      'profile-generate',
+      'claude',
+      { preferences: '- Regions: Germany', analysisLanguage: 'zh-TW' },
+      '/workspace',
+    ]);
+    expect(written).toEqual(['cv.md']);
+    expect(mocks.getGenerationResult).toHaveBeenCalledWith('task-1');
   });
 
-  it('keeps malformed output retryable instead of invoking apply', async () => {
-    const previewing = previewIntakeProposal('/workspace');
-    await emitOutput('malformed provider output');
-    await finishTask();
+  it('still returns a partial result when the provider exits non-zero but wrote files', async () => {
+    const partial: GenerationResult = {
+      ...completeResult,
+      complete: false,
+      files: completeResult.files.map((file, index) => (index === 3 ? { ...file, content: null, valid: false, issue: 'missing' } : file)),
+    };
+    mocks.getGenerationResult.mockResolvedValue(partial);
 
-    await expect(previewing).rejects.toThrow(/try again/i);
-    expect(mocks.invokeRunTask).toHaveBeenCalledOnce();
-    expect(mocks.discardIntakeSession).toHaveBeenCalledWith('intake-1');
+    const generating = generateProfile('/workspace', '', 'en');
+    await emitOutput('stderr', 'provider crashed late');
+    await finishTask(false);
+
+    await expect(generating).resolves.toEqual(partial);
+  });
+
+  it('rejects with the provider stderr when nothing was written', async () => {
+    mocks.getGenerationResult.mockResolvedValue({
+      taskId: 'task-1',
+      complete: false,
+      files: completeResult.files.map((file) => ({ ...file, content: null, valid: false, issue: 'missing' })),
+    });
+
+    const generating = generateProfile('/workspace', '', 'en');
+    await emitOutput('stderr', 'Not logged in. Please run /login');
+    await finishTask(false);
+
+    await expect(generating).rejects.toThrow(/authentication failed/i);
   });
 });

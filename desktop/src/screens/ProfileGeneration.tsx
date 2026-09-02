@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  previewIntakeProposal,
-  applyIntakeProposal,
-  confirmIntakeProposal,
-} from '../lib/runner';
+import { generateProfile } from '../lib/runner';
 
 type Props = {
   root: string;
@@ -28,20 +24,7 @@ export default function ProfileGeneration({ root, onComplete }: Props) {
     }, 2400);
 
     try {
-      const session = await previewIntakeProposal(root);
-
-      if (session.proposal.items.length === 0) {
-        clearInterval(timer);
-        setActiveIndex(PROFILE_FILES.length);
-        setGenerating(false);
-        setTimeout(onComplete, 500);
-        return;
-      }
-
-      const allIds = session.proposal.items.map((item) => item.id);
-      await applyIntakeProposal(root, session.intakeSessionId, allIds);
-      await confirmIntakeProposal(session.intakeSessionId);
-
+      await generateProfile(root, '', 'en');
       clearInterval(timer);
       setActiveIndex(PROFILE_FILES.length);
       setGenerating(false);

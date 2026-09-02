@@ -273,26 +273,13 @@ describe('installed runtime package inputs', () => {
   });
 });
 
-describe('reviewed intake release isolation', () => {
-  it('uses the packaged macOS sandbox and does not ship an unproven Linux sandbox', () => {
-    const conf = readJson(join(DESKTOP, 'src-tauri', 'tauri.conf.json'));
+describe('generation staging isolation', () => {
+  it('runs the provider in a disposable staging directory, not the workspace', () => {
     const runner = readFileSync(join(DESKTOP, 'src-tauri', 'src', 'runner.rs'), 'utf8');
 
-    expect(runner).toContain('Command::new("/usr/bin/sandbox-exec")');
-    expect(runner).toContain('because it does not include a supported isolation runtime');
-    expect(conf.bundle?.externalBin ?? []).not.toEqual(expect.arrayContaining([
-      'bwrap',
-      'binaries/bwrap',
-    ]));
-    expect(runner).not.toMatch(/install (?:bubblewrap|bwrap)/i);
-  });
-
-  it('keeps unsupported packaged platforms fail-closed with no files changed', () => {
-    const runner = readFileSync(join(DESKTOP, 'src-tauri', 'src', 'runner.rs'), 'utf8');
-
-    expect(runner).toContain('#[cfg(not(any(target_os = "macos", target_os = "linux")))]');
-    expect(runner).toContain('Err(INTAKE_ISOLATION_UNAVAILABLE.to_owned())');
-    expect(runner).toContain('No files were changed; retry only after updating');
+    expect(runner).toContain('create_generation_staging');
+    expect(runner).toContain('careerops-generate-');
+    expect(runner).toContain('apply_generation_at');
   });
 });
 

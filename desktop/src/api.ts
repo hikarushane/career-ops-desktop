@@ -159,27 +159,24 @@ export type StagedIntakeFile = {
   duplicate: boolean;
 };
 
-export type IntakeProposalItem = {
-  id: string;
-  targetFile: 'cv.md' | 'config/profile.yml' | 'modes/_profile.md';
-  field: string;
-  proposedValue: string;
-  sources: string[];
-  conflict?: {
-    existingValue: string;
-    proposedValue: string;
-  };
+export type GenerationTarget = 'cv.md' | 'config/profile.yml' | 'modes/_profile.md' | 'portals.yml';
+
+export type GenerationFile = {
+  path: GenerationTarget;
+  content: string | null;
+  valid: boolean;
+  issue: string | null;
 };
 
-export type IntakeProposal = {
-  items: IntakeProposalItem[];
-  sourcePaths: string[];
+export type GenerationResult = {
+  taskId: string;
+  files: GenerationFile[];
+  complete: boolean;
 };
 
-export type IntakeExactFileChange = {
-  targetFile: IntakeProposalItem['targetFile'];
-  beforeContent: string | null;
-  afterContent: string;
+export type GenerationProgressEvent = {
+  task_id: string;
+  file: GenerationTarget;
 };
 
 export function isError(r: { ok: boolean }): r is SidecarError {
@@ -219,12 +216,10 @@ export type TaskType =
   | 'interview-plan'
   | 'interview-practice'
   | 'interview-debrief'
-  | 'intake-preview'
-  | 'intake-apply';
+  | 'profile-generate';
 
 export type TaskStarted = {
   task_id: string;
-  intake_session_id?: string;
 };
 
 export type TaskOutputEvent = {
@@ -287,20 +282,16 @@ export function cancelTask(taskId: string) {
   return invoke<void>('cancel_task', { taskId });
 }
 
-export function bindIntakeProposal(intakeSessionId: string, proposal: IntakeProposal) {
-  return invoke<void>('bind_intake_proposal', { intakeSessionId, proposal });
+export function getGenerationResult(taskId: string) {
+  return invoke<GenerationResult>('generation_result', { taskId });
 }
 
-export function getPendingIntakeChanges(intakeSessionId: string) {
-  return invoke<IntakeExactFileChange[]>('pending_intake_changes', { intakeSessionId });
+export function applyGeneration(taskId: string) {
+  return invoke<string[]>('apply_generation', { taskId });
 }
 
-export function confirmIntakeChanges(intakeSessionId: string) {
-  return invoke<string[]>('confirm_intake_changes', { intakeSessionId });
-}
-
-export function discardIntakeSession(intakeSessionId: string) {
-  return invoke<void>('discard_intake_session', { intakeSessionId });
+export function discardGeneration(taskId: string) {
+  return invoke<void>('discard_generation', { taskId });
 }
 
 export function getDefaultWorkspacePath(): Promise<string> {
