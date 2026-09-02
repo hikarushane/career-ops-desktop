@@ -46,6 +46,23 @@ describe('taskStore', () => {
     expect(getTasks()).toHaveLength(0);
   });
 
+  it('stores the args and languageContext a task was started with', async () => {
+    const languageContext = { analysisLanguage: 'en' };
+    const id = await startTask('evaluate', { url: 'https://x', capture: 'jds/x.md' }, '/w', 'Acme', languageContext);
+    const task = getTask(id)!;
+    expect(task.args).toEqual({ url: 'https://x', capture: 'jds/x.md' });
+    expect(task.languageContext).toEqual(languageContext);
+  });
+
+  it('caps rawLog at the last 2000 lines', async () => {
+    const id = await startTask('scan', {}, '/w', 'Scan');
+    for (let i = 0; i < 2100; i++) emit('task-output', { task_id: id, stream: 'stdout', data: `line-${i}` });
+    const task = getTask(id)!;
+    expect(task.rawLog).toHaveLength(2000);
+    expect(task.rawLog[0]).toBe('line-100');
+    expect(task.rawLog[1999]).toBe('line-2099');
+  });
+
   it('dismiss is a no-op for a still-running task', async () => {
     const id = await startTask('evaluate', { url: 'https://x' }, '/w', 'Acme');
     dismiss(id);

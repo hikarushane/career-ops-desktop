@@ -10,9 +10,11 @@ export type TaskRecord = {
   taskId: string; taskType: TaskType; label: string; startedAt: number;
   state: 'running' | 'done' | 'failed'; events: TaskEvent[]; rawLog: string[];
   outcome: TaskOutcome | null; exitCode: number | null;
+  args: Record<string, string>; languageContext?: LanguageContext;
 };
 
 const MAX_EVENTS = 500;
+const MAX_RAW_LOG_LINES = 2000;
 let tasks: TaskRecord[] = [];
 let runningCache: TaskRecord[] = [];
 const listeners = new Set<() => void>();
@@ -40,7 +42,10 @@ function apply(name: string, payload: unknown) {
   if (name === 'task-event') {
     next = { ...task, events: [...task.events.slice(-(MAX_EVENTS - 1)), payload as TaskEvent] };
   } else if (name === 'task-output') {
-    next = { ...task, rawLog: [...task.rawLog, (payload as TaskOutputEvent).data] };
+    next = {
+      ...task,
+      rawLog: [...task.rawLog, (payload as TaskOutputEvent).data].slice(-MAX_RAW_LOG_LINES),
+    };
   } else {
     const fin = payload as TaskFinishedEvent;
     next = { ...task, state: fin.success ? 'done' : 'failed', outcome: fin.outcome, exitCode: fin.exit_code };
@@ -63,6 +68,10 @@ export function initTaskStore(): Promise<void> {
             taskId: snap.task_id, taskType: snap.task_type, label: snap.label, startedAt: snap.started_at,
             state: snap.state, events: [], rawLog: [], exitCode: null,
             outcome: snap.state === 'running' ? null : { ok: snap.state === 'done', detail: snap.last_summary, artifacts: [] },
+            // Hydrated snapshots come from the Rust-side task registry, which
+            // does not persist the original args/languageContext — retry on
+            // a hydrated task falls back to whatever the screen re-derives.
+            args: {},
           }));
         tasks = [...tasks, ...hydrated];
         notify();
@@ -86,7 +95,10 @@ export async function startTask(
   const [model, effort, fastMode] = await Promise.all([getModel(), getEffort(), getFastMode()]);
   const started = await invokeRunTask(taskType, provider.id, args, root, languageContext, { model, effort, fastMode }, label);
   tasks = [
-    { taskId: started.task_id, taskType, label, startedAt: Date.now(), state: 'running', events: [], rawLog: [], outcome: null, exitCode: null },
+    {
+      taskId: started.task_id, taskType, label, startedAt: Date.now(), state: 'running',
+      events: [], rawLog: [], outcome: null, exitCode: null, args, languageContext,
+    },
     ...tasks,
   ];
   notify();
