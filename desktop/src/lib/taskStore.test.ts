@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TaskSnapshot } from '../api';
 
 const mocks = vi.hoisted(() => {
   const listeners = new Map<string, (e: { payload: unknown }) => void>();
@@ -7,7 +8,7 @@ const mocks = vi.hoisted(() => {
     listen: vi.fn(async (name: string, cb: (e: { payload: unknown }) => void) => { listeners.set(name, cb); return () => {}; }),
     invokeRunTask: vi.fn(async () => ({ task_id: 'task-1' })),
     invokeCancelTask: vi.fn(async () => {}),
-    listTasks: vi.fn(async () => []),
+    listTasks: vi.fn(async (): Promise<TaskSnapshot[]> => []),
     getPreferredProvider: vi.fn(async () => ({ id: 'claude', state: 'ready' })),
     getModel: vi.fn(async () => ''), getEffort: vi.fn(async () => 'medium'), getFastMode: vi.fn(async () => false),
   };
@@ -43,5 +44,45 @@ describe('taskStore', () => {
     emit('task-finished', { task_id: id, exit_code: 0, success: true, outcome: { ok: true, detail: 'Pipeline updated.', artifacts: ['data/pipeline.md'] } });
     dismiss(id);
     expect(getTasks()).toHaveLength(0);
+  });
+
+  it('dismiss is a no-op for a still-running task', async () => {
+    const id = await startTask('evaluate', { url: 'https://x' }, '/w', 'Acme');
+    dismiss(id);
+    expect(getTask(id)).not.toBeNull();
+    expect(getTasks()).toHaveLength(1);
+  });
+
+  it('replays task events buffered while hydrating from the backend registry', async () => {
+    // Simulate a webview reload: the store re-initialises from `listTasks()`
+    // while a backend task is still running, and that task finishes before
+    // `listTasks()` resolves. The finished event must not be lost.
+    __resetForTests();
+    mocks.listeners.clear();
+    let resolveListTasks!: (snapshots: TaskSnapshot[]) => void;
+    mocks.listTasks.mockImplementationOnce(
+      () => new Promise<TaskSnapshot[]>((resolve) => { resolveListTasks = resolve; }),
+    );
+
+    const initPromise = initTaskStore();
+    // Let the microtask queue drain past `await Promise.all([...listen])` so
+    // `listTasks()` has actually been invoked (and `resolveListTasks` bound)
+    // before we emit — `listen()`'s own callback registration happens
+    // synchronously, but the `await` in front of it still yields.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    emit('task-finished', {
+      task_id: 'task-7',
+      exit_code: 0,
+      success: true,
+      outcome: { ok: true, detail: 'Scan complete.', artifacts: [] },
+    });
+    resolveListTasks([
+      { task_id: 'task-7', task_type: 'scan', label: 'Scan', started_at: 1, state: 'running', last_summary: '' },
+    ]);
+    await initPromise;
+
+    const task = getTask('task-7')!;
+    expect(task.state).toBe('done');
+    expect(task.outcome?.detail).toBe('Scan complete.');
   });
 });

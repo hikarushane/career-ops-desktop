@@ -26,6 +26,11 @@ function notify() {
 }
 function find(id: string) { return tasks.find((t) => t.taskId === id); }
 
+function drainPending() {
+  const replay = pending.splice(0);
+  for (const p of replay) apply(p.name, p.payload);
+}
+
 function apply(name: string, payload: unknown) {
   const id = (payload as { task_id: string }).task_id;
   const index = tasks.findIndex((t) => t.taskId === id);
@@ -51,14 +56,21 @@ export function initTaskStore(): Promise<void> {
       await Promise.all(['task-event', 'task-output', 'task-finished'].map((name) =>
         listen(name, (e) => apply(name, e.payload))));
       try {
-        for (const snap of await listTasks()) {
-          if (!find(snap.task_id)) tasks.push({
+        const snapshots = await listTasks();
+        const hydrated = snapshots
+          .filter((snap) => !find(snap.task_id))
+          .map((snap): TaskRecord => ({
             taskId: snap.task_id, taskType: snap.task_type, label: snap.label, startedAt: snap.started_at,
             state: snap.state, events: [], rawLog: [], exitCode: null,
             outcome: snap.state === 'running' ? null : { ok: snap.state === 'done', detail: snap.last_summary, artifacts: [] },
-          });
-        }
+          }));
+        tasks = [...tasks, ...hydrated];
         notify();
+        // Events for these tasks may have arrived (and been buffered) while
+        // `listTasks()` was still in flight; replay them now that the tasks
+        // they belong to exist, so a task that finished mid-hydration doesn't
+        // get stuck showing as running.
+        drainPending();
       } catch { /* registry unavailable in tests */ }
     })();
   }
@@ -78,8 +90,7 @@ export async function startTask(
     ...tasks,
   ];
   notify();
-  const replay = pending.splice(0);
-  for (const p of replay) apply(p.name, p.payload);
+  drainPending();
   return started.task_id;
 }
 
