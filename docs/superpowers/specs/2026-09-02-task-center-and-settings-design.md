@@ -300,3 +300,51 @@ career-data models --provider claude|codex|agy [--probe]
 - 任務跨 app 重啟續跑。
 - Settings 的 Effort 對 agy 的支援。
 - 舊 `IntakeReview.tsx` 等已在前一份 spec 列為刪除的項目。
+
+## 13. 實作驗證結果（2026-09-02）
+
+分支 `release/desktop-v0.5.0`，範圍 `7c7a2379..b15d96ed`（32 commits，15 個 Task + 最終 review 修正波）。
+
+### 自動化測試
+
+| 項目 | 結果 |
+|---|---|
+| `cargo test --lib` | 65 pass（起點 47） |
+| `npx vitest run` | 30 files / 239 tests pass（起點 186） |
+| `npx tsc --noEmit` | clean |
+| `go test ./...` + `go vet ./cmd/career-data/` | pass / clean（新增 fetch-posting、models、pipeline-summary 測試） |
+
+### Build、安裝、sidecar smoke
+
+| 項目 | 結果 |
+|---|---|
+| `node desktop/scripts/build-sidecar.mjs` + `npm run tauri build` | `.app` / `.dmg` 產出成功；updater 簽章步驟因本 shell 無 `TAURI_SIGNING_PRIVATE_KEY` 而略過（不影響 app bundle；正式 release 需在有金鑰的環境重跑） |
+| 安裝到 `/Applications/CareerOps.app` 並啟動 | OK |
+| `fetch-posting` LinkedIn `jobs/view` URL | `ok:true`、`source:linkedin-guest`、標題與描述非空 |
+| `fetch-posting` 內容過少的頁面 | `ok:false`、`error:"empty"` |
+| `models --provider claude`（未探測） | 4 個候選，`available:null` |
+| `models --provider agy` | 14 個 model，`available:true` |
+| `pipeline-summary` | `pending:0, processed:0, failed:0` |
+
+### 審查
+
+每個 Task 一輪獨立 spec + 品質審查，Task 2/3/6/7/8/9/10/11/12/13/14 各經 1 到 2 輪修正；最終 whole-branch review「With fixes」，8 個 Important 與 4 個 minor 於修正波 `c44854e8..b15d96ed` 處理完畢並通過 scoped re-review。所有 ruling 與 deferred minor 記錄於本次 session 的 SDD ledger，摘要如下。
+
+### 與 spec 的已知差異（皆為 ruling）
+
+- §5.1：Go stdlib 無 HTML parser，採用 `golang.org/x/net/html`（含 charset 解碼）。
+- §4.3：`watched_dirs` 為空的 task type（如 `deep`）保留 exit-code 語意；`pdf` 監看 `output/`；`interview-prep/` 遞迴且略過 symlink。
+- §7.1：探測結果三態（`true` / `false` / `null` 未驗證）；`null` 在 UI 顯示「(unverified)」且可選。
+- §7.2：model 與 fast mode 改為每個 provider 各自儲存（`ai-model.<provider>`），舊的全域鍵一次性遷移。
+- §4.5：AI 說明（`text` 事件）只在失敗時顯示；純文字 provider 以最後 12 行 raw 輸出回退。
+- §10：`fast_mode_state: off` 提示未實作（後續）。
+
+### 未完成 / 交由使用者手動驗證
+
+GUI walkthrough（Settings AI 下拉、貼 LinkedIn URL 走完整評估、切頁後 chip 回到任務、onboarding 四項）未自動化：computer-use 無法點擊 app 視窗，且完整評估會消耗使用者的 AI 額度。
+
+### 後續（已記錄，未納入本輪）
+
+- Rust 任務登錄不保存 args，webview reload 後 Retry 會以空 args 失敗；`cancel_task` 只 kill 直接 pid（process-group 函式仍未接線，4 個 dead_code warning 早於本分支）。
+- `getEffort` 仍為全域鍵；探測費用在 Settings 未提示；`.eval-input` focus ring；`home-actions` 三欄在 800px 偏窄。
+- README 需更新（見 gate 提案）。
