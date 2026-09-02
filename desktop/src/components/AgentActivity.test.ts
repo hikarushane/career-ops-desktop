@@ -44,4 +44,12 @@ describe('AgentActivity', () => {
     const text = textContent(AgentActivity({ task: textOnly, onCancel: vi.fn(), onRetry: vi.fn() }));
     expect(text).toMatch(new RegExp(`· ${'x'.repeat(80)}…`));
   });
+
+  it('does not show raw output when task has text events but no status/tool events', () => {
+    const textEvents = { ...base, events: [{ task_id: 't', kind: 'text' as const, summary: 'Hello', tool: null, target: null, is_error: null }], rawLog: ['{"type":"assistant"}'] };
+    const text = textContent(AgentActivity({ task: textEvents, onCancel: vi.fn(), onRetry: vi.fn() }));
+    expect(text).not.toMatch(/Provider output \(raw\)/);
+    expect(text).not.toMatch(/{"type"/);
+    expect(text).toMatch(/Waiting for the AI provider to start/);
+  });
 });

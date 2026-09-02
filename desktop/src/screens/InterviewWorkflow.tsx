@@ -92,9 +92,13 @@ export default function InterviewWorkflow({ root, mode, company, role, initialTa
           <small>Practice, planning, and debrief material follow the job language; analysis stays {languages.analysisLanguage}.</small>
         </label>
       )}
-      {!taskId && <button className="btn-primary" onClick={start} disabled={starting || modeAlreadyRunning}>Start</button>}
-      {modeAlreadyRunning && (
-        <p className="setup-hint">An interview prep task is already running — open it from the header.</p>
+      {!taskId && (
+        <>
+          <button className="btn-primary" onClick={start} disabled={starting || modeAlreadyRunning}>Start</button>
+          {modeAlreadyRunning && (
+            <p className="setup-hint">An interview prep task is already running — open it from the header.</p>
+          )}
+        </>
       )}
       {startError && <p className="intake-error" role="alert">{startError}</p>}
     </TaskScreen>

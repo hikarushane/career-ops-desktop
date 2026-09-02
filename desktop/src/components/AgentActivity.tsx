@@ -29,11 +29,10 @@ export default function AgentActivity({ task, onCancel, onRetry }: Props) {
   const lastRawLine = task.rawLog.length > 0 ? task.rawLog[task.rawLog.length - 1] : '';
   // Text-only providers (opencode/copilot/qwen/grok) never emit structured
   // status/tool events, so the feed and headline fall back to raw stdout.
-  const hasStructuredActivity = activity.length > 0;
 
   const stateWord = task.state === 'running' ? 'Running' : task.state === 'done' ? 'Done' : 'Failed';
   const summaryText = task.state === 'running'
-    ? (latest ? summarize(latest) : (lastRawLine ? truncate(lastRawLine, 80) : ''))
+    ? (latest ? summarize(latest) : (task.events.length === 0 && lastRawLine ? truncate(lastRawLine, 80) : ''))
     : task.state === 'done'
       ? (task.outcome?.detail ?? '')
       : (task.outcome?.detail ?? `exit code ${task.exitCode ?? 'unknown'}`);
@@ -50,10 +49,10 @@ export default function AgentActivity({ task, onCancel, onRetry }: Props) {
         <blockquote className="agent-last-text">{lastText.summary}</blockquote>
       )}
       <ol className="agent-feed" aria-label="Activity">
-        {hasStructuredActivity && activity.slice(-12).reverse().map((e, i) => (
+        {activity.length > 0 && activity.slice(-12).reverse().map((e, i) => (
           <li key={`${e.summary}-${i}`} className={`agent-feed-item kind-${e.kind}`}>{summarize(e)}</li>
         ))}
-        {!hasStructuredActivity && task.rawLog.length > 0 && (
+        {task.events.length === 0 && task.rawLog.length > 0 && (
           <>
             <li className="agent-feed-heading">Provider output (raw)</li>
             {task.rawLog.slice(-12).reverse().map((line, i) => (
@@ -61,7 +60,7 @@ export default function AgentActivity({ task, onCancel, onRetry }: Props) {
             ))}
           </>
         )}
-        {!hasStructuredActivity && task.rawLog.length === 0 && task.state === 'running' && (
+        {task.events.length > 0 && activity.length === 0 && task.state === 'running' && (
           <li className="agent-feed-item">Waiting for the AI provider to start</li>
         )}
       </ol>
