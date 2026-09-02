@@ -48,6 +48,11 @@ vi.mock('../api', () => ({
   listApplications: vi.fn(),
 }));
 vi.mock('../lib/workspace', () => ({ loadWorkspacePath: vi.fn(), saveWorkspacePath: vi.fn() }));
+vi.mock('../lib/taskStore', () => ({
+  useTasks: () => [],
+  initTaskStore: vi.fn(),
+  dismiss: vi.fn(),
+}));
 
 const mockedOpen = vi.mocked(open);
 const mockedDoctor = vi.mocked(doctor);
