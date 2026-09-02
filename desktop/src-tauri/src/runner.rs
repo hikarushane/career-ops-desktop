@@ -265,9 +265,16 @@ fn list_files(dir: &Path, prefix: &str, out: &mut HashMap<String, std::time::Sys
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_file() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.starts_with('.') {
+                continue;
+            }
+            let rel = format!("{prefix}/{name_str}");
+            if path.is_dir() {
+                list_files(&path, &rel, out);
+            } else if path.is_file() {
                 if let Ok(meta) = entry.metadata() {
-                    let rel = format!("{prefix}/{}", entry.file_name().to_string_lossy());
                     out.insert(rel, meta.modified().unwrap_or(std::time::UNIX_EPOCH));
                 }
             }
@@ -284,6 +291,7 @@ fn watched_dirs(task_type: &str) -> &'static [&'static str] {
     match task_type {
         "evaluate" | "batch" => &["reports"],
         "scan" => &["data"],
+        "pdf" => &["output"],
         t if t.starts_with("interview") => &["interview-prep"],
         _ => &[],
     }
@@ -298,6 +306,9 @@ pub fn snapshot_artifacts(workspace: &Path, task_type: &str) -> ArtifactSnapshot
 }
 
 pub fn judge_outcome(workspace: &Path, task_type: &str, before: &ArtifactSnapshot) -> TaskOutcome {
+    if watched_dirs(task_type).is_empty() {
+        return TaskOutcome { ok: true, detail: "Finished.".into(), artifacts: vec![] };
+    }
     let after = snapshot_artifacts(workspace, task_type);
     let mut artifacts: Vec<String> = after
         .files
@@ -1025,11 +1036,6 @@ pub fn run_task(
         *c += 1;
         format!("task-{c}")
     };
-    state.register(
-        task_id.clone(),
-        &input.task_type,
-        input.label.as_deref().unwrap_or(&input.task_type),
-    );
 
     let mut cmd_args = cmd_args_base;
     cmd_args.push(prompt);
@@ -1086,6 +1092,11 @@ pub fn run_task(
         let mut pids = state.pids.lock().map_err(|e| e.to_string())?;
         pids.insert(task_id.clone(), pid);
     }
+    state.register(
+        task_id.clone(),
+        &input.task_type,
+        input.label.as_deref().unwrap_or(&input.task_type),
+    );
 
     let stdout_thread = spawn_output_pump(app.clone(), task_id.clone(), "stdout", child.stdout.take());
     let stderr_thread = spawn_output_pump(app.clone(), task_id.clone(), "stderr", child.stderr.take());
@@ -1568,6 +1579,37 @@ mod tests {
         let out = judge_outcome(dir.path(), "batch", &before);
         assert!(out.ok);
         assert!(out.detail.contains("Processed 1 of 2"));
+    }
+
+    #[test]
+    fn unwatched_task_types_keep_exit_code_semantics() {
+        let dir = tempfile::tempdir().unwrap();
+        let before = snapshot_artifacts(dir.path(), "deep");
+        let out = judge_outcome(dir.path(), "deep", &before);
+        assert!(out.ok);
+    }
+
+    #[test]
+    fn pdf_outcome_requires_a_new_output_file() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("output")).unwrap();
+        let before = snapshot_artifacts(dir.path(), "pdf");
+        let none = judge_outcome(dir.path(), "pdf", &before);
+        assert!(!none.ok);
+        fs::write(dir.path().join("output/x.pdf"), "y").unwrap();
+        let ok = judge_outcome(dir.path(), "pdf", &before);
+        assert!(ok.ok);
+    }
+
+    #[test]
+    fn interview_practice_outcome_finds_nested_session_files() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("interview-prep/sessions")).unwrap();
+        let before = snapshot_artifacts(dir.path(), "interview-practice");
+        fs::write(dir.path().join("interview-prep/sessions/2026-09-02.md"), "notes").unwrap();
+        let ok = judge_outcome(dir.path(), "interview-practice", &before);
+        assert!(ok.ok);
+        assert_eq!(ok.artifacts, vec!["interview-prep/sessions/2026-09-02.md".to_owned()]);
     }
 
     #[test]
