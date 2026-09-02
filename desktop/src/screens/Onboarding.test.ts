@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Onboarding from './Onboarding';
+import { EMPTY_PREFERENCES } from '../lib/jobPreferences';
 
 const hooks = vi.hoisted(() => {
   let state: unknown[] = [];
@@ -31,7 +32,9 @@ type ElementNode = {
   type?: unknown;
   props?: {
     onComplete?: (result?: unknown) => void;
+    onContinue?: () => void;
     onSaved?: () => void;
+    onSkip?: () => void;
     onBack?: () => void;
     children?: unknown;
   };
@@ -64,7 +67,7 @@ function render() {
 
 describe('onboarding reviewed intake step', () => {
   it('runs profile generation after staged background reaches a ready AI provider', () => {
-    hooks.reset(['import', []]);
+    hooks.reset(['import', [], EMPTY_PREFERENCES]);
     const tree = render();
 
     findElement(tree, (el) => Boolean(el.props?.onComplete))?.props?.onComplete?.({
@@ -78,6 +81,10 @@ describe('onboarding reviewed intake step', () => {
     findElement(language, (element) => Boolean(element.props?.onSaved))?.props?.onSaved?.();
     const aiTree = render();
     findElement(aiTree, (el) => Boolean(el.props?.onComplete))?.props?.onComplete?.();
+
+    const prefsTree = render();
+    findElement(prefsTree, (el) => Boolean(el.props?.onContinue))?.props?.onContinue?.();
+
     const genTree = render();
     const gen = findElement(genTree, (el) => (el.type as { name?: string })?.name === 'ProfileGeneration');
 
@@ -88,7 +95,7 @@ describe('onboarding reviewed intake step', () => {
   });
 
   it('skips generating and reaches Ready when no background was staged', () => {
-    hooks.reset(['import', []]);
+    hooks.reset(['import', [], EMPTY_PREFERENCES]);
     const tree = render();
 
     findElement(tree, (el) => Boolean(el.props?.onComplete))?.props?.onComplete?.({ staged: [] });
@@ -97,11 +104,14 @@ describe('onboarding reviewed intake step', () => {
     const aiTree = render();
     findElement(aiTree, (el) => Boolean(el.props?.onComplete))?.props?.onComplete?.();
 
+    const prefsTree = render();
+    findElement(prefsTree, (el) => Boolean(el.props?.onContinue))?.props?.onContinue?.();
+
     expect(textContent(render())).toContain("You're all set");
   });
 
   it('reaches Ready when profile generation completes', () => {
-    hooks.reset(['generating', []]);
+    hooks.reset(['generating', [], EMPTY_PREFERENCES]);
     const tree = render();
     const gen = findElement(tree, (el) => Boolean(el.props?.onComplete));
 
@@ -109,5 +119,13 @@ describe('onboarding reviewed intake step', () => {
     const ready = render();
 
     expect(textContent(ready)).toContain("You're all set");
+  });
+
+  it('skips generation when nothing was staged', () => {
+    hooks.reset(['preferences', [], EMPTY_PREFERENCES]);
+    const tree = render();
+    findElement(tree, (el) => Boolean(el.props?.onContinue))?.props?.onContinue?.();
+    const next = render();
+    expect(textContent(next)).toContain("You're all set");
   });
 });
