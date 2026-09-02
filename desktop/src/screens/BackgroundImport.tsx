@@ -106,7 +106,11 @@ export default function BackgroundImport({ root, onComplete }: Props) {
       })));
       setStaged(results);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not stage the selected files.');
+      setError(
+        typeof reason === 'string' ? reason
+          : reason instanceof Error ? reason.message
+          : 'Could not stage the selected files.',
+      );
     } finally {
       setStaging(false);
     }
@@ -189,7 +193,7 @@ export default function BackgroundImport({ root, onComplete }: Props) {
           onClick={staged ? () => onComplete({ staged }) : continueImport}
           disabled={!staged && (staging || (files.length > 0 && unresolved))}
         >
-          {staged ? 'Continue setup' : staging ? 'Staging...' : files.length > 0 ? 'Continue' : 'Skip for now'}
+          {staged ? 'Continue setup' : staging ? <span className="animated-dots">Staging</span> : files.length > 0 ? 'Continue' : 'Skip for now'}
         </button>
       </div>
     </div>

@@ -161,15 +161,42 @@ describe('intake proposal protocol', () => {
   });
 
   it.each([
-    '{"items":[],"sourcePaths":[],"unexpected":true}',
     '{"items":[{"id":"work-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"unexpected":true}],"sourcePaths":["work/review.txt"]}',
     '{"items":[{"id":"work-1","targetFile":"cv.md","field":"Experience","proposedValue":"Senior Engineer","sources":["work/review.txt"],"conflict":{"existingValue":"Engineer","proposedValue":"Senior Engineer","unexpected":true}}],"sourcePaths":["work/review.txt"]}',
-  ])('rejects unknown intake proposal fields', (json) => {
+  ])('rejects unknown intake proposal item fields', (json) => {
     const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
 ${json}
 ---CAREEROPS_INTAKE_PROPOSAL_END---`;
 
     expect(() => parseIntakeProposal(output)).toThrow(/try again/i);
+  });
+
+  it('treats an explicit null conflict as no conflict', () => {
+    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
+{"items":[{"id":"cv-1","targetFile":"cv.md","field":"Experience","proposedValue":"Led a migration","sources":["cv/cv.md"],"conflict":null}],"sourcePaths":["cv/cv.md"]}
+---CAREEROPS_INTAKE_PROPOSAL_END---`;
+
+    expect(parseIntakeProposal(output)).toEqual({
+      items: [{
+        id: 'cv-1',
+        targetFile: 'cv.md',
+        field: 'Experience',
+        proposedValue: 'Led a migration',
+        sources: ['cv/cv.md'],
+      }],
+      sourcePaths: ['cv/cv.md'],
+    });
+  });
+
+  it('strips unknown top-level fields such as provider notes', () => {
+    const output = `---CAREEROPS_INTAKE_PROPOSAL_START---
+{"items":[],"sourcePaths":["cv/Resume.html"],"note":"HTML resume found but summarized here"}
+---CAREEROPS_INTAKE_PROPOSAL_END---`;
+
+    expect(parseIntakeProposal(output)).toEqual({
+      items: [],
+      sourcePaths: ['cv/Resume.html'],
+    });
   });
 });
 

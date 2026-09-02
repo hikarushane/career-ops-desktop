@@ -11,6 +11,7 @@ import type { IntakeExactFileChange } from '../api';
 type Props = { root: string; onBack: () => void; onComplete: () => void };
 
 function errorMessage(reason: unknown, fallback: string): string {
+  if (typeof reason === 'string') return reason;
   return reason instanceof Error ? reason.message : fallback;
 }
 
@@ -119,7 +120,7 @@ export default function IntakeReview({ root, onBack, onComplete }: Props) {
     return (
       <div className="setup-screen" role="status">
         <h1>Review your background</h1>
-        <p className="setup-subtitle">Scanning all new and changed evidence together…</p>
+        <p className="setup-subtitle animated-dots">Scanning your background</p>
       </div>
     );
   }

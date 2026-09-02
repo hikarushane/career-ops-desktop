@@ -44,6 +44,7 @@ const usage = `career-data <command> [flags]
 Commands:
   contracts
   providers
+  install-provider --id <provider-id>
   doctor      --path <dir>
   list        --path <dir>
   report      --path <dir> --file <reportPath>
@@ -72,6 +73,17 @@ func run(args []string) int {
 
 	case "providers":
 		return emit(runProviders())
+
+	case "install-provider":
+		fs := flag.NewFlagSet("install-provider", flag.ContinueOnError)
+		id := fs.String("id", "", "provider id to install")
+		if err := fs.Parse(rest); err != nil {
+			return fail("usage", err.Error())
+		}
+		if *id == "" {
+			return fail("usage", "--id is required")
+		}
+		return emit(installProvider(*id))
 
 	case "doctor":
 		fs := flag.NewFlagSet("doctor", flag.ContinueOnError)

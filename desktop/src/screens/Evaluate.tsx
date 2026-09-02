@@ -147,7 +147,7 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
 
   return (
     <div className="eval-screen">
-      <h1>{status === 'done' ? 'Evaluation complete' : 'Evaluating...'}</h1>
+      <h1>{status === 'done' ? 'Evaluation complete' : <span className="animated-dots">Evaluating</span>}</h1>
 
       <AgentActivity
         taskId={taskId}

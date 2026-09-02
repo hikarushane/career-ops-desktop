@@ -56,7 +56,13 @@ function readmeLanguageFromFilename(filename) {
   return README_FILENAME_ALIASES[match[1]] ?? match[1];
 }
 
+const DISPLAY_NAME_OVERRIDES = {
+  'zh-CN': '中文（簡體）',
+  'zh-TW': '中文（繁體）',
+};
+
 function languageName(code) {
+  if (DISPLAY_NAME_OVERRIDES[code]) return DISPLAY_NAME_OVERRIDES[code];
   try {
     return new Intl.DisplayNames([code], { type: 'language' }).of(code) ?? code;
   } catch {
@@ -81,9 +87,15 @@ export function analysisLanguageOptions(root = process.cwd()) {
     }
   }
 
+  const SORT_PRIORITY = { 'zh-TW': 0, 'zh-CN': 1, en: 2 };
+
   return [...options]
     .map((code) => ({ code, name: languageName(code) }))
-    .sort((left, right) => left.code.localeCompare(right.code));
+    .sort((left, right) => {
+      const lp = SORT_PRIORITY[left.code] ?? 999;
+      const rp = SORT_PRIORITY[right.code] ?? 999;
+      return lp !== rp ? lp - rp : left.code.localeCompare(right.code);
+    });
 }
 
 export function resolveHelpReadme(root, language) {

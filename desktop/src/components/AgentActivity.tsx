@@ -15,7 +15,7 @@ type Props = {
 export default function AgentActivity({
   status, steps, currentStep, stdout, stderr, exitCode, onCancel, onRetry,
 }: Props) {
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(true);
 
   if (status === 'idle') return null;
 
@@ -25,7 +25,7 @@ export default function AgentActivity({
         {steps.map((step, i) => (
           <div key={i} className={`agent-step ${i < currentStep ? 'done' : i === currentStep ? 'active' : ''}`}>
             <span className="agent-step-dot" />
-            <span>{step}</span>
+            <span className={i === currentStep && status === 'running' ? 'animated-dots' : undefined}>{step}</span>
           </div>
         ))}
       </div>

@@ -10,7 +10,7 @@ import Header from './components/Header';
 import UpdateModal from './components/UpdateModal';
 import {
   HomeIcon, PipelineIcon, ProgressIcon, InterviewIcon,
-  ProfileIcon, HelpIcon,
+  SettingsIcon, HelpIcon,
 } from './components/icons';
 import EmptyState from './screens/EmptyState';
 import WorkspaceSetup from './screens/WorkspaceSetup';
@@ -44,6 +44,8 @@ export default function App() {
   const [iwMode, setIwMode] = useState<'interview-plan' | 'interview-practice' | 'interview-debrief'>('interview-plan');
   const [iwCompany, setIwCompany] = useState('');
   const [iwRole, setIwRole] = useState('');
+  const [evalActive, setEvalActive] = useState(false);
+  const [evalKey, setEvalKey] = useState(0);
   const [updateState, setUpdateState] = useState<UpdateState>(initialState);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
 
@@ -119,16 +121,28 @@ export default function App() {
   const navigate = useCallback((target: string, params?: Record<string, string>) => {
     if (target === 'evaluate') {
       setEvalUrl(params?.url);
+      setEvalKey((k) => k + 1);
+      setEvalActive(true);
       setScreen('evaluate');
     } else if (target === 'pipeline') {
-      setPipelineSelected(params?.selected);
-      setScreen('pipeline');
+      if (evalActive) {
+        setScreen('evaluate');
+      } else {
+        setPipelineSelected(params?.selected);
+        setScreen('pipeline');
+      }
     } else if (target === 'scanner') {
       setScreen('scanner');
     } else {
       setScreen(target as Screen);
     }
-  }, []);
+  }, [evalActive]);
+
+  const evalDone = useCallback(() => {
+    setEvalActive(false);
+    reload();
+    setScreen('pipeline');
+  }, [reload]);
 
   const startInterviewWorkflow = useCallback(
     (mode: string, app: Application) => {
@@ -176,7 +190,7 @@ export default function App() {
     { key: 'pipeline', label: 'Jobs', Icon: PipelineIcon },
     { key: 'interview', label: 'Interview', Icon: InterviewIcon },
     { key: 'progress', label: 'Progress', Icon: ProgressIcon },
-    { key: 'profile', label: 'Profile', Icon: ProfileIcon },
+    { key: 'profile', label: 'Settings', Icon: SettingsIcon },
     { key: 'help', label: 'Help', Icon: HelpIcon },
   ];
 
@@ -189,7 +203,7 @@ export default function App() {
       case 'progress':
         return <Progress data={data!.progress} />;
       case 'evaluate':
-        return <Evaluate root={root!} initialUrl={evalUrl} onDone={() => { reload(); setScreen('pipeline'); }} />;
+        return null;
       case 'scanner':
         return <Scanner root={root!} onDone={() => { reload(); setScreen('pipeline'); }} />;
       case 'interview':
@@ -206,7 +220,7 @@ export default function App() {
   return (
     <div className="shell">
       <Header
-        title={NAV.find((n) => n.key === screen)?.label ?? screen}
+        title={NAV.find((n) => n.key === screen || (n.key === 'pipeline' && screen === 'evaluate'))?.label ?? screen}
         root={root}
         onReload={reload}
         onChangeFolder={onPick}
@@ -215,7 +229,7 @@ export default function App() {
       />
       <nav className="nav">
         {NAV.map(({ key, label, Icon }) => (
-          <button key={key} aria-current={screen === key} onClick={() => navigate(key)}>
+          <button key={key} aria-current={screen === key || (key === 'pipeline' && screen === 'evaluate')} onClick={() => navigate(key)}>
             <Icon />
             <span>{label}</span>
           </button>
@@ -227,7 +241,12 @@ export default function App() {
           <button type="button" onClick={() => setWorkspaceError(null)}>Dismiss</button>
         </div>
       )}
-      {renderScreen()}
+      {evalActive && (
+        <div style={{ display: screen === 'evaluate' ? undefined : 'none' }}>
+          <Evaluate key={evalKey} root={root!} initialUrl={evalUrl} onDone={evalDone} />
+        </div>
+      )}
+      {screen !== 'evaluate' && renderScreen()}
       {showUpdateModal && (
         <UpdateModal
           state={updateState}

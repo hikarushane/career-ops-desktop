@@ -44,6 +44,11 @@ pub async fn providers(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn install_provider(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    run(&app, vec!["install-provider".into(), "--id".into(), id]).await
+}
+
+#[tauri::command]
 pub async fn doctor(app: tauri::AppHandle, path: String) -> Result<String, String> {
     run(&app, vec!["doctor".into(), "--path".into(), path]).await
 }

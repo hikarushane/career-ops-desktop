@@ -32,6 +32,7 @@ type ElementNode = {
   props?: {
     onComplete?: (result?: unknown) => void;
     onSaved?: () => void;
+    onBack?: () => void;
     children?: unknown;
   };
 };
@@ -62,11 +63,11 @@ function render() {
 }
 
 describe('onboarding reviewed intake step', () => {
-  it('runs one review after staged background reaches a ready AI provider', () => {
+  it('runs profile generation after staged background reaches a ready AI provider', () => {
     hooks.reset(['import', []]);
-    const backgroundImport = render();
+    const tree = render();
 
-    backgroundImport.props?.onComplete?.({
+    findElement(tree, (el) => Boolean(el.props?.onComplete))?.props?.onComplete?.({
       staged: [
         { sourcePath: '/source/cv.pdf', destinationPath: 'documents/cv/cv.pdf', category: 'cv', duplicate: false },
         { sourcePath: '/source/work.pdf', destinationPath: 'documents/work/work.pdf', category: 'work', duplicate: false },
@@ -75,34 +76,36 @@ describe('onboarding reviewed intake step', () => {
     });
     const language = render();
     findElement(language, (element) => Boolean(element.props?.onSaved))?.props?.onSaved?.();
-    const aiSetup = render();
-    aiSetup.props?.onComplete?.();
-    const intake = render();
+    const aiTree = render();
+    findElement(aiTree, (el) => Boolean(el.props?.onComplete))?.props?.onComplete?.();
+    const genTree = render();
+    const gen = findElement(genTree, (el) => (el.type as { name?: string })?.name === 'ProfileGeneration');
 
-    expect((intake.type as { name?: string })?.name).toBe('IntakeReview');
+    expect((gen?.type as { name?: string })?.name).toBe('ProfileGeneration');
 
-    intake.props?.onComplete?.();
+    gen?.props?.onComplete?.();
     expect(textContent(render())).toContain("You're all set");
   });
 
-  it('skips intake and reaches Ready when no background was staged', () => {
+  it('skips generating and reaches Ready when no background was staged', () => {
     hooks.reset(['import', []]);
-    const backgroundImport = render();
+    const tree = render();
 
-    backgroundImport.props?.onComplete?.({ staged: [] });
+    findElement(tree, (el) => Boolean(el.props?.onComplete))?.props?.onComplete?.({ staged: [] });
     const language = render();
     findElement(language, (element) => Boolean(element.props?.onSaved))?.props?.onSaved?.();
-    const aiSetup = render();
-    aiSetup.props?.onComplete?.();
+    const aiTree = render();
+    findElement(aiTree, (el) => Boolean(el.props?.onComplete))?.props?.onComplete?.();
 
     expect(textContent(render())).toContain("You're all set");
   });
 
-  it('reaches Ready when the intake review is skipped with zero approvals', () => {
-    hooks.reset(['intake', []]);
-    const intake = render();
+  it('reaches Ready when profile generation completes', () => {
+    hooks.reset(['generating', []]);
+    const tree = render();
+    const gen = findElement(tree, (el) => Boolean(el.props?.onComplete));
 
-    intake.props?.onComplete?.();
+    gen?.props?.onComplete?.();
     const ready = render();
 
     expect(textContent(ready)).toContain("You're all set");
