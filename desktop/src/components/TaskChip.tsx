@@ -13,9 +13,11 @@ export default function TaskChip({ tasks, onOpen, onDismiss }: Props) {
   const running = tasks.filter((t) => t.state === 'running');
   if (running.length > 1) {
     return (
-      <button className="task-chip running" onClick={() => onOpen(running[0].taskId)}>
-        {`${running.length} tasks running`}
-      </button>
+      <span className="task-chip running">
+        <button className="task-chip-main" onClick={() => onOpen(running[0].taskId)}>
+          {`${running.length} tasks running`}
+        </button>
+      </span>
     );
   }
   const task = running[0] ?? tasks[0];

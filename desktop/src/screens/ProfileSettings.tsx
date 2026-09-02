@@ -80,6 +80,14 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
   const selectProvider = useCallback(async (id: string) => {
     await setPreferredId(id);
     setPreferred(id);
+    // Model and fast-mode are stored per provider (#4): reload them for the
+    // newly selected provider instead of leaving the previous provider's
+    // values on screen, and drop any Custom-model override tied to the old
+    // provider's model id.
+    const [nextModel, nextFastMode] = await Promise.all([getModel(), getFastMode()]);
+    setModelState(nextModel);
+    setFastState(nextFastMode);
+    setCustomModel(false);
   }, []);
 
   const modelSettingsSupported = !!preferredId && !NO_MODEL_SETTINGS_PROVIDERS.has(preferredId);
