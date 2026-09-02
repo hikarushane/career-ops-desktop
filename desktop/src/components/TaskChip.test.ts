@@ -24,11 +24,21 @@ describe('TaskChip', () => {
   });
 
   it('counts multiple running tasks', () => {
-    expect(textContent(TaskChip({
+    const multi = TaskChip({
       tasks: [t({}), t({ taskId: 'b', taskType: 'scan', label: 'Scan' })],
       onOpen: vi.fn(),
       onDismiss: vi.fn(),
-    }))).toMatch(/2 tasks running/);
+    });
+    expect(textContent(multi)).toMatch(/2 tasks running/);
+    // Regression: the multi-task chip must reuse the `.task-chip button`
+    // padding rule (a bare <button className="task-chip running"> had no
+    // padding of its own), so it needs a `.task-chip` wrapper around a
+    // `.task-chip-main` button, same shape as the single-task chip.
+    const el = multi as { type: string; props: { className: string; children: { type: string; props: { className: string } } } };
+    expect(el.type).toBe('span');
+    expect(el.props.className).toBe('task-chip running');
+    expect(el.props.children.type).toBe('button');
+    expect(el.props.children.props.className).toBe('task-chip-main');
   });
 
   it('shows done and failed labels', () => {

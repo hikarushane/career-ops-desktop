@@ -40,14 +40,47 @@ export async function getPreferredProvider(): Promise<ProviderEntry | null> {
   return cached.find((p) => p.id === id && p.state === 'ready') ?? getReadyProviders()[0] ?? null;
 }
 
-export async function getModel(): Promise<string> {
+/** Key suffix for the currently preferred provider, or 'default' when none is set. */
+async function providerKeySuffix(): Promise<string> {
+  return (await getPreferredId()) ?? 'default';
+}
+
+/**
+ * Reads a per-provider setting, migrating a legacy global value on first
+ * read: model and fast-mode choices used to be stored under one shared key
+ * across all providers, which meant switching provider silently carried
+ * over an unrelated model id or fast-mode flag. Each provider now gets its
+ * own key (`${legacyKey}.${providerId}`); an existing legacy value is
+ * adopted once for whichever provider happens to read it first, then
+ * deleted so it cannot be re-migrated to a different provider later.
+ */
+async function getPerProviderSetting<T>(legacyKey: string, fallback: T): Promise<T> {
   const store = await load('settings.json', { autoSave: true });
-  return (await store.get<string>(MODEL_KEY)) ?? '';
+  const suffix = await providerKeySuffix();
+  const scopedKey = `${legacyKey}.${suffix}`;
+  const scoped = await store.get<T>(scopedKey);
+  if (scoped !== undefined && scoped !== null) return scoped;
+  const legacy = await store.get<T>(legacyKey);
+  if (legacy !== undefined && legacy !== null) {
+    await store.set(scopedKey, legacy);
+    await store.delete(legacyKey);
+    return legacy;
+  }
+  return fallback;
+}
+
+async function setPerProviderSetting<T>(legacyKey: string, value: T): Promise<void> {
+  const store = await load('settings.json', { autoSave: true });
+  const suffix = await providerKeySuffix();
+  await store.set(`${legacyKey}.${suffix}`, value);
+}
+
+export async function getModel(): Promise<string> {
+  return getPerProviderSetting<string>(MODEL_KEY, '');
 }
 
 export async function setModel(model: string): Promise<void> {
-  const store = await load('settings.json', { autoSave: true });
-  await store.set(MODEL_KEY, model);
+  await setPerProviderSetting(MODEL_KEY, model);
 }
 
 export async function getEffort(): Promise<EffortLevel> {
@@ -61,13 +94,11 @@ export async function setEffort(level: EffortLevel): Promise<void> {
 }
 
 export async function getFastMode(): Promise<boolean> {
-  const store = await load('settings.json', { autoSave: true });
-  return (await store.get<boolean>(FAST_KEY)) ?? false;
+  return getPerProviderSetting<boolean>(FAST_KEY, false);
 }
 
 export async function setFastMode(on: boolean): Promise<void> {
-  const store = await load('settings.json', { autoSave: true });
-  await store.set(FAST_KEY, on);
+  await setPerProviderSetting(FAST_KEY, on);
 }
 
 export async function installProviderById(id: string): Promise<InstallResult> {
