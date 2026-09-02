@@ -266,15 +266,18 @@ export type LanguageContext = {
   marketMode?: string;
 };
 
+export type ModelOptions = { model: string; effort: string; fastMode: boolean };
+
 export function runTask(
   taskType: TaskType,
   providerId: string,
   args: Record<string, string>,
   path: string,
   languageContext?: LanguageContext,
+  modelOptions?: ModelOptions,
 ) {
   return invoke<TaskStarted>('run_task', {
-    input: { taskType, providerId, args, path, languageContext },
+    input: { taskType, providerId, args, path, languageContext, modelOptions },
   });
 }
 

@@ -199,32 +199,66 @@ fn get_task_def(task_type: &str) -> Option<TaskDef> {
     }
 }
 
-fn headless_args(provider_id: &str) -> Option<Vec<&'static str>> {
-    match provider_id {
-        "claude" => Some(vec!["-p"]),
-        "codex" => Some(vec!["exec", "--skip-git-repo-check"]),
-        "opencode" => Some(vec!["run"]),
-        "copilot" => Some(vec!["-p"]),
-        "qwen" => Some(vec!["-p"]),
-        "agy" => Some(vec!["-p"]),
-        "grok" => Some(vec!["-p"]),
-        _ => None,
-    }
+#[derive(Deserialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelOptions {
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    #[serde(default)]
+    pub fast_mode: bool,
 }
 
-fn generation_args(provider_id: &str) -> Option<Vec<&'static str>> {
-    match provider_id {
-        "claude" => Some(vec![
+fn non_empty(value: &Option<String>) -> Option<&str> {
+    value.as_deref().map(str::trim).filter(|v| !v.is_empty())
+}
+
+fn provider_args(provider_id: &str, options: &ModelOptions) -> Option<Vec<String>> {
+    let base: Vec<&str> = match provider_id {
+        "claude" => vec![
             "-p",
             "--setting-sources",
             "project",
             "--strict-mcp-config",
             "--dangerously-skip-permissions",
-        ]),
-        "agy" => Some(vec!["-p", "--dangerously-skip-permissions"]),
-        "codex" => Some(vec!["exec", "--skip-git-repo-check", "--full-auto"]),
-        other => headless_args(other),
+            "--output-format",
+            "stream-json",
+            "--verbose",
+        ],
+        "agy" => vec!["-p", "--dangerously-skip-permissions", "--output-format", "stream-json"],
+        "codex" => vec!["exec", "--skip-git-repo-check", "--full-auto", "--json"],
+        "opencode" => vec!["run"],
+        "copilot" | "qwen" | "grok" => vec!["-p"],
+        _ => return None,
+    };
+    let mut args: Vec<String> = base.into_iter().map(str::to_owned).collect();
+    match provider_id {
+        "claude" => {
+            if let Some(m) = non_empty(&options.model) {
+                args.extend(["--model".into(), m.into()]);
+            }
+            if let Some(e) = non_empty(&options.effort) {
+                args.extend(["--effort".into(), e.into()]);
+            }
+            if options.fast_mode {
+                args.extend(["--settings".into(), r#"{"fastMode":true}"#.into()]);
+            }
+        }
+        "codex" => {
+            if let Some(m) = non_empty(&options.model) {
+                args.extend(["-m".into(), m.into()]);
+            }
+            if let Some(e) = non_empty(&options.effort) {
+                args.extend(["-c".into(), format!("model_reasoning_effort={e}")]);
+            }
+        }
+        "agy" => {
+            if let Some(m) = non_empty(&options.model) {
+                args.extend(["--model".into(), m.into()]);
+            }
+        }
+        _ => {}
     }
+    Some(args)
 }
 
 fn build_prompt(template: &str, args: &HashMap<String, String>) -> String {
@@ -635,6 +669,7 @@ pub struct RunTaskInput {
     args: HashMap<String, String>,
     path: String,
     language_context: Option<LanguageContext>,
+    model_options: Option<ModelOptions>,
 }
 
 fn canonical_workspace(path: &str) -> Result<PathBuf, String> {
@@ -805,12 +840,9 @@ pub fn run_task(
     }
 
     let is_generation = input.task_type == "profile-generate";
-    let h_args = if is_generation {
-        generation_args(&input.provider_id)
-    } else {
-        headless_args(&input.provider_id)
-    }
-    .ok_or_else(|| format!("unknown provider: {}", input.provider_id))?;
+    let options = input.model_options.clone().unwrap_or_default();
+    let cmd_args_base = provider_args(&input.provider_id, &options)
+        .ok_or_else(|| format!("unknown provider: {}", input.provider_id))?;
 
     let language_instruction = language_context_instruction(input.language_context.as_ref())?;
     let prompt = if is_generation {
@@ -829,7 +861,7 @@ pub fn run_task(
         format!("task-{c}")
     };
 
-    let mut cmd_args: Vec<String> = h_args.iter().map(|s| s.to_string()).collect();
+    let mut cmd_args = cmd_args_base;
     cmd_args.push(prompt);
 
     let workspace = canonical_workspace(&input.path)?;
@@ -1001,9 +1033,9 @@ mod tests {
 
     use super::{
         apply_generation_at, build_prompt, copy_document_sources, create_generation_staging,
-        generation_args, generation_is_complete, get_task_def, headless_args,
-        inspect_generation, language_context_instruction, packaged_runtime_paths_for_executable,
-        render_generation_prompt, LanguageContext, PackagedJsRuntime,
+        generation_is_complete, get_task_def, inspect_generation, language_context_instruction,
+        packaged_runtime_paths_for_executable, provider_args, render_generation_prompt,
+        LanguageContext, ModelOptions, PackagedJsRuntime,
     };
 
     #[test]
@@ -1222,23 +1254,36 @@ mod tests {
     }
 
     #[test]
-    fn generation_args_isolate_the_provider_from_user_settings() {
-        let claude = generation_args("claude").unwrap();
+    fn provider_args_add_structured_output_and_isolation() {
+        let opts = ModelOptions::default();
+        let claude = provider_args("claude", &opts).unwrap();
         assert!(claude.windows(2).any(|w| w == ["--setting-sources", "project"]));
-        assert!(claude.contains(&"--strict-mcp-config"));
-        assert!(claude.contains(&"--dangerously-skip-permissions"));
-        assert_eq!(claude[0], "-p");
+        assert!(claude.contains(&"--strict-mcp-config".to_owned()));
+        assert!(claude.contains(&"--dangerously-skip-permissions".to_owned()));
+        assert!(claude.windows(2).any(|w| w == ["--output-format", "stream-json"]));
+        assert!(claude.contains(&"--verbose".to_owned()));
+        let codex = provider_args("codex", &opts).unwrap();
+        assert!(codex.contains(&"--full-auto".to_owned()) && codex.contains(&"--json".to_owned()));
+        let agy = provider_args("agy", &opts).unwrap();
+        assert!(agy.windows(2).any(|w| w == ["--output-format", "stream-json"]));
+    }
 
-        let agy = generation_args("agy").unwrap();
-        assert_eq!(agy[0], "-p");
-        assert!(agy.contains(&"--dangerously-skip-permissions"));
-
-        let codex = generation_args("codex").unwrap();
-        assert_eq!(&codex[..2], ["exec", "--skip-git-repo-check"]);
-        assert!(codex.contains(&"--full-auto"));
-
-        assert_eq!(generation_args("qwen"), headless_args("qwen"));
-        assert!(generation_args("nope").is_none());
+    #[test]
+    fn provider_args_map_model_effort_and_fast_mode_per_provider() {
+        let opts = ModelOptions { model: Some("opus".into()), effort: Some("high".into()), fast_mode: true };
+        let claude = provider_args("claude", &opts).unwrap();
+        assert!(claude.windows(2).any(|w| w == ["--model", "opus"]));
+        assert!(claude.windows(2).any(|w| w == ["--effort", "high"]));
+        assert!(claude.windows(2).any(|w| w == ["--settings", r#"{"fastMode":true}"#]));
+        let codex = provider_args("codex", &opts).unwrap();
+        assert!(codex.windows(2).any(|w| w == ["-m", "opus"]));
+        assert!(codex.windows(2).any(|w| w == ["-c", "model_reasoning_effort=high"]));
+        assert!(!codex.iter().any(|a| a.contains("fastMode")));
+        let agy = provider_args("agy", &opts).unwrap();
+        assert!(agy.windows(2).any(|w| w == ["--model", "opus"]));
+        assert!(!agy.contains(&"--effort".to_owned()));
+        let empty = ModelOptions { model: Some(String::new()), ..ModelOptions::default() };
+        assert!(!provider_args("claude", &empty).unwrap().contains(&"--model".to_owned()));
     }
 
     #[test]
