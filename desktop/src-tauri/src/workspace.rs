@@ -442,17 +442,35 @@ fn slugify_capture(name: &str) -> String {
 
 pub fn save_job_capture_at(root: &Path, slug: &str, text: &str) -> Result<String, String> {
     let dir = root.join("jds");
+    if let Ok(metadata) = fs::symlink_metadata(&dir) {
+        if metadata.file_type().is_symlink() {
+            return Err("jds must not be a symlink".to_owned());
+        }
+    }
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let base = slugify_capture(slug);
     let base = if base.is_empty() { "posting".to_owned() } else { base };
     let mut rel = format!("jds/{base}.md");
     let mut n = 2;
-    while root.join(&rel).exists() {
-        rel = format!("jds/{base}-{n}.md");
-        n += 1;
+    loop {
+        let path = root.join(&rel);
+        if fs::symlink_metadata(&path).is_ok() {
+            rel = format!("jds/{base}-{n}.md");
+            n += 1;
+            continue;
+        }
+        match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut file) => {
+                file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+                return Ok(rel);
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                rel = format!("jds/{base}-{n}.md");
+                n += 1;
+            }
+            Err(error) => return Err(error.to_string()),
+        }
     }
-    fs::write(root.join(&rel), text).map_err(|e| e.to_string())?;
-    Ok(rel)
 }
 
 #[tauri::command]
@@ -2395,5 +2413,38 @@ mod tests {
         assert!(rel.ends_with(".md"));
         assert_eq!(fs::read_to_string(root.path().join(&rel)).unwrap(), "JD text");
         assert!(save_job_capture_at(root.path(), "../escape", "x").unwrap().starts_with("jds/escape"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_job_capture_rejects_a_symlinked_jds_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let real_dir = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(real_dir.path(), root.path().join("jds")).unwrap();
+
+        let error = save_job_capture_at(root.path(), "slug", "text").unwrap_err();
+
+        assert!(error.contains("symlink"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_job_capture_skips_a_dangling_symlinked_collision() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join("jds")).unwrap();
+        std::os::unix::fs::symlink(
+            root.path().join("jds/does-not-exist.md"),
+            root.path().join("jds/slug.md"),
+        )
+        .unwrap();
+
+        let rel = save_job_capture_at(root.path(), "slug", "JD text").unwrap();
+
+        assert_eq!(rel, "jds/slug-2.md");
+        assert_eq!(fs::read_to_string(root.path().join(&rel)).unwrap(), "JD text");
+        assert!(fs::symlink_metadata(root.path().join("jds/slug.md"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
 }

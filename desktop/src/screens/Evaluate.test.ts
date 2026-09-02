@@ -120,4 +120,27 @@ describe('Evaluate', () => {
     expect(api.fetchPosting).not.toHaveBeenCalled();
     expect(store.startTask).toHaveBeenCalledWith('evaluate', expect.objectContaining({ url_line: '', capture: 'jds/pasted_1.md' }), '/w', 'Pasted job description', undefined);
   });
+
+  it('resets a stale blocked state when the input changes to a different URL', async () => {
+    api.fetchPosting.mockResolvedValue({ ok: true, source: 'html', title: 'PM', company: 'NewCo', location: 'Berlin', text: 'y'.repeat(500), fetchedAt: 'now' });
+    api.saveJobCapture.mockResolvedValue('jds/2026-09-02_newco_pm.md');
+    const staleJdText = 'Stale pasted paragraph that should never be sent. '.repeat(10);
+    hooks.reset([
+      'https://new.example.com/jobs/2',
+      staleJdText,
+      { kind: 'blocked', url: 'https://old.example.com/jobs/1', reason: 'the page asks for a login' },
+      null, null, false, null, '', null,
+    ]);
+    hooks.beginRender();
+    const tree = Evaluate({ root: '/w', onDone: vi.fn() }) as ElementNode;
+    await findButton(tree, 'Analyse')?.props?.onClick?.();
+
+    expect(api.fetchPosting).toHaveBeenCalledWith('https://new.example.com/jobs/2');
+    for (const call of api.saveJobCapture.mock.calls) {
+      expect(call[2]).not.toContain(staleJdText.trim());
+    }
+    expect(store.startTask).toHaveBeenCalledWith('evaluate',
+      { url: 'https://new.example.com/jobs/2', url_line: ' Posting URL: https://new.example.com/jobs/2.', capture: 'jds/2026-09-02_newco_pm.md' },
+      '/w', 'NewCo', undefined);
+  });
 });
