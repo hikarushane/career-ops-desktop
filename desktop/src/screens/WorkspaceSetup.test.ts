@@ -243,7 +243,7 @@ describe('WorkspaceSetup', () => {
       null,
       null,
       { applications: [], metrics: {}, progress: {} },
-      'home', true, undefined, undefined, 'interview-plan', '', '', {}, false,
+      'home', true, undefined, undefined, 'interview-plan', '', '', null,
     ]);
     const initial = renderComponent(() => App());
     const header = findElement(initial, (element) => element.type === Header);
@@ -283,7 +283,7 @@ describe('WorkspaceSetup', () => {
       null,
       null,
       { applications: [], metrics: {}, progress: {} },
-      'profile', true, undefined, undefined, 'interview-plan', '', '', {}, false,
+      'profile', true, undefined, undefined, 'interview-plan', '', '', null,
     ]);
     const tree = renderComponent(() => App());
     const settings = findElement(tree, (element) => element.type === ProfileSettings);
