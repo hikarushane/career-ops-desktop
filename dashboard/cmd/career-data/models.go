@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +19,9 @@ import (
 
 // ModelEntry is one selectable model for a provider. Available is a
 // pointer so "never probed" (nil) is distinguishable from "probed and
-// found available/unavailable" (true/false) in the JSON output.
+// conclusively found available/unavailable" (true/false); an inconclusive
+// probe (rate limit, timeout, unrecognized failure) also stays nil, because
+// it is not evidence the model is unusable.
 type ModelEntry struct {
 	ID        string `json:"id"`
 	Label     string `json:"label"`
@@ -27,12 +30,21 @@ type ModelEntry struct {
 }
 
 // ModelsResult is the JSON shape returned by `models --provider <id>`.
+// Models is always a non-nil (possibly empty) slice so it serializes as
+// `[]`, never JSON `null`, matching the desktop API's `ModelEntry[]` type.
 type ModelsResult struct {
 	OK       bool         `json:"ok"`
 	Provider string       `json:"provider"`
 	Models   []ModelEntry `json:"models"`
 	ProbedAt string       `json:"probedAt,omitempty"`
 }
+
+// modelsError carries a machine-readable code alongside the human message,
+// mirroring fetchError, so main.go's dispatch can map it straight onto
+// fail(code, message).
+type modelsError struct{ code, message string }
+
+func (e *modelsError) Error() string { return e.code + ": " + e.message }
 
 // commandRunner abstracts process execution so tests can fake CLI output
 // without ever invoking a real provider CLI.
@@ -100,8 +112,11 @@ func lastJSONLine(out string) string {
 
 // codexConfiguredModel reads the `model` key out of ~/.codex/config.toml,
 // if present, so the user's own configured default is always offered as a
-// candidate even when it isn't in the fixed codex list above. It never
-// returns anything beyond that single value.
+// candidate even when it isn't in the fixed codex list above. It requires
+// an exact "model" key match (after trimming whitespace around the `=`) so
+// a similarly-prefixed key such as `model_reasoning_effort` is never
+// mistaken for it, and skips comment lines. It never returns anything
+// beyond that single value.
 func codexConfiguredModel() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -112,11 +127,15 @@ func codexConfiguredModel() string {
 		return ""
 	}
 	for _, line := range strings.Split(string(b), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "model") {
-			if _, v, ok := strings.Cut(line, "="); ok {
-				return strings.Trim(strings.TrimSpace(v), `"`)
-			}
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
 		}
+		key, v, ok := strings.Cut(trimmed, "=")
+		if !ok || strings.TrimSpace(key) != "model" {
+			continue
+		}
+		return strings.Trim(strings.TrimSpace(v), `"`)
 	}
 	return ""
 }
@@ -135,67 +154,122 @@ func parseAgyModels(out string) []ModelEntry {
 	return list
 }
 
+// ptrBool returns a pointer to a copy of b, for building the tri-state
+// *bool probeModel/Available values from a literal.
+func ptrBool(b bool) *bool { return &b }
+
 // probeModel asks whether id is actually usable on the user's account for
-// provider, by making one minimal live call through run. claude reports
-// success/failure structurally in its JSON result's is_error field; codex
-// has no equivalent, so an unsupported/unknown model is inferred from the
-// process failing along with a recognizable error shape on stderr.
-func probeModel(ctx context.Context, provider, id string, run commandRunner) bool {
+// provider, by making one minimal live call through run. The result is
+// tri-state: true means the probe conclusively found the model usable,
+// false means it conclusively found it rejected, and nil means the probe
+// was inconclusive (timeout, unrecognized failure shape, rate limiting) —
+// which must never be reported as "unavailable", since that would tell the
+// user a perfectly good model doesn't exist.
+//
+// claude reports success/failure structurally in its JSON result: an
+// is_error:false result is conclusive success; is_error:true with
+// api_error_status:404 (unknown model) is conclusive rejection; anything
+// else (no parseable JSON, a different error status, a timed-out call with
+// no output) is inconclusive.
+//
+// codex has no equivalent structured signal: a clean exit is conclusive
+// success; a failure whose stderr names an unsupported/unknown model is
+// conclusive rejection; any other failure (missing binary, not logged in,
+// network error, timeout) is inconclusive.
+func probeModel(ctx context.Context, provider, id string, run commandRunner) *bool {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	switch provider {
 	case "claude":
 		out, _, _ := run(ctx, "claude", "-p", "--model", id, "--max-turns", "1", "--output-format", "json", "--setting-sources", "project", "--strict-mcp-config", "reply ok")
 		var res struct {
-			IsError *bool `json:"is_error"`
+			IsError        *bool `json:"is_error"`
+			APIErrorStatus int   `json:"api_error_status"`
 		}
-		if json.Unmarshal([]byte(lastJSONLine(out)), &res) != nil || res.IsError == nil {
-			return false
+		line := lastJSONLine(out)
+		if line == "" || json.Unmarshal([]byte(line), &res) != nil || res.IsError == nil {
+			return nil
 		}
-		return !*res.IsError
+		if !*res.IsError {
+			return ptrBool(true)
+		}
+		if res.APIErrorStatus == 404 {
+			return ptrBool(false)
+		}
+		return nil
 	case "codex":
 		_, stderr, err := run(ctx, "codex", "exec", "--skip-git-repo-check", "-m", id, "reply ok")
 		if err == nil {
-			return true
+			return ptrBool(true)
 		}
-		return !strings.Contains(stderr, "not supported") && !strings.Contains(stderr, `"status":400`) && !strings.Contains(stderr, `"status":404`)
+		if strings.Contains(stderr, "not supported") || strings.Contains(stderr, `"status":400`) || strings.Contains(stderr, `"status":404`) {
+			return ptrBool(false)
+		}
+		return nil
 	}
-	return false
+	return nil
 }
 
 // runModels is the models command's implementation. "agy" is handled
 // separately because `agy models` already returns the real, definitive
-// list — there is nothing to probe. For "claude"/"codex", the fixed
-// candidate set is returned as-is, or probed concurrently (one goroutine
-// per candidate) when probe is true.
-func runModels(provider string, probe bool, run commandRunner) ModelsResult {
+// list — there is nothing to probe, but a failure there (missing binary,
+// not logged in, network error, or an empty parse) means career-ops has no
+// list at all and must say so, rather than silently reporting zero models
+// as success. For "claude"/"codex", the fixed candidate set is returned
+// as-is, or probed concurrently (one goroutine per candidate) when probe is
+// true. An unrecognized provider is also an error, never a silent empty
+// result.
+func runModels(provider string, probe bool, run commandRunner) (ModelsResult, error) {
 	augmentUserPATH()
-	res := ModelsResult{OK: true, Provider: provider}
-	if provider == "agy" {
+	res := ModelsResult{OK: true, Provider: provider, Models: []ModelEntry{}}
+
+	switch provider {
+	case "agy":
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		out, _, _ := run(ctx, "agy", "models")
-		res.Models = parseAgyModels(out)
+		out, stderr, err := run(ctx, "agy", "models")
+		rows := parseAgyModels(out)
+		if err != nil {
+			msg := "agy models failed: " + err.Error()
+			if s := strings.TrimSpace(stderr); s != "" {
+				msg += ": " + s
+			}
+			return ModelsResult{}, &modelsError{"provider", msg}
+		}
+		if len(rows) == 0 {
+			msg := "agy models returned no models"
+			if s := strings.TrimSpace(stderr); s != "" {
+				msg += ": " + s
+			}
+			return ModelsResult{}, &modelsError{"provider", msg}
+		}
 		yes := true
-		for i := range res.Models {
-			res.Models[i].Available = &yes
+		for i := range rows {
+			rows[i].Available = &yes
 		}
+		res.Models = rows
 		res.ProbedAt = time.Now().UTC().Format(time.RFC3339)
-		return res
-	}
-	res.Models = candidateModels(provider)
-	if probe {
-		var wg sync.WaitGroup
-		for i := range res.Models {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				ok := probeModel(context.Background(), provider, res.Models[i].ID, run)
-				res.Models[i].Available = &ok
-			}(i)
+		return res, nil
+
+	case "claude", "codex":
+		if list := candidateModels(provider); list != nil {
+			res.Models = list
 		}
-		wg.Wait()
-		res.ProbedAt = time.Now().UTC().Format(time.RFC3339)
+		if probe {
+			var wg sync.WaitGroup
+			for i := range res.Models {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					res.Models[i].Available = probeModel(context.Background(), provider, res.Models[i].ID, run)
+				}(i)
+			}
+			wg.Wait()
+			res.ProbedAt = time.Now().UTC().Format(time.RFC3339)
+		}
+		return res, nil
+
+	default:
+		return ModelsResult{}, &modelsError{"usage", fmt.Sprintf("unknown provider: %s", provider)}
 	}
-	return res
 }

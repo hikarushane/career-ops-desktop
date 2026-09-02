@@ -268,7 +268,15 @@ func run(args []string) int {
 		if *provider == "" {
 			return fail("usage", "--provider is required")
 		}
-		return emit(runModels(*provider, *probe, execRunner))
+		res, err := runModels(*provider, *probe, execRunner)
+		if err != nil {
+			var me *modelsError
+			if errors.As(err, &me) {
+				return fail(me.code, me.message)
+			}
+			return fail("provider", err.Error())
+		}
+		return emit(res)
 
 	default:
 		fmt.Fprint(os.Stderr, usage)
