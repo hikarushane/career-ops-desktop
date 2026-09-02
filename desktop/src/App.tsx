@@ -5,6 +5,7 @@ import {
 } from './api';
 import { loadActiveRoot, pickWorkspace, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
+import { dismiss, initTaskStore, useTasks } from './lib/taskStore';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
 import UpdateModal from './components/UpdateModal';
@@ -44,10 +45,10 @@ export default function App() {
   const [iwMode, setIwMode] = useState<'interview-plan' | 'interview-practice' | 'interview-debrief'>('interview-plan');
   const [iwCompany, setIwCompany] = useState('');
   const [iwRole, setIwRole] = useState('');
-  const [evalActive, setEvalActive] = useState(false);
-  const [evalKey, setEvalKey] = useState(0);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [updateState, setUpdateState] = useState<UpdateState>(initialState);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const tasks = useTasks();
 
   const refresh = useCallback(async (path: string) => {
     setError(null);
@@ -72,6 +73,7 @@ export default function App() {
 
   useEffect(() => {
     loadContracts().catch(() => {});
+    void initTaskStore();
     loadActiveRoot()
       .then(async (p) => {
         setRoot(p);
@@ -121,28 +123,34 @@ export default function App() {
   const navigate = useCallback((target: string, params?: Record<string, string>) => {
     if (target === 'evaluate') {
       setEvalUrl(params?.url);
-      setEvalKey((k) => k + 1);
-      setEvalActive(true);
+      setActiveTaskId(params?.taskId ?? null);
       setScreen('evaluate');
     } else if (target === 'pipeline') {
-      if (evalActive) {
-        setScreen('evaluate');
-      } else {
-        setPipelineSelected(params?.selected);
-        setScreen('pipeline');
-      }
+      setPipelineSelected(params?.selected);
+      setScreen('pipeline');
     } else if (target === 'scanner') {
       setScreen('scanner');
     } else {
       setScreen(target as Screen);
     }
-  }, [evalActive]);
+  }, []);
 
   const evalDone = useCallback(() => {
-    setEvalActive(false);
     reload();
     setScreen('pipeline');
   }, [reload]);
+
+  const onOpenTask = useCallback((id: string) => {
+    const task = tasks.find((t) => t.taskId === id);
+    if (!task) return;
+    if (task.taskType === 'evaluate' || task.taskType === 'batch') {
+      navigate('evaluate', { taskId: id });
+    } else if (task.taskType === 'scan') {
+      setScreen('scanner');
+    } else if (task.taskType.startsWith('interview')) {
+      setScreen('interview-workflow');
+    }
+  }, [tasks, navigate]);
 
   const startInterviewWorkflow = useCallback(
     (mode: string, app: Application) => {
@@ -203,7 +211,10 @@ export default function App() {
       case 'progress':
         return <Progress data={data!.progress} />;
       case 'evaluate':
-        return null;
+        // Task 11 adds `initialTaskId` to Evaluate's props and wires
+        // `activeTaskId` through to it; until then it is tracked here only.
+        void activeTaskId;
+        return <Evaluate root={root!} initialUrl={evalUrl} onDone={evalDone} />;
       case 'scanner':
         return <Scanner root={root!} onDone={() => { reload(); setScreen('pipeline'); }} />;
       case 'interview':
@@ -226,6 +237,9 @@ export default function App() {
         onChangeFolder={onPick}
         updateState={updateState}
         onUpdateClick={() => setShowUpdateModal(true)}
+        tasks={tasks}
+        onOpenTask={onOpenTask}
+        onDismissTask={dismiss}
       />
       <nav className="nav">
         {NAV.map(({ key, label, Icon }) => (
@@ -241,12 +255,7 @@ export default function App() {
           <button type="button" onClick={() => setWorkspaceError(null)}>Dismiss</button>
         </div>
       )}
-      {evalActive && (
-        <div style={{ display: screen === 'evaluate' ? undefined : 'none' }}>
-          <Evaluate key={evalKey} root={root!} initialUrl={evalUrl} onDone={evalDone} />
-        </div>
-      )}
-      {screen !== 'evaluate' && renderScreen()}
+      {renderScreen()}
       {showUpdateModal && (
         <UpdateModal
           state={updateState}

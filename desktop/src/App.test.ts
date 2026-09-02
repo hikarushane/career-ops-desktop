@@ -41,6 +41,11 @@ vi.mock('./api', () => ({
   listApplications: mocks.listApplications,
   prepareOnboardingWorkspace: mocks.prepareOnboardingWorkspace,
 }));
+vi.mock('./lib/taskStore', () => ({
+  useTasks: () => [],
+  initTaskStore: vi.fn(),
+  dismiss: vi.fn(),
+}));
 
 afterEach(() => {
   hooks.reset([]);
@@ -65,7 +70,7 @@ function render(probe: { missing: string[]; ready: boolean }, onboarded = probe.
   hooks.reset([
     '/workspace', true, { ok: true, careerOpsPath: '/workspace', trackerPath: null, ...probe },
     null, null, null, 'home', onboarded, undefined, undefined,
-    'interview-plan', '', '', {}, false,
+    'interview-plan', '', '', null,
   ]);
   hooks.beginRender();
   return App() as ElementNode;

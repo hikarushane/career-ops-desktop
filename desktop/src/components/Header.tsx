@@ -1,6 +1,8 @@
 import { FolderIcon, ReloadIcon } from './icons';
+import TaskChip from './TaskChip';
 import UpdateBadge from './UpdateBadge';
 import type { UpdateState } from '../lib/updater';
+import type { TaskRecord } from '../lib/taskStore';
 
 type Props = {
   title: string;
@@ -9,6 +11,9 @@ type Props = {
   onChangeFolder: () => void;
   updateState?: UpdateState;
   onUpdateClick?: () => void;
+  tasks: TaskRecord[];
+  onOpenTask: (id: string) => void;
+  onDismissTask: (id: string) => void;
 };
 
 /**
@@ -17,7 +22,9 @@ type Props = {
  * repurposed as a "workspace block" showing the selected career-ops
  * folder instead of a person — see STITCH-PROMPT.md §4.1.
  */
-export default function Header({ title, root, onReload, onChangeFolder, updateState, onUpdateClick }: Props) {
+export default function Header({
+  title, root, onReload, onChangeFolder, updateState, onUpdateClick, tasks, onOpenTask, onDismissTask,
+}: Props) {
   const segments = root.split('/').filter(Boolean);
   const folderName = segments[segments.length - 1] || root;
 
@@ -27,6 +34,7 @@ export default function Header({ title, root, onReload, onChangeFolder, updateSt
 
       <div className="app-header-right">
         <div className="app-header-utilities">
+          <TaskChip tasks={tasks} onOpen={onOpenTask} onDismiss={onDismissTask} />
           <button type="button" className="icon-button" onClick={onReload} title="Reload" aria-label="Reload">
             <ReloadIcon />
           </button>
