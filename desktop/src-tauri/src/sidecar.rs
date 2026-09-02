@@ -154,6 +154,15 @@ pub async fn fetch_posting(app: tauri::AppHandle, url: String) -> Result<String,
     run(&app, vec!["fetch-posting".into(), "--url".into(), url]).await
 }
 
+#[tauri::command]
+pub async fn models(app: tauri::AppHandle, provider: String, probe: bool) -> Result<String, String> {
+    let mut args = vec!["models".into(), "--provider".into(), provider];
+    if probe {
+        args.push("--probe".into());
+    }
+    run(&app, args).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::data_service_spawn_error;
