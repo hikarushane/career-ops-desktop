@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ProviderEntry } from '../api';
-import { detectProviders, getPreferredId, setPreferredId } from '../lib/providers';
+import {
+  detectProviders, getPreferredId, setPreferredId,
+  getModel, setModel as saveModel,
+  getEffort, setEffort as saveEffort,
+  getFastMode, setFastMode as saveFastMode,
+  type EffortLevel,
+} from '../lib/providers';
 import { checkForUpdate, type UpdateState, initialState } from '../lib/updater';
+import { openWorkspaceFolder } from '../lib/workspace';
 import AnalysisLanguageField from '../components/AnalysisLanguageField';
 import WorkspaceSettings from './WorkspaceSettings';
 
@@ -12,15 +19,21 @@ type Props = {
 
 type Tab = 'background' | 'preferences' | 'sources' | 'workspace' | 'ai' | 'about';
 
-export default function ProfileSettings({ root: _root, onWorkspaceChanged }: Props) {
+export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
   const [tab, setTab] = useState<Tab>('background');
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [preferredId, setPreferred] = useState<string | null>(null);
+  const [model, setModelState] = useState('');
+  const [effort, setEffortState] = useState<EffortLevel>('medium');
+  const [fastMode, setFastState] = useState(false);
   const [updateCheck, setUpdateCheck] = useState<UpdateState>(initialState());
 
   useEffect(() => {
     detectProviders().then(setProviders);
     getPreferredId().then(setPreferred);
+    getModel().then(setModelState);
+    getEffort().then(setEffortState);
+    getFastMode().then(setFastState);
   }, []);
 
   const selectProvider = useCallback(async (id: string) => {
@@ -57,7 +70,7 @@ export default function ProfileSettings({ root: _root, onWorkspaceChanged }: Pro
             <p className="setup-hint">
               Edit your profile through the AI assistant, or open the raw files for advanced editing.
             </p>
-            <button className="btn-secondary" onClick={() => {/* open in editor */}}>
+            <button className="btn-secondary" onClick={() => openWorkspaceFolder(root)}>
               Open raw files
             </button>
           </div>
@@ -70,19 +83,19 @@ export default function ProfileSettings({ root: _root, onWorkspaceChanged }: Pro
             <p className="setup-hint">
               These settings are stored in <code>config/profile.yml</code> and <code>modes/_profile.md</code>.
             </p>
-            <AnalysisLanguageField root={_root} />
+            <AnalysisLanguageField root={root} />
           </div>
         )}
 
         {tab === 'sources' && (
           <div>
             <h2>Search Sources</h2>
-            <p>Companies and job boards to scan, stored in <code>portals.yml</code>.</p>
+            <p>Companies and job boards to scan, stored in <code>{root.split('/').pop()}/portals.yml</code>.</p>
           </div>
         )}
 
         {tab === 'workspace' && (
-          <WorkspaceSettings path={_root} onWorkspaceChanged={onWorkspaceChanged} />
+          <WorkspaceSettings path={root} onWorkspaceChanged={onWorkspaceChanged} />
         )}
 
         {tab === 'ai' && (
@@ -102,6 +115,51 @@ export default function ProfileSettings({ root: _root, onWorkspaceChanged }: Pro
                   </span>
                 </button>
               ))}
+            </div>
+
+            <h2 style={{ marginTop: 32 }}>Model Settings</h2>
+
+            <div className="ai-setting-row">
+              <label htmlFor="ai-model">Model</label>
+              <input
+                id="ai-model"
+                type="text"
+                className="ai-input"
+                placeholder="Default (provider decides)"
+                value={model}
+                onChange={(e) => {
+                  setModelState(e.target.value);
+                  saveModel(e.target.value);
+                }}
+              />
+            </div>
+
+            <div className="ai-setting-row">
+              <label>Effort</label>
+              <div className="ai-segment">
+                {(['low', 'medium', 'high'] as const).map((lvl) => (
+                  <button
+                    key={lvl}
+                    aria-current={effort === lvl}
+                    onClick={() => { setEffortState(lvl); saveEffort(lvl); }}
+                  >
+                    {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="ai-setting-row">
+              <label htmlFor="ai-fast">Fast mode</label>
+              <button
+                id="ai-fast"
+                role="switch"
+                aria-checked={fastMode}
+                className="ai-toggle"
+                onClick={() => { setFastState(!fastMode); saveFastMode(!fastMode); }}
+              >
+                <span className="ai-toggle-thumb" />
+              </button>
             </div>
           </div>
         )}

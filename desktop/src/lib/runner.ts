@@ -78,7 +78,6 @@ export function parseIntakeProposal(output: string): IntakeProposal {
 
   if (
     !isRecord(parsed)
-    || !hasOnlyKeys(parsed, ['items', 'sourcePaths'])
     || !Array.isArray(parsed.items)
     || !Array.isArray(parsed.sourcePaths)
   ) {
@@ -87,13 +86,22 @@ export function parseIntakeProposal(output: string): IntakeProposal {
   if (!parsed.sourcePaths.every(isSafeSourcePath)) throw new Error(INTAKE_PROTOCOL_ERROR);
   const sourcePaths = new Set(parsed.sourcePaths);
   if (sourcePaths.size !== parsed.sourcePaths.length) throw new Error(INTAKE_PROTOCOL_ERROR);
+  // Providers emit `"conflict": null` for "no conflict" even though the protocol
+  // says to omit the key. Treat null exactly like an absent conflict.
+  for (const item of parsed.items) {
+    if (isRecord(item) && item.conflict === null) delete item.conflict;
+  }
   if (!parsed.items.every((item) => isProposalItem(item, sourcePaths))) {
     throw new Error(INTAKE_PROTOCOL_ERROR);
   }
   const ids = new Set(parsed.items.map((item) => item.id));
   if (ids.size !== parsed.items.length) throw new Error(INTAKE_PROTOCOL_ERROR);
 
-  return parsed as IntakeProposal;
+  // Providers commonly add extra top-level fields ("note", "explanation", ...) even when
+  // not asked. Keep only the protocol keys and discard the rest — the Rust bind step
+  // deserializes with deny_unknown_fields, and isProposalItem stays strict per item,
+  // which is the real security boundary.
+  return { items: parsed.items, sourcePaths: parsed.sourcePaths } as IntakeProposal;
 }
 
 export type TaskCallbacks = {
@@ -185,6 +193,7 @@ export type IntakePreviewSession = {
 export async function previewIntakeProposal(root: string): Promise<IntakePreviewSession> {
   return new Promise<IntakePreviewSession>((resolve, reject) => {
     const stdout: string[] = [];
+    const stderr: string[] = [];
     let intakeSessionId: string | undefined;
     void runTask('intake-preview', {}, root, {
       onStarted: (_taskId, sessionId) => {
@@ -192,20 +201,42 @@ export async function previewIntakeProposal(root: string): Promise<IntakePreview
       },
       onOutput: (stream, data) => {
         if (stream === 'stdout') stdout.push(data);
+        if (stream === 'stderr') stderr.push(data);
       },
-      onFinished: async (_exitCode, success) => {
+      onFinished: async (exitCode, success) => {
         if (!success) {
-          reject(new Error('The intake preview could not be completed. Try again.'));
+          const stderrText = stderr.join('\n').trim().slice(-500);
+          const stdoutText = stdout.join('\n').trim().slice(-300);
+          const combined = `${stderrText}\n${stdoutText}`.toLowerCase();
+          const isAuthError = /authenticat|expired|login|oauth|unauthorized/.test(combined);
+          const parts = [isAuthError
+            ? 'AI provider authentication failed. Open Terminal and run: claude login'
+            : `Intake preview failed (exit ${exitCode ?? 'unknown'})`];
+          if (stderrText) parts.push(stderrText);
+          else if (stdoutText) parts.push(stdoutText);
+          else if (!isAuthError) parts.push('No output was captured from the AI provider.');
+          reject(new Error(parts.join('\n')));
           return;
         }
         try {
           if (!intakeSessionId) throw new Error(INTAKE_PROTOCOL_ERROR);
-          const proposal = parseIntakeProposal(stdout.join('\n'));
+          const fullOutput = stdout.join('\n');
+          const proposal = parseIntakeProposal(fullOutput);
           await invokeBindIntakeProposal(intakeSessionId, proposal);
           resolve({ proposal, intakeSessionId });
         } catch (reason) {
           if (intakeSessionId) void invokeDiscardIntakeSession(intakeSessionId).catch(() => {});
-          reject(reason);
+          if (reason instanceof Error && reason.message === INTAKE_PROTOCOL_ERROR) {
+            const fullOutput = stdout.join('\n');
+            const stderrTail = stderr.join('\n').trim().slice(-400);
+            const stdoutTail = fullOutput.slice(-800) || '(empty)';
+            const detail = stderrTail
+              ? `AI stderr (last 400 chars):\n${stderrTail}\n\nAI stdout (last 800 chars):\n${stdoutTail}`
+              : `AI output (last 800 chars):\n${stdoutTail}`;
+            reject(new Error(`${INTAKE_PROTOCOL_ERROR}\n\n${detail}`));
+          } else {
+            reject(reason);
+          }
         }
       },
     }).catch(reject);
@@ -220,13 +251,20 @@ export async function applyIntakeProposal(
   if (approvedIds.length === 0) return { applied: false, exactChanges: [] };
 
   await new Promise<void>((resolve, reject) => {
+    const stderr: string[] = [];
     void runTask('intake-apply', {
       intakeSessionId,
       approvedProposalIds: JSON.stringify(approvedIds),
     }, root, {
+      onOutput: (stream, data) => {
+        if (stream === 'stderr') stderr.push(data);
+      },
       onFinished: (_exitCode, success) => {
         if (success) resolve();
-        else reject(new Error('The intake changes could not be applied. No sources were recorded; try again.'));
+        else {
+          const detail = stderr.join('\n').trim().slice(-500);
+          reject(new Error(detail || 'The intake changes could not be applied. No sources were recorded; try again.'));
+        }
       },
     }).catch(reject);
   });

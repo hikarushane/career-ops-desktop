@@ -134,6 +134,18 @@ summary:focus-visible {
 }
 
 /* --- Setup / Onboarding (STITCH §6.7: full-bleed, max-width 640px) --- */
+.onboarding { position: relative; min-height: 100vh; }
+.btn-back {
+  position: absolute; top: 16px; left: 16px; z-index: 1;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid var(--color-surface-muted);
+  border-radius: 50%; cursor: pointer;
+  color: var(--color-text-primary);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.btn-back:hover { background: var(--color-surface-subtle); border-color: var(--color-line-strong); }
+.btn-back:focus-visible { outline: 2px solid var(--color-accent-teal); outline-offset: 2px; }
 .setup-screen {
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
@@ -269,8 +281,50 @@ summary:focus-visible {
 }
 .provider-card.selected { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary); }
 .provider-card:disabled { opacity: 0.5; cursor: default; }
+.provider-card.state-not_installed { cursor: default; }
+.provider-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.provider-card.state-ready .provider-info { cursor: pointer; }
+.provider-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .provider-name { font: 700 14px var(--font-sans); }
 .provider-state { font: 400 12px var(--font-sans); color: var(--color-text-secondary); display: flex; align-items: center; gap: 4px; }
+.provider-auth-hint { font: 400 11px var(--font-sans); color: var(--color-text-secondary); max-width: 180px; text-align: right; }
+.btn-install {
+  padding: 4px 12px; border-radius: var(--radius-card); border: 1px solid var(--color-primary);
+  background: var(--color-primary); color: #fff; font: 600 12px var(--font-sans);
+  cursor: pointer; white-space: nowrap;
+}
+.btn-install:hover { opacity: 0.9; }
+.btn-link { background: none; border: none; color: var(--color-primary); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
+.provider-spinner {
+  width: 16px; height: 16px; border: 2px solid var(--color-surface-muted);
+  border-top-color: var(--color-primary); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Animated ellipsis for in-progress states */
+.animated-dots::after {
+  content: '...';
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: ellipsis-reveal 1.4s steps(4, end) infinite;
+}
+@keyframes ellipsis-reveal {
+  to { width: 1.5em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animated-dots::after { width: 1.5em; animation: none; }
+}
+
+/* Profile generation step */
+.profile-gen-steps {
+  display: flex; flex-direction: column; gap: 8px;
+  width: 100%; max-width: 400px;
+}
+
+.setup-actions { display: flex; gap: 8px; margin-top: 16px; }
 
 /* --- Home screen (follows .progress-grid padding convention) --- */
 .home-screen { padding: 20px 32px; }
@@ -515,3 +569,52 @@ summary:focus-visible {
 .settings-update-row span { font: 500 14px var(--font-sans); }
 .settings-update-status { font: 400 12px var(--font-sans); color: var(--color-text-secondary); margin-top: 4px; }
 .settings-update-error { color: var(--color-accent-red); }
+
+/* --- AI settings --- */
+.ai-setting-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 0; border-bottom: var(--border-divider);
+}
+.ai-setting-row label {
+  font: 500 14px var(--font-sans); color: var(--color-text-primary);
+}
+.ai-input {
+  width: 220px; padding: 8px 12px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-control);
+  background: var(--color-surface-subtle); color: var(--color-text-primary);
+  font: 400 13px var(--font-sans);
+}
+.ai-input:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.ai-input::placeholder { color: var(--color-text-secondary); }
+.ai-segment {
+  display: flex; border: 1px solid var(--color-border); border-radius: var(--radius-control); overflow: hidden;
+}
+.ai-segment button {
+  padding: 6px 16px; border: none; background: var(--color-surface-subtle);
+  font: 500 13px var(--font-sans); color: var(--color-text-secondary); cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.ai-segment button:not(:last-child) { border-right: 1px solid var(--color-border); }
+.ai-segment button[aria-current="true"] {
+  background: var(--color-primary); color: #fff;
+}
+.ai-toggle {
+  position: relative; width: 44px; height: 24px; border-radius: 12px;
+  border: none; padding: 0; cursor: pointer;
+  background: var(--color-border); transition: background 0.2s;
+}
+.ai-toggle[aria-checked="true"] { background: var(--color-primary); }
+.ai-toggle-thumb {
+  position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
+  border-radius: 50%; background: #fff;
+  transition: transform 0.2s;
+}
+.ai-toggle[aria-checked="true"] .ai-toggle-thumb { transform: translateX(20px); }
+
+/* --- Progress empty state --- */
+.progress-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 300px; text-align: center; color: var(--color-text-secondary);
+}
+.progress-empty h2 { font: 600 18px var(--font-sans); color: var(--color-text-primary); margin-bottom: 8px; }
+.progress-empty p { font: 400 14px/1.5 var(--font-sans); max-width: 320px; }

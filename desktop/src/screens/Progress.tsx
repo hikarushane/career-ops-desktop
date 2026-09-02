@@ -33,9 +33,9 @@ export default function Progress({ data }: { data: ProgressData }) {
   // source (career.go), padding meant for the TUI's monospace grid. Left in,
   // it reads as a stray gap before the label in a proportional-font axis
   // tick. Applied defensively to all three series.
-  const funnel = data.FunnelStages.map((s) => ({ name: s.Label.trim(), count: s.Count, pct: s.Pct }));
-  const buckets = data.ScoreBuckets.map((b) => ({ name: b.Label.trim(), count: b.Count }));
-  const weeks = data.WeeklyActivity.map((w) => ({ name: w.Week.trim(), count: w.Count }));
+  const funnel = (data.FunnelStages ?? []).map((s) => ({ name: s.Label.trim(), count: s.Count, pct: s.Pct }));
+  const buckets = (data.ScoreBuckets ?? []).map((b) => ({ name: b.Label.trim(), count: b.Count }));
+  const weeks = (data.WeeklyActivity ?? []).map((w) => ({ name: w.Week.trim(), count: w.Count }));
 
   // Score buckets are ordered from the highest band down, so the first two get
   // the "good" colors. This mirrors the score bands the table uses (Task 7's
@@ -59,6 +59,19 @@ export default function Progress({ data }: { data: ProgressData }) {
   // --color-primary (green), DESIGN.md's one sanctioned accent for
   // interactive/primary marks.
   const funnelColor = 'var(--color-primary)';
+
+  const isEmpty = funnel.length === 0 && buckets.length === 0 && weeks.length === 0;
+
+  if (isEmpty) {
+    return (
+      <div className="pane">
+        <div className="progress-empty">
+          <h2>No data yet</h2>
+          <p>Evaluate some job postings to see your progress charts here.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pane">
