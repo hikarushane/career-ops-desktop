@@ -128,4 +128,11 @@ describe('ProfileGeneration', () => {
     expect(findElement(tree, (el) => textContent(el) === 'Try again')).toBeTruthy();
     expect(findElement(tree, (el) => textContent(el) === 'Skip for now')).toBeTruthy();
   });
+
+  it('counts written files while running', () => {
+    hooks.reset(['running', 'task-1', ['cv.md', 'config/profile.yml'], null, 'cv.md', null, false]);
+    hooks.beginRender();
+    const tree = ProfileGeneration({ root: '/w', preferences: EMPTY_PREFERENCES, onComplete: vi.fn(), onSkip: vi.fn() }) as ElementNode;
+    expect(textContent(tree)).toMatch(/2 of 4 files written/);
+  });
 });
