@@ -47,8 +47,81 @@ fn tool_target(input: &Value) -> Option<String> {
     None
 }
 
+/// Maps Antigravity CLI tool names onto the Claude Code names the frontend
+/// summariser already understands; unknown names pass through unchanged.
+fn agy_tool_name(name: &str) -> String {
+    match name {
+        "run_command" => "Bash",
+        "view_file" | "view_file_outline" | "view_code_item" | "read_file" => "Read",
+        "write_to_file" => "Write",
+        "replace_file_content" | "multi_replace_file_content" | "edit_file" => "Edit",
+        "find_by_name" | "list_dir" => "Glob",
+        "grep_search" => "Grep",
+        "read_url_content" => "WebFetch",
+        "search_web" => "WebSearch",
+        other => other,
+    }
+    .to_owned()
+}
+
+fn agy_tool_target(parameters: &Value) -> Option<String> {
+    for key in [
+        "CommandLine",
+        "AbsolutePath",
+        "TargetFile",
+        "Url",
+        "Pattern",
+        "Query",
+        "SearchDirectory",
+        "DirectoryPath",
+    ] {
+        if let Some(v) = parameters.get(key).and_then(Value::as_str) {
+            return Some(truncate(v, 80));
+        }
+    }
+    None
+}
+
+/// Antigravity CLI (`agy --output-format stream-json`) emits
+/// `{"event":"step_update","step_update":{...}}` and `{"event":"result","result":{...}}`.
+fn parse_agy(task_id: &str, event_name: &str, value: &Value) -> Option<TaskEvent> {
+    match event_name {
+        "result" => {
+            let result = value.get("result")?;
+            let status = result.get("status").and_then(Value::as_str).unwrap_or("");
+            let mut e = event(
+                task_id,
+                "result",
+                truncate(result.get("response").and_then(Value::as_str).unwrap_or(""), 200),
+            );
+            e.is_error = Some(status != "SUCCESS");
+            Some(e)
+        }
+        "step_update" => {
+            let step = value.get("step_update")?;
+            if step.get("step_type").and_then(Value::as_str) != Some("tool") {
+                return None;
+            }
+            // ACTIVE marks the call starting; DONE repeats the same call with output.
+            if step.get("state").and_then(Value::as_str) != Some("ACTIVE") {
+                return None;
+            }
+            let raw_name = step.get("tool_name").and_then(Value::as_str)?;
+            let name = agy_tool_name(raw_name);
+            let mut e = event(task_id, "tool", name.clone());
+            e.target = step.pointer("/tool_info/parameters").and_then(agy_tool_target);
+            e.tool = Some(name);
+            Some(e)
+        }
+        _ => None,
+    }
+}
+
 pub fn parse_line(task_id: &str, line: &str) -> Option<TaskEvent> {
     let value: Value = serde_json::from_str(line.trim()).ok()?;
+    if let Some(event_name) = value.get("event").and_then(Value::as_str) {
+        return parse_agy(task_id, event_name, &value);
+    }
     let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
 
     if value.get("total_cost_usd").is_some() || kind == "result" {
@@ -126,6 +199,30 @@ pub fn parse_line(task_id: &str, line: &str) -> Option<TaskEvent> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maps_agy_tool_steps_once_with_a_normalised_name() {
+        let active = r#"{"event":"step_update","step_update":{"conversation_id":"c","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"run_command","tool_info":{"name":"run_command","parameters":{"CommandLine":"pwd && ls -la"}}}}"#;
+        let e = parse_line("t", active).unwrap();
+        assert_eq!((e.kind.as_str(), e.tool.as_deref()), ("tool", Some("Bash")));
+        assert_eq!(e.target.as_deref(), Some("pwd && ls -la"));
+        let done = r#"{"event":"step_update","step_update":{"state":"DONE","step_type":"tool","tool_name":"run_command","tool_info":{"parameters":{"CommandLine":"pwd"},"output":"x"}}}"#;
+        assert!(parse_line("t", done).is_none());
+        let find = r#"{"event":"step_update","step_update":{"state":"ACTIVE","step_type":"tool","tool_name":"find_by_name","tool_info":{"parameters":{"Pattern":"sample.txt","SearchDirectory":"/w"}}}}"#;
+        let f = parse_line("t", find).unwrap();
+        assert_eq!((f.tool.as_deref(), f.target.as_deref()), (Some("Glob"), Some("sample.txt")));
+    }
+
+    #[test]
+    fn ignores_agy_noise_and_maps_result() {
+        assert!(parse_line("t", r#"{"event":"init","conversation_id":"c","init":{"cwd":"/w","tools":[]}}"#).is_none());
+        assert!(parse_line("t", r#"{"event":"step_update","step_update":{"state":"DONE","step_type":"agent_response","text_delta":"ok"}}"#).is_none());
+        let ok = r#"{"event":"result","result":{"conversation_id":"c","status":"SUCCESS","response":"ok\n","num_turns":1}}"#;
+        let e = parse_line("t", ok).unwrap();
+        assert_eq!((e.kind.as_str(), e.is_error, e.summary.as_str()), ("result", Some(false), "ok\n"));
+        let bad = r#"{"event":"result","result":{"status":"ERROR","response":""}}"#;
+        assert_eq!(parse_line("t", bad).unwrap().is_error, Some(true));
+    }
 
     #[test]
     fn maps_task_summary_to_status() {

@@ -384,6 +384,18 @@ fn non_empty(value: &Option<String>) -> Option<&str> {
     value.as_deref().map(str::trim).filter(|v| !v.is_empty())
 }
 
+/// agy ignores the process working directory in print mode and runs in its own
+/// scratch folder; `--add-dir` makes `dir` the agent's workspace. It is inserted
+/// before the trailing `-p`, which must stay last because it takes the prompt.
+fn add_agy_workspace_dir(args: &mut Vec<String>, dir: &Path) {
+    let prompt_flag = if args.last().map(String::as_str) == Some("-p") { args.pop() } else { None };
+    args.push("--add-dir".to_owned());
+    args.push(dir.to_string_lossy().into_owned());
+    if let Some(flag) = prompt_flag {
+        args.push(flag);
+    }
+}
+
 fn provider_args(provider_id: &str, options: &ModelOptions) -> Option<Vec<String>> {
     let base: Vec<&str> = match provider_id {
         "claude" => vec![
@@ -1042,9 +1054,6 @@ pub fn run_task(
         format!("task-{c}")
     };
 
-    let mut cmd_args = cmd_args_base;
-    cmd_args.push(prompt);
-
     let workspace = canonical_workspace(&input.path)?;
     let before = snapshot_artifacts(&workspace, &input.task_type);
     if !workspace.join(".git").exists() {
@@ -1066,6 +1075,13 @@ pub fn run_task(
         .map(|s| s.path().to_path_buf())
         .unwrap_or_else(|| workspace.clone());
     let staging_path = staging.as_ref().map(|s| s.path().to_path_buf());
+
+    let mut cmd_args = cmd_args_base;
+    if input.provider_id == "agy" {
+        add_agy_workspace_dir(&mut cmd_args, &execution_directory);
+    }
+    cmd_args.push(prompt);
+
     if let Some(staging) = staging {
         let mut generations = state.generations.lock().map_err(|e| e.to_string())?;
         generations.insert(
@@ -1224,7 +1240,7 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        apply_generation_at, build_prompt, copy_document_sources, create_generation_staging,
+        add_agy_workspace_dir, apply_generation_at, build_prompt, copy_document_sources, create_generation_staging,
         generation_is_complete, get_task_def, inspect_generation, judge_outcome,
         language_context_instruction, packaged_runtime_paths_for_executable, provider_args,
         render_generation_prompt, snapshot_artifacts, LanguageContext, ModelOptions,
@@ -1475,9 +1491,12 @@ mod tests {
         assert!(codex.windows(2).any(|w| w == ["-m", "opus"]));
         assert!(codex.windows(2).any(|w| w == ["-c", "model_reasoning_effort=high"]));
         assert!(!codex.iter().any(|a| a.contains("fastMode")));
-        let agy = provider_args("agy", &opts).unwrap();
+        let mut agy = provider_args("agy", &opts).unwrap();
         assert!(agy.windows(2).any(|w| w == ["--model", "opus"]));
         assert!(!agy.contains(&"--effort".to_owned()));
+        assert_eq!(agy.last().map(String::as_str), Some("-p"));
+        add_agy_workspace_dir(&mut agy, Path::new("/w/space"));
+        assert!(agy.windows(2).any(|w| w == ["--add-dir", "/w/space"]));
         assert_eq!(agy.last().map(String::as_str), Some("-p"));
         let empty = ModelOptions { model: Some(String::new()), ..ModelOptions::default() };
         assert!(!provider_args("claude", &empty).unwrap().contains(&"--model".to_owned()));
