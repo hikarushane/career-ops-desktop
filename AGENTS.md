@@ -414,6 +414,7 @@ Headless worker command per CLI:
 |--------|----------|
 | `archive-posting.mjs` | `{YYYY-MM-DD}_{company}_{role}.pdf` |
 | `archive-posting.mjs --report=N` | `{NNN}-{YYYY-MM-DD}_{company}_{role}.pdf` |
+| CareerOps Desktop (Evaluate) | `{YYYY-MM-DD}_{company}_{title}.md`, renamed to `{NNN}-…` by the evaluating agent |
 | `plugins/apify/index.mjs`, `scan-apify.mjs` | `{company}-{role}-{sha1(url)[0:10]}.md` |
 | `scan` mode (manual save) | `{company}-{role-slug}.md` |
 

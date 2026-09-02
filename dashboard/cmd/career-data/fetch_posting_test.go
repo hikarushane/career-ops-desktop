@@ -86,6 +86,28 @@ func TestFetchPostingCapsRedirects(t *testing.T) {
 	}
 }
 
+// TestFetchPostingDecodesNonUTF8Charset pins the charset.NewReader transcode
+// in `get`: a page served as ISO-8859-1 (common on older corporate ATS
+// pages) must come out with its non-ASCII characters intact, not mojibake
+// from html.Parse assuming UTF-8 on the raw bytes.
+func TestFetchPostingDecodesNonUTF8Charset(t *testing.T) {
+	// 'ä' (U+00E4) is byte 0xE4 in ISO-8859-1 / Latin-1.
+	body := []byte("<html><head><title>B\xe4ckerei GmbH</title></head><body><main><p>Wir suchen eine erfahrene B\xe4ckerin oder einen B\xe4cker.</p>" +
+		strings.Repeat("<p>Weitere Beschreibung des Stellenangebots.</p>", 20) + "</main></body></html>")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=iso-8859-1")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+	got, err := fetchPosting(srv.URL, srv.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got.Text, "ä") {
+		t.Fatalf("expected decoded ISO-8859-1 text to contain %q, got %q", "ä", got.Text)
+	}
+}
+
 // TestLinkedInJobIDExtraction pins linkedInJobID to the trailing job ID in
 // a /jobs/view/... path or a currentJobId= query parameter, rejecting an
 // earlier 6+ digit run (e.g. a requisition number or year) embedded before
