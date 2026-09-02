@@ -14,6 +14,7 @@ describe('jobPreferences', () => {
     const prefs: JobPreferences = {
       regions: 'Germany, Netherlands',
       keywords: 'Manufacturing Engineer',
+      industries: '',
       salary: 'EUR 70k-85k',
       relocation: 'yes',
       preferredCities: 'Hamburg',
@@ -27,5 +28,10 @@ describe('jobPreferences', () => {
 
   it('returns fallback line when nothing is filled', () => {
     expect(preferencesToPrompt(EMPTY_PREFERENCES)).toContain('No preferences provided');
+  });
+
+  it('serialises industries after keywords', () => {
+    const prompt = preferencesToPrompt({ ...EMPTY_PREFERENCES, keywords: 'PM', industries: 'Automotive, Semiconductor' });
+    expect(prompt).toBe('- Role keywords: PM\n- Industries: Automotive, Semiconductor');
   });
 });

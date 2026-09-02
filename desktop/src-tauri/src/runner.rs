@@ -39,7 +39,7 @@ Produce exactly these four files in this directory, overwriting any existing cop
 1. cv.md: the master CV, as detailed as the evidence allows. If the documents show distinct career tracks or specialisations, keep one file with a clearly titled section per track so a tailored CV can later be cut from it.
 2. config/profile.yml: follow config/profile.example.yml. Fill only fields backed by the documents or by the preferences above. Set language.analysis to {analysisLanguage}.
 3. modes/_profile.md: follow modes/_profile.template.md: archetypes, North Star, narrative, proof points, location policy, and compensation targets, all derived from the documents and the preferences.
-4. portals.yml: follow templates/portals.example.yml. Set title_filter and location_filter from the preferences and keep the shipped company list.
+4. portals.yml: follow templates/portals.example.yml. Set title_filter and location_filter from the preferences and keep the shipped company list. Choose companies in portals.yml that match the candidate's industries first; only fall back to generic tech employers when no industry is given.
 
 Write modes/_profile.md and every narrative field in {analysisLanguage}. Write cv.md in the language used by most of the source documents.
 

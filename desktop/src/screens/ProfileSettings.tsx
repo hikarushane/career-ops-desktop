@@ -136,11 +136,12 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
 
             <div className="ai-setting-row">
               <label>Effort</label>
-              <div className="ai-segment">
+              <div className="ai-segment" role="radiogroup">
                 {(['low', 'medium', 'high'] as const).map((lvl) => (
                   <button
                     key={lvl}
-                    aria-current={effort === lvl}
+                    role="radio"
+                    aria-checked={effort === lvl}
                     onClick={() => { setEffortState(lvl); saveEffort(lvl); }}
                   >
                     {lvl.charAt(0).toUpperCase() + lvl.slice(1)}

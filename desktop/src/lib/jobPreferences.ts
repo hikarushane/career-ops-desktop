@@ -3,6 +3,7 @@ export type Relocation = 'yes' | 'no' | 'maybe';
 export type JobPreferences = {
   regions: string;
   keywords: string;
+  industries: string;
   salary: string;
   relocation: Relocation;
   preferredCities: string;
@@ -12,6 +13,7 @@ export type JobPreferences = {
 export const EMPTY_PREFERENCES: JobPreferences = {
   regions: '',
   keywords: '',
+  industries: '',
   salary: '',
   relocation: 'maybe',
   preferredCities: '',
@@ -21,6 +23,7 @@ export const EMPTY_PREFERENCES: JobPreferences = {
 const LABELS: [keyof JobPreferences, string][] = [
   ['regions', 'Target regions'],
   ['keywords', 'Role keywords'],
+  ['industries', 'Industries'],
   ['salary', 'Expected salary'],
   ['relocation', 'Willing to relocate'],
   ['preferredCities', 'Preferred cities'],

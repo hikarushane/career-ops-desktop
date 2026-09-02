@@ -642,7 +642,9 @@ summary:focus-visible {
   transition: background 0.15s, color 0.15s;
 }
 .ai-segment button:not(:last-child) { border-right: 1px solid var(--color-border); }
-.ai-segment button[aria-current="true"] {
+.ai-segment button[aria-current="true"],
+.ai-segment button[aria-checked="true"],
+.ai-segment button.selected {
   background: var(--color-primary); color: #fff;
 }
 .ai-toggle {
