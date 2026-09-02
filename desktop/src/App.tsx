@@ -139,6 +139,11 @@ export default function App() {
       setPipelineSelected(params?.selected);
       setScreen('pipeline');
     } else if (target === 'scanner') {
+      // A fresh visit to the scanner (not a reopen from the header chip)
+      // must not inherit a stale activeTaskId left over from a previous
+      // evaluate/batch/interview session — Scanner would otherwise try to
+      // hydrate a task of the wrong type.
+      setActiveTaskId(null);
       setScreen('scanner');
     } else if (target === 'batch') {
       // Guard against a double click starting two batch agents over the
@@ -177,14 +182,21 @@ export default function App() {
     if (task.taskType === 'evaluate' || task.taskType === 'batch') {
       navigate('evaluate', { taskId: id });
     } else if (task.taskType === 'scan') {
+      setActiveTaskId(id);
       setScreen('scanner');
     } else if (task.taskType.startsWith('interview')) {
+      setActiveTaskId(id);
+      setIwMode(task.taskType as typeof iwMode);
       setScreen('interview-workflow');
     }
   }, [tasks, navigate]);
 
   const startInterviewWorkflow = useCallback(
     (mode: string, app: Application) => {
+      // A fresh start (not a reopen from the header chip) must not inherit
+      // a stale activeTaskId from a previous session — see the 'scanner'
+      // branch of navigate() above for the same concern.
+      setActiveTaskId(null);
       setIwMode(mode as typeof iwMode);
       setIwCompany(app.company);
       setIwRole(app.role);
@@ -244,11 +256,28 @@ export default function App() {
       case 'evaluate':
         return <Evaluate key={activeTaskId ?? 'new'} root={root!} initialUrl={evalUrl} initialTaskId={activeTaskId} onDone={evalDone} />;
       case 'scanner':
-        return <Scanner root={root!} onDone={() => { reload(); setScreen('pipeline'); }} />;
+        return (
+          <Scanner
+            key={activeTaskId ?? 'new'}
+            root={root!}
+            initialTaskId={activeTaskId}
+            onDone={() => { reload(); setScreen('pipeline'); }}
+          />
+        );
       case 'interview':
         return <Interview data={data!} onAction={startInterviewWorkflow} />;
       case 'interview-workflow':
-        return <InterviewWorkflow root={root!} mode={iwMode} company={iwCompany} role={iwRole} onBack={() => setScreen('interview')} />;
+        return (
+          <InterviewWorkflow
+            key={activeTaskId ?? 'new'}
+            root={root!}
+            mode={iwMode}
+            company={iwCompany}
+            role={iwRole}
+            initialTaskId={activeTaskId}
+            onBack={() => setScreen('interview')}
+          />
+        );
       case 'profile':
         return <ProfileSettings root={root!} onWorkspaceChanged={onWorkspaceReady} />;
       case 'help':

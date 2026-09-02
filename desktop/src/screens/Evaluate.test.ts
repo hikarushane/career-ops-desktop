@@ -60,6 +60,7 @@ type ElementNode = {
   props?: {
     children?: unknown;
     onClick?: () => void | Promise<void>;
+    onKeyDown?: (e: unknown) => void;
     title?: string;
     onRetry?: () => void | Promise<void>;
     onCancelled?: () => void;
@@ -85,6 +86,27 @@ function findButton(node: unknown, label: string): ElementNode | undefined {
   const element = node as ElementNode;
   if (element.type === 'button' && textContent(element) === label) return element;
   return findButton(element.props?.children, label);
+}
+
+function findByType(node: unknown, type: string, skip = 0): ElementNode | undefined {
+  let remaining = skip;
+  function walk(n: unknown): ElementNode | undefined {
+    if (Array.isArray(n)) {
+      for (const child of n) {
+        const found = walk(child);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    if (typeof n !== 'object' || n === null) return undefined;
+    const element = n as ElementNode;
+    if (element.type === type) {
+      if (remaining === 0) return element;
+      remaining -= 1;
+    }
+    return walk(element.props?.children);
+  }
+  return walk(node);
 }
 
 // State order: input, jdText, fetchState, taskId, startError, starting, languages, jobLanguage, detectedLanguage
@@ -163,5 +185,73 @@ describe('Evaluate', () => {
 
     await tree.props?.onRetry?.();
     expect(store.startTask).toHaveBeenCalledWith('batch', {}, '/w', 'Batch (3 pending)');
+  });
+
+  it('retries a reopened (failed) evaluate task with its stored args, not a re-derived start', async () => {
+    const storedLanguageContext = { analysisLanguage: 'en' };
+    store.getTask.mockReturnValue({
+      taskId: 'task-e', taskType: 'evaluate', label: 'Acme', startedAt: 0,
+      state: 'failed', events: [], rawLog: [], outcome: null, exitCode: 1,
+      args: { url: 'https://acme.example/job', url_line: ' Posting URL: https://acme.example/job.', capture: 'jds/x.md' },
+      languageContext: storedLanguageContext,
+    });
+    // input/jdText/languages are all empty here — exactly the state a fresh
+    // remount via App's `key={activeTaskId}` starts with when reopened from
+    // the header chip, so a correct retry cannot come from re-running start().
+    hooks.reset(['', '', { kind: 'idle' }, 'task-e', null, false, null, '', null]);
+    hooks.beginRender();
+    const tree = Evaluate({ root: '/w', initialTaskId: 'task-e', onDone: vi.fn() }) as ElementNode;
+
+    await tree.props?.onRetry?.();
+
+    expect(store.startTask).toHaveBeenCalledWith(
+      'evaluate',
+      { url: 'https://acme.example/job', url_line: ' Posting URL: https://acme.example/job.', capture: 'jds/x.md' },
+      '/w', 'Acme', storedLanguageContext,
+    );
+  });
+
+  it('submits on Enter for a single-line URL but not on Shift+Enter', async () => {
+    api.fetchPosting.mockResolvedValue({ ok: true, source: 'linkedin-guest', title: 'PM', company: 'Acme', location: 'Berlin', text: 'x'.repeat(500), fetchedAt: 'now' });
+    api.saveJobCapture.mockResolvedValue('jds/2026-09-02_acme_pm.md');
+    hooks.reset(['https://www.linkedin.com/jobs/view/1', '', { kind: 'idle' }, null, null, false, null, '', null]);
+    hooks.beginRender();
+    const tree = Evaluate({ root: '/w', onDone: vi.fn() }) as ElementNode;
+    const textarea = findByType(tree, 'textarea', 0)!;
+    const onKeyDown = textarea.props?.onKeyDown as (e: unknown) => void;
+
+    const shiftEnter = { key: 'Enter', shiftKey: true, preventDefault: vi.fn() };
+    onKeyDown(shiftEnter);
+    expect(shiftEnter.preventDefault).not.toHaveBeenCalled();
+    expect(store.startTask).not.toHaveBeenCalled();
+
+    const plainEnter = { key: 'Enter', shiftKey: false, preventDefault: vi.fn() };
+    onKeyDown(plainEnter);
+    expect(plainEnter.preventDefault).toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.startTask).toHaveBeenCalled();
+  });
+
+  it('submits on Cmd/Ctrl+Enter even for multi-line pasted text', async () => {
+    api.saveJobCapture.mockResolvedValue('jds/pasted_1.md');
+    hooks.reset(['Senior PM at Acme.\nMore JD text here.', '', { kind: 'idle' }, null, null, false, null, '', null]);
+    hooks.beginRender();
+    const tree = Evaluate({ root: '/w', onDone: vi.fn() }) as ElementNode;
+    const textarea = findByType(tree, 'textarea', 0)!;
+    const onKeyDown = textarea.props?.onKeyDown as (e: unknown) => void;
+
+    const cmdEnter = { key: 'Enter', metaKey: true, shiftKey: false, preventDefault: vi.fn() };
+    onKeyDown(cmdEnter);
+    expect(cmdEnter.preventDefault).toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.startTask).toHaveBeenCalled();
+  });
+
+  it('shows a fetching hint and label while the posting is being fetched', () => {
+    hooks.reset(['https://www.linkedin.com/jobs/view/1', '', { kind: 'fetching' }, null, null, true, null, '', null]);
+    hooks.beginRender();
+    const tree = Evaluate({ root: '/w', onDone: vi.fn() }) as ElementNode;
+    expect(textContent(tree)).toMatch(/Fetching the posting…/);
+    expect(findButton(tree, 'Fetching…')).toBeDefined();
   });
 });
