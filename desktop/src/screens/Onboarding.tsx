@@ -43,7 +43,7 @@ export default function Onboarding({ root, onComplete }: Props) {
       </div>
     );
   } else if (step === 'import') {
-    content = <BackgroundImport root={root} onComplete={completeBackgroundImport} />;
+    content = <BackgroundImport root={root} initialStaged={staged} onComplete={completeBackgroundImport} />;
   } else if (step === 'language') {
     content = (
       <div className="setup-screen">

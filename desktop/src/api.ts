@@ -317,6 +317,10 @@ export function stageIntakeFiles(
   return invoke<StagedIntakeFile[]>('stage_intake_files_for_workspace', { root, files });
 }
 
+export function listIntakeCandidates(paths: string[]): Promise<string[]> {
+  return invoke<string[]>('list_intake_candidates', { paths });
+}
+
 export function contracts() {
   return invokeSidecar<ContractsResult | SidecarError>('contracts');
 }
