@@ -11,18 +11,21 @@ describe('getModelCatalog', () => {
     m.models.mockResolvedValue({ ok: true, provider: 'claude', probedAt: 'x', models: [
       { id: 'opus', label: 'Opus', available: true, fast: true }, { id: 'fable', label: 'Fable', available: false, fast: false }] });
     const first = await getModelCatalog('claude', { force: false });
-    expect(first.map((x) => x.id)).toEqual(['opus']);
+    expect(first.models.map((x) => x.id)).toEqual(['opus']);
+    expect(first.degraded).toBe(false);
     expect(m.models).toHaveBeenCalledWith('claude', true);
-    await getModelCatalog('claude', { force: false });
+    const second = await getModelCatalog('claude', { force: false });
+    expect(second.degraded).toBe(false);
     expect(m.models).toHaveBeenCalledTimes(1);
     await getModelCatalog('claude', { force: true });
     expect(m.models).toHaveBeenCalledTimes(2);
   });
   it('returns unverified candidates when probing fails', async () => {
     m.models.mockResolvedValue({ ok: false, error: 'network', message: 'offline' });
-    const list = await getModelCatalog('codex', { force: true });
-    expect(list.length).toBeGreaterThan(0);
-    expect(list.every((x) => x.available === null)).toBe(true);
+    const result = await getModelCatalog('codex', { force: true });
+    expect(result.models.length).toBeGreaterThan(0);
+    expect(result.models.every((x) => x.available === null)).toBe(true);
+    expect(result.degraded).toBe(true);
     expect(m.store.size).toBe(0);
   });
 });

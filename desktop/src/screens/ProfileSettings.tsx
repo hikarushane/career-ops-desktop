@@ -34,13 +34,16 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
   const [catalog, setCatalog] = useState<ModelEntry[]>([]);
   const [catalogState, setCatalogState] = useState<'loading' | 'ready' | 'error'>('ready');
   const [customModel, setCustomModel] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   useEffect(() => {
-    detectProviders().then(setProviders);
-    getPreferredId().then(setPreferred);
-    getModel().then(setModelState);
-    getEffort().then(setEffortState);
-    getFastMode().then(setFastState);
+    Promise.all([
+      detectProviders().then(setProviders),
+      getPreferredId().then(setPreferred),
+      getModel().then(setModelState),
+      getEffort().then(setEffortState),
+      getFastMode().then(setFastState),
+    ]).then(() => setSettingsLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -48,10 +51,11 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
     let active = true;
     setCatalogState('loading');
     getModelCatalog(preferredId, { force: false })
-      .then((result) => {
+      .then(({ models: result, degraded }) => {
         if (!active) return;
         setCatalog(result);
-        setCatalogState('ready');
+        setCustomModel(model !== '' && !result.some((m) => m.id === model));
+        setCatalogState(degraded ? 'error' : 'ready');
       })
       .catch(() => {
         if (!active) return;
@@ -64,13 +68,14 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
     if (!preferredId) return;
     setCatalogState('loading');
     try {
-      const result = await getModelCatalog(preferredId, { force: true });
+      const { models: result, degraded } = await getModelCatalog(preferredId, { force: true });
       setCatalog(result);
-      setCatalogState('ready');
+      setCustomModel(model !== '' && !result.some((m) => m.id === model));
+      setCatalogState(degraded ? 'error' : 'ready');
     } catch {
       setCatalogState('error');
     }
-  }, [preferredId]);
+  }, [preferredId, model]);
 
   const selectProvider = useCallback(async (id: string) => {
     await setPreferredId(id);
@@ -82,11 +87,11 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
   const fastOk = fastModeAllowed(preferredId ?? '', model, catalog);
 
   useEffect(() => {
-    if (!fastOk && fastMode) {
+    if (settingsLoaded && tab === 'ai' && catalogState === 'ready' && !fastOk && fastMode) {
       setFastState(false);
-      saveFastMode(false);
+      saveFastMode(false).catch(() => {});
     }
-  }, [fastOk, fastMode]);
+  }, [settingsLoaded, tab, catalogState, fastOk, fastMode]);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'background', label: 'My Background' },
@@ -174,7 +179,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
               <label htmlFor="ai-model">Model</label>
               <select
                 id="ai-model"
-                disabled={!modelSettingsSupported}
+                disabled={!modelSettingsSupported || catalogState === 'loading'}
                 value={customModel ? '__custom' : model}
                 onChange={(e) => {
                   if (e.target.value === '__custom') { setCustomModel(true); return; }

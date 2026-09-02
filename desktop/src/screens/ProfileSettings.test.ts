@@ -44,10 +44,14 @@ const providersLib = vi.hoisted(() => ({
 vi.mock('../lib/providers', () => providersLib);
 
 const modelsLib = vi.hoisted(() => ({
-  getModelCatalog: vi.fn(async () => []),
-  fastModeAllowed: vi.fn(() => false),
+  getModelCatalog: vi.fn(async () => ({ models: [], degraded: false })),
 }));
-vi.mock('../lib/models', () => modelsLib);
+// Real fastModeAllowed so "disables fast mode for non-opus models" actually
+// exercises the opus/non-opus distinction instead of trivially passing.
+vi.mock('../lib/models', async (orig) => ({
+  ...(await orig<typeof import('../lib/models')>()),
+  getModelCatalog: modelsLib.getModelCatalog,
+}));
 
 const updaterLib = vi.hoisted(() => ({
   initialState: vi.fn(() => ({ status: 'idle' })),
@@ -115,10 +119,18 @@ function findSelect(node: unknown, id: string): ElementNode | undefined {
   return findSelect(element.props?.children, id);
 }
 
+// State order: tab, providers, preferredId, model, effort, fastMode, updateCheck,
+// catalog, catalogState, customModel, settingsLoaded
+const CLAUDE_PROVIDER = { id: 'claude', displayName: 'Claude Code', binary: 'claude', headlessCmd: 'claude -p', state: 'ready' };
+const CATALOG = [
+  { id: 'opus', label: 'Opus', available: true, fast: true },
+  { id: 'haiku', label: 'Haiku', available: true, fast: false },
+];
+
 describe('ProfileSettings AI tab', () => {
   it('disables fast mode for non-opus models and lists only available models', () => {
-    hooks.reset(['ai', [{ id: 'claude', displayName: 'Claude Code', binary: 'claude', headlessCmd: 'claude -p', state: 'ready' }], 'claude', 'haiku', 'medium', false, { status: 'idle' },
-      [{ id: 'opus', label: 'Opus', available: true, fast: true }, { id: 'haiku', label: 'Haiku', available: true, fast: false }], 'ready', false]);
+    hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
+      CATALOG, 'ready', false, true]);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const toggle = findByRole(tree, 'switch');
@@ -126,5 +138,22 @@ describe('ProfileSettings AI tab', () => {
     const select = findSelect(tree, 'ai-model');
     expect(textContent(select)).toMatch(/Opus/);
     expect(textContent(select)).toMatch(/Custom/);
+  });
+
+  it('enables fast mode for an opus model', () => {
+    hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'opus', 'medium', false, { status: 'idle' },
+      CATALOG, 'ready', false, true]);
+    hooks.beginRender();
+    const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    const toggle = findByRole(tree, 'switch');
+    expect(toggle?.props?.disabled).toBe(false);
+  });
+
+  it('shows a degraded-probe hint when the catalog could not be verified', () => {
+    hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
+      CATALOG, 'error', false, true]);
+    hooks.beginRender();
+    const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    expect(textContent(tree)).toMatch(/Could not verify models; showing defaults\./);
   });
 });
