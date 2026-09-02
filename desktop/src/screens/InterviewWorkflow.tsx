@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import AgentActivity from '../components/AgentActivity';
-import { runTask, cancelTask } from '../lib/runner';
+import TaskScreen from './TaskScreen';
+import { startTask } from '../lib/taskStore';
 import { languageSettings, type LanguageSettings, type TaskType } from '../api';
 
 type Props = {
@@ -17,20 +17,8 @@ const TITLES: Record<string, string> = {
   'interview-debrief': 'Post-Interview Debrief',
 };
 
-const STEPS: Record<string, string[]> = {
-  'interview-plan': ['Loading role context', 'Building prep plan', 'Creating schedule'],
-  'interview-practice': ['Preparing questions', 'Ready for practice'],
-  'interview-debrief': ['Reviewing interview notes', 'Analysing gaps', 'Updating knowledge base'],
-};
-
 export default function InterviewWorkflow({ root, mode, company, role, onBack }: Props) {
-  const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
-  const [step, setStep] = useState(0);
   const [taskId, setTaskId] = useState<string | null>(null);
-  const [stdout, setStdout] = useState<string[]>([]);
-  const [stderr, setStderr] = useState<string[]>([]);
-  const [exitCode, setExitCode] = useState<number | null>(null);
-  const [unlistenFn, setUnlistenFn] = useState<(() => void) | null>(null);
   const [languages, setLanguages] = useState<LanguageSettings | null>(null);
   const [jobLanguage, setJobLanguage] = useState('');
 
@@ -39,58 +27,23 @@ export default function InterviewWorkflow({ root, mode, company, role, onBack }:
   }, [root]);
 
   const start = useCallback(async () => {
-    setStatus('running');
-    setStep(0);
-    setStdout([]);
-    setStderr([]);
-
-    const steps = STEPS[mode] ?? [];
-    const { taskId: tid, unlisten } = await runTask(
-      mode as TaskType,
-      { company, role },
-      root,
-      {
-        onOutput: (stream, data) => {
-          if (stream === 'stdout') {
-            setStdout((prev) => [...prev, data]);
-            setStep((s) => Math.min(s + 1, steps.length - 1));
-          } else {
-            setStderr((prev) => [...prev, data]);
-          }
-        },
-        onFinished: (code, success) => {
-          setExitCode(code);
-          setStatus(success ? 'done' : 'error');
-          },
-        },
-      languages
-        ? {
-            analysisLanguage: languages.analysisLanguage,
-            ...(jobLanguage ? { jobLanguage, jobLanguageSource: 'manual-override', jobLanguageConfidence: 1 } : {}),
-          }
-        : undefined,
-    );
-    setTaskId(tid);
-    setUnlistenFn(() => unlisten);
+    const languageContext = languages
+      ? {
+          analysisLanguage: languages.analysisLanguage,
+          ...(jobLanguage ? { jobLanguage, jobLanguageSource: 'manual-override', jobLanguageConfidence: 1 } : {}),
+        }
+      : undefined;
+    setTaskId(await startTask(mode as TaskType, { company, role }, root, `${TITLES[mode] ?? mode} · ${company}`, languageContext));
   }, [root, mode, company, role, languages, jobLanguage]);
 
-  const cancel = useCallback(async () => {
-    if (taskId) await cancelTask(taskId);
-    unlistenFn?.();
-    setStatus('idle');
-  }, [taskId, unlistenFn]);
-
-  const steps = STEPS[mode] ?? [];
-
   return (
-    <div className="interview-workflow-screen">
+    <TaskScreen taskId={taskId} title={TITLES[mode] ?? mode} onRetry={start} doneAction={{ label: 'Done', onClick: onBack }}>
       <button className="btn-ghost" onClick={onBack}>&larr; Back</button>
-      <h1>{TITLES[mode] ?? mode}</h1>
       <p>{company} &mdash; {role}</p>
       {languages && (
         <label className="workflow-language-picker">
           <span>Interview language</span>
-          <select value={jobLanguage} onChange={(event) => setJobLanguage(event.target.value)} disabled={status === 'running'}>
+          <select value={jobLanguage} onChange={(event) => setJobLanguage(event.target.value)} disabled={taskId !== null}>
             <option value="">Detect from this job's description</option>
             {languages.options.map((option) => (
               <option key={option.code} value={option.code}>{option.name}</option>
@@ -99,28 +52,7 @@ export default function InterviewWorkflow({ root, mode, company, role, onBack }:
           <small>Practice, planning, and debrief material follow the job language; analysis stays {languages.analysisLanguage}.</small>
         </label>
       )}
-
-      {status === 'idle' && (
-        <button className="btn-primary" onClick={start}>Start</button>
-      )}
-
-      {status !== 'idle' && (
-        <AgentActivity
-          taskId={taskId}
-          status={status === 'done' ? 'done' : status === 'error' ? 'error' : 'running'}
-          steps={steps}
-          currentStep={step}
-          stdout={stdout}
-          stderr={stderr}
-          exitCode={exitCode}
-          onCancel={cancel}
-          onRetry={start}
-        />
-      )}
-
-      {status === 'done' && (
-        <button className="btn-primary" onClick={onBack}>Done</button>
-      )}
-    </div>
+      {!taskId && <button className="btn-primary" onClick={start}>Start</button>}
+    </TaskScreen>
   );
 }

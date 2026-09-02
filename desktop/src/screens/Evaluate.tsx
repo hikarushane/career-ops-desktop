@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import AgentActivity from '../components/AgentActivity';
-import { runTask, cancelTask } from '../lib/runner';
+import TaskScreen from './TaskScreen';
+import { startTask } from '../lib/taskStore';
 import {
   languageSettings,
   resolveJobLanguage,
@@ -14,23 +14,21 @@ type Props = {
   onDone: () => void;
 };
 
-const EVAL_STEPS = [
-  'Reading job posting',
-  'Matching your background',
-  'Analysing role requirements',
-  'Researching compensation',
-  'Generating evaluation',
-];
+function labelFor(url: string): string {
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      return new URL(trimmed).host;
+    } catch {
+      // fall through to generic truncation below
+    }
+  }
+  return trimmed.slice(0, 40);
+}
 
 export default function Evaluate({ root, initialUrl, onDone }: Props) {
   const [url, setUrl] = useState(initialUrl ?? '');
-  const [status, setStatus] = useState<'input' | 'running' | 'done' | 'error'>('input');
-  const [step, setStep] = useState(0);
   const [taskId, setTaskId] = useState<string | null>(null);
-  const [stdout, setStdout] = useState<string[]>([]);
-  const [stderr, setStderr] = useState<string[]>([]);
-  const [exitCode, setExitCode] = useState<number | null>(null);
-  const [unlistenFn, setUnlistenFn] = useState<(() => void) | null>(null);
   const [languages, setLanguages] = useState<LanguageSettings | null>(null);
   const [jobLanguage, setJobLanguage] = useState('');
   const [detectedLanguage, setDetectedLanguage] = useState<JobLanguageResolution | null>(null);
@@ -53,10 +51,6 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
 
   const start = useCallback(async () => {
     if (!url.trim()) return;
-    setStatus('running');
-    setStep(0);
-    setStdout([]);
-    setStderr([]);
 
     const languageContext = languages
       ? {
@@ -65,37 +59,10 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
         }
       : undefined;
 
-    const { taskId: tid, unlisten } = await runTask(
-      'evaluate',
-      { url: url.trim() },
-      root,
-      {
-        onOutput: (stream, data) => {
-          if (stream === 'stdout') {
-            setStdout((prev) => [...prev, data]);
-            setStep((s) => Math.min(s + 1, EVAL_STEPS.length - 1));
-          } else {
-            setStderr((prev) => [...prev, data]);
-          }
-        },
-        onFinished: (code, success) => {
-          setExitCode(code);
-          setStatus(success ? 'done' : 'error');
-          },
-        },
-      languageContext,
-    );
-    setTaskId(tid);
-    setUnlistenFn(() => unlisten);
+    setTaskId(await startTask('evaluate', { url: url.trim() }, root, labelFor(url), languageContext));
   }, [url, root, languages, jobLanguage]);
 
-  const cancel = useCallback(async () => {
-    if (taskId) await cancelTask(taskId);
-    unlistenFn?.();
-    setStatus('input');
-  }, [taskId, unlistenFn]);
-
-  if (status === 'input') {
+  if (taskId === null) {
     return (
       <div className="eval-screen">
         <h1>Evaluate a job</h1>
@@ -146,26 +113,6 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
   }
 
   return (
-    <div className="eval-screen">
-      <h1>{status === 'done' ? 'Evaluation complete' : <span className="animated-dots">Evaluating</span>}</h1>
-
-      <AgentActivity
-        taskId={taskId}
-        status={status === 'done' ? 'done' : status === 'error' ? 'error' : 'running'}
-        steps={EVAL_STEPS}
-        currentStep={step}
-        stdout={stdout}
-        stderr={stderr}
-        exitCode={exitCode}
-        onCancel={cancel}
-        onRetry={start}
-      />
-
-      {status === 'done' && (
-        <div className="eval-done-actions">
-          <button className="btn-primary" onClick={onDone}>Back to pipeline</button>
-        </div>
-      )}
-    </div>
+    <TaskScreen taskId={taskId} title="Evaluating" onRetry={start} doneAction={{ label: 'Back to pipeline', onClick: onDone }} />
   );
 }
