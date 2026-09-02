@@ -34,6 +34,7 @@ vi.mock('react', async (importOriginal) => {
 const store = vi.hoisted(() => ({
   startTask: vi.fn(async () => 'task-9'),
   useTask: () => null,
+  getTask: vi.fn(() => null as unknown),
   cancel: vi.fn(),
 }));
 vi.mock('../lib/taskStore', () => store);
@@ -59,6 +60,9 @@ type ElementNode = {
   props?: {
     children?: unknown;
     onClick?: () => void | Promise<void>;
+    title?: string;
+    onRetry?: () => void | Promise<void>;
+    onCancelled?: () => void;
   };
 };
 
@@ -142,5 +146,22 @@ describe('Evaluate', () => {
     expect(store.startTask).toHaveBeenCalledWith('evaluate',
       { url: 'https://new.example.com/jobs/2', url_line: ' Posting URL: https://new.example.com/jobs/2.', capture: 'jds/2026-09-02_newco_pm.md' },
       '/w', 'NewCo', undefined);
+  });
+
+  it('shows a batch title and retries a failed batch by starting a new batch task', async () => {
+    store.getTask.mockReturnValue({
+      taskId: 'task-b', taskType: 'batch', label: 'Batch (3 pending)', startedAt: 0,
+      state: 'failed', events: [], rawLog: [], outcome: null, exitCode: 1,
+    });
+    hooks.reset(['', '', { kind: 'idle' }, 'task-b', null, false, null, '', null]);
+    hooks.beginRender();
+    const onDone = vi.fn();
+    const tree = Evaluate({ root: '/w', initialTaskId: 'task-b', onDone }) as ElementNode;
+
+    expect(tree.props?.title).toBe('Processing pending jobs');
+    expect(tree.props?.onCancelled).toBe(onDone);
+
+    await tree.props?.onRetry?.();
+    expect(store.startTask).toHaveBeenCalledWith('batch', {}, '/w', 'Batch (3 pending)');
   });
 });

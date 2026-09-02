@@ -5,7 +5,7 @@ import {
 } from './api';
 import { loadActiveRoot, pickWorkspace, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
-import { dismiss, initTaskStore, startTask, useTasks } from './lib/taskStore';
+import { dismiss, initTaskStore, startTask, useRunningTasks, useTasks } from './lib/taskStore';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
 import UpdateModal from './components/UpdateModal';
@@ -31,6 +31,14 @@ type Screen =
   | 'scanner' | 'interview' | 'interview-workflow'
   | 'profile' | 'help';
 
+// Guards a batch start against a double click. Deliberately module-level
+// rather than component state: App must not gain a useState slot for this,
+// and a plain synchronous flag closes the double-click race window
+// immediately, before the first click's handler even returns — a
+// useRunningTasks()-derived boolean cannot, because the task is not
+// registered in the store until after startTask's await resolves.
+let batchStartInFlight = false;
+
 export default function App() {
   const [root, setRoot] = useState<string | null>(null);
   const [rootLoaded, setRootLoaded] = useState(false);
@@ -49,6 +57,8 @@ export default function App() {
   const [updateState, setUpdateState] = useState<UpdateState>(initialState);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const tasks = useTasks();
+  const runningTasks = useRunningTasks();
+  const batchRunning = runningTasks.some((t) => t.taskType === 'batch');
 
   const refresh = useCallback(async (path: string) => {
     setError(null);
@@ -131,9 +141,14 @@ export default function App() {
     } else if (target === 'scanner') {
       setScreen('scanner');
     } else if (target === 'batch') {
-      // There is no dedicated error slot for a batch-start failure; the
+      // Guard against a double click starting two batch agents over the
+      // same data/pipeline.md (a report-numbering race): bail out
+      // synchronously if a start is already in flight. There is no
+      // dedicated error slot for a batch-start failure either; the
       // header's workspaceError banner is the only global error surface, so
       // it is reused here too.
+      if (batchStartInFlight) return;
+      batchStartInFlight = true;
       void (async () => {
         try {
           const id = await startTask('batch', {}, root!, `Batch (${data!.pipelineSummary.pending} pending)`);
@@ -142,6 +157,8 @@ export default function App() {
           setScreen('evaluate');
         } catch (e) {
           setWorkspaceError(e instanceof Error ? e.message : String(e));
+        } finally {
+          batchStartInFlight = false;
         }
       })();
     } else {
@@ -219,7 +236,7 @@ export default function App() {
   function renderScreen() {
     switch (screen) {
       case 'home':
-        return <Home root={root!} data={data!} onNavigate={navigate} />;
+        return <Home root={root!} data={data!} onNavigate={navigate} batchStarting={batchRunning || batchStartInFlight} />;
       case 'pipeline':
         return <Pipeline root={root!} data={data!} onReload={reload} initialSelected={pipelineSelected} />;
       case 'progress':
