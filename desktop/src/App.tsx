@@ -5,7 +5,7 @@ import {
 } from './api';
 import { loadActiveRoot, pickWorkspace, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
-import { dismiss, initTaskStore, useTasks } from './lib/taskStore';
+import { dismiss, initTaskStore, startTask, useTasks } from './lib/taskStore';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
 import UpdateModal from './components/UpdateModal';
@@ -130,10 +130,24 @@ export default function App() {
       setScreen('pipeline');
     } else if (target === 'scanner') {
       setScreen('scanner');
+    } else if (target === 'batch') {
+      // There is no dedicated error slot for a batch-start failure; the
+      // header's workspaceError banner is the only global error surface, so
+      // it is reused here too.
+      void (async () => {
+        try {
+          const id = await startTask('batch', {}, root!, `Batch (${data!.pipelineSummary.pending} pending)`);
+          setEvalUrl(undefined);
+          setActiveTaskId(id);
+          setScreen('evaluate');
+        } catch (e) {
+          setWorkspaceError(e instanceof Error ? e.message : String(e));
+        }
+      })();
     } else {
       setScreen(target as Screen);
     }
-  }, []);
+  }, [root, data]);
 
   const evalDone = useCallback(() => {
     reload();

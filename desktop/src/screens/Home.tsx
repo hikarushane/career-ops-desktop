@@ -53,6 +53,14 @@ export default function Home({ root: _root, data, onNavigate }: Props) {
             <SearchIcon size={16} /> Search &amp; evaluate
           </button>
         </div>
+
+        <div className="action-card">
+          <h2>Process pending jobs</h2>
+          <p>{`${data.pipelineSummary.pending} pending in your inbox${data.pipelineSummary.failed > 0 ? ` · ${data.pipelineSummary.failed} need attention` : ''}.`}</p>
+          <button className="btn-secondary" disabled={data.pipelineSummary.pending === 0} onClick={() => onNavigate('batch')}>
+            Process pending jobs
+          </button>
+        </div>
       </section>
 
       <section className="home-recent">

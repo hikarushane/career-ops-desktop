@@ -45,6 +45,7 @@ vi.mock('./lib/taskStore', () => ({
   useTasks: () => [],
   initTaskStore: vi.fn(),
   dismiss: vi.fn(),
+  startTask: vi.fn(),
 }));
 
 afterEach(() => {
@@ -64,6 +65,7 @@ const data = {
     FunnelStages: [], ScoreBuckets: [], WeeklyActivity: [], ResponseRate: 0, InterviewRate: 0,
     OfferRate: 0, AvgScore: 0, TopScore: 0, TotalOffers: 0, ActiveApps: 0,
   },
+  pipelineSummary: { pending: 0, processed: 0, failed: 0 },
 };
 
 function render(probe: { missing: string[]; ready: boolean }, onboarded = probe.missing.length === 0) {

@@ -69,6 +69,7 @@ export type ListResult = {
   applications: Application[];
   metrics: Metrics;
   progress: Progress;
+  pipelineSummary: { pending: number; processed: number; failed: number };
 };
 
 export type ReportResult = {
