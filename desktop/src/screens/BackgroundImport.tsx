@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
-import { stageIntakeFiles, type StagedIntakeFile } from '../api';
+import { listIntakeCandidates, stageIntakeFiles, type StagedIntakeFile } from '../api';
 import { INTAKE_CATEGORIES, suggestIntakeCategory, type IntakeCategoryId } from '../lib/intakeCategories';
 import { ImportIcon } from '../components/icons';
 
@@ -11,6 +11,7 @@ export type BackgroundImportResult = {
 
 type Props = {
   root: string;
+  initialStaged: StagedIntakeFile[];
   onComplete: (result: BackgroundImportResult) => void;
 };
 
@@ -24,17 +25,23 @@ function filenameFor(sourcePath: string): string {
   return sourcePath.split(/[\\/]/).filter(Boolean).pop() ?? sourcePath;
 }
 
-export default function BackgroundImport({ root, onComplete }: Props) {
+export default function BackgroundImport({ root, initialStaged, onComplete }: Props) {
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [staging, setStaging] = useState(false);
-  const [staged, setStaged] = useState<StagedIntakeFile[] | null>(null);
+  const [staged, setStaged] = useState<StagedIntakeFile[] | null>(initialStaged.length > 0 ? initialStaged : null);
   const [error, setError] = useState<string | null>(null);
 
-  const addFiles = useCallback((paths: string[]) => {
+  const addFiles = useCallback(async (paths: string[]) => {
+    let expanded = paths;
+    try {
+      expanded = await listIntakeCandidates(paths);
+    } catch {
+      // Fall back to the raw paths when the command is unavailable.
+    }
     setFiles((current) => {
       const knownPaths = new Set(current.map((file) => file.sourcePath));
-      const additions = paths
+      const additions = expanded
         .filter((path) => !knownPaths.has(path))
         .map((sourcePath) => ({
           sourcePath,
@@ -58,7 +65,7 @@ export default function BackgroundImport({ root, onComplete }: Props) {
         setDragging(false);
       } else {
         setDragging(false);
-        addFiles(payload.paths);
+        void addFiles(payload.paths);
       }
     }).then((cleanup) => {
       if (disposed) cleanup();
@@ -76,8 +83,13 @@ export default function BackgroundImport({ root, onComplete }: Props) {
   const pickFiles = useCallback(async () => {
     const selected = await open({ multiple: true, title: 'Add background files' });
     if (!selected) return;
+    void addFiles(Array.isArray(selected) ? selected : [selected]);
+  }, [addFiles]);
 
-    addFiles(Array.isArray(selected) ? selected : [selected]);
+  const pickFolder = useCallback(async () => {
+    const selected = await open({ directory: true, multiple: true, title: 'Add a folder of background files' });
+    if (!selected) return;
+    void addFiles(Array.isArray(selected) ? selected : [selected]);
   }, [addFiles]);
 
   const setCategory = useCallback((sourcePath: string, category: IntakeCategoryId | null) => {
@@ -142,15 +154,21 @@ export default function BackgroundImport({ root, onComplete }: Props) {
             </p>
           )}
           <p className="setup-hint">Your files were copied only; profile extraction starts after AI setup.</p>
+          <button className="btn-ghost" onClick={() => { setStaged(null); setFiles([]); }}>Start over</button>
         </div>
       ) : (
         <>
           <div className={`intake-dropzone${dragging ? ' is-dragging' : ''}`}>
-            <p>{dragging ? 'Drop files to add them' : 'Drag files here'}</p>
-            <button className="btn-secondary import-btn" onClick={pickFiles} disabled={staging}>
-              <ImportIcon size={18} />
-              Add files
-            </button>
+            <p>{dragging ? 'Drop files to add them' : 'Drag files or folders here'}</p>
+            <div className="setup-actions">
+              <button className="btn-secondary import-btn" onClick={pickFiles} disabled={staging}>
+                <ImportIcon size={18} />
+                Add files
+              </button>
+              <button className="btn-secondary import-btn" onClick={pickFolder} disabled={staging}>
+                Add folder
+              </button>
+            </div>
           </div>
 
           {files.length > 0 && (

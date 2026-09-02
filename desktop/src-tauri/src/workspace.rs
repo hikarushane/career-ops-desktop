@@ -389,6 +389,43 @@ pub fn stage_intake_files_for_workspace(
     stage_intake_files(Path::new(&root), &files)
 }
 
+fn collect_candidates(path: &Path, out: &mut Vec<String>) {
+    let Ok(metadata) = fs::symlink_metadata(path) else { return };
+    if metadata.file_type().is_symlink() {
+        return;
+    }
+    if metadata.is_file() {
+        out.push(path.to_string_lossy().into_owned());
+        return;
+    }
+    if !metadata.is_dir() {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(path) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with('.') {
+            continue;
+        }
+        collect_candidates(&entry.path(), out);
+    }
+}
+
+pub fn list_intake_candidates_at(paths: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for path in paths {
+        collect_candidates(Path::new(path), &mut out);
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+#[tauri::command]
+pub fn list_intake_candidates(paths: Vec<String>) -> Vec<String> {
+    list_intake_candidates_at(&paths)
+}
+
 const CAREEROPS_SYSTEM_INVARIANTS: &[&str] = &[
     "doctor.mjs",
     "modes/_shared.md",
@@ -2291,5 +2328,28 @@ mod tests {
             fs::read_to_string(&external_resume).unwrap(),
             "external evidence"
         );
+    }
+
+    #[test]
+    fn lists_regular_files_under_dropped_folders_and_skips_dotfiles() {
+        let root = tempfile::tempdir().unwrap();
+        let folder = root.path().join("materials");
+        fs::create_dir_all(folder.join("nested")).unwrap();
+        fs::write(folder.join("cv.pdf"), b"pdf").unwrap();
+        fs::write(folder.join("nested/reference.md"), b"md").unwrap();
+        fs::write(folder.join(".DS_Store"), b"junk").unwrap();
+        fs::write(root.path().join("single.txt"), b"txt").unwrap();
+
+        let listed = list_intake_candidates_at(&[
+            folder.to_string_lossy().into_owned(),
+            root.path().join("single.txt").to_string_lossy().into_owned(),
+            folder.to_string_lossy().into_owned(),
+        ]);
+
+        assert_eq!(listed, vec![
+            folder.join("cv.pdf").to_string_lossy().into_owned(),
+            folder.join("nested/reference.md").to_string_lossy().into_owned(),
+            root.path().join("single.txt").to_string_lossy().into_owned(),
+        ]);
     }
 }

@@ -31,7 +31,7 @@ vi.mock('react', async (importOriginal) => {
 });
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: vi.fn() }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
-vi.mock('../api', () => ({ stageIntakeFiles: vi.fn() }));
+vi.mock('../api', () => ({ stageIntakeFiles: vi.fn(), listIntakeCandidates: vi.fn() }));
 
 afterEach(() => hooks.reset());
 
@@ -75,7 +75,7 @@ describe('BackgroundImport', () => {
     const onComplete = vi.fn();
     hooks.reset([[], false, false, staged, null]);
     hooks.beginRender();
-    const tree = BackgroundImport({ root: '/workspace', onComplete }) as ElementNode;
+    const tree = BackgroundImport({ root: '/workspace', initialStaged: [], onComplete }) as ElementNode;
 
     const continueSetup = findButton(tree, 'Continue setup');
     expect(continueSetup).toBeDefined();
@@ -94,11 +94,34 @@ describe('BackgroundImport', () => {
     hooks.reset([[], false, false, staged, null]);
     hooks.beginRender();
 
-    const tree = BackgroundImport({ root: '/workspace', onComplete: vi.fn() }) as ElementNode;
+    const tree = BackgroundImport({ root: '/workspace', initialStaged: [], onComplete: vi.fn() }) as ElementNode;
     const copy = textContent(tree);
 
     expect(copy).toContain('PDF text extraction is unavailable in this build');
     expect(copy).toContain('still staged');
     expect(copy).not.toMatch(/brew|Homebrew|poppler/i);
+  });
+
+  it('renders the staged summary immediately when files were staged earlier', () => {
+    const initialStaged = [{
+      sourcePath: '/s/cv.md',
+      destinationPath: '/w/documents/cv/cv.md',
+      category: 'cv' as const,
+      duplicate: false,
+    }];
+    hooks.reset([[], false, false, initialStaged, null]);
+    hooks.beginRender();
+    const tree = BackgroundImport({ root: '/w', initialStaged, onComplete: vi.fn() }) as ElementNode;
+
+    const text = textContent(tree);
+    expect(text).toMatch(/1\s+file\s+staged for review/);
+    expect(findButton(tree, 'Continue setup')).toBeDefined();
+  });
+
+  it('lists Other as a destination category', () => {
+    hooks.reset([[], false, false, null, null]);
+    hooks.beginRender();
+    const tree = BackgroundImport({ root: '/w', initialStaged: [], onComplete: vi.fn() }) as ElementNode;
+    expect(textContent(tree)).toContain('Other');
   });
 });
