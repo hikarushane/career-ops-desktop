@@ -1,5 +1,6 @@
 mod runner;
 mod sidecar;
+mod task_events;
 mod workspace;
 
 #[cfg(unix)]
