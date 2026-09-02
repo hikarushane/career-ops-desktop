@@ -143,3 +143,50 @@ staging dir 是可拋棄的，所以 skip-permissions 只影響 staging dir。`s
 | Import | 拖入資料夾時由 Rust `list_intake_candidates` 遞迴列出一般檔案（略過 dotfile）；新增 `others` 類別對應 `documents/others`；Onboarding 保存 import 狀態，Back 回來仍看得到 |
 | 刪除 | `IntakeReview.tsx`（無人引用）、proposal 協定、IntakeSession、gate、fingerprint、transaction、journal、recovery、capability writer 及其測試 |
 | 範圍外 | `evaluate`／`scan` 等一般任務的 provider 旗標硬化（另案）；stream-json 即時進度；`release-pipeline.test.ts:281` 的 sandbox-exec 決策；Settings 的 Model／Effort／Fast mode 後端串接 |
+
+## 9. 實作驗證結果（2026-09-02）
+
+### 自動化測試
+
+| 項目 | 結果 |
+|---|---|
+| `cargo test --lib` | 47 pass |
+| `npx vitest run` | 19 files, 186 tests pass |
+| `tsc --noEmit` | clean |
+
+### Build & Install
+
+| 項目 | 結果 |
+|---|---|
+| `cargo tauri build` | success (v0.5.0, signed) |
+| Install to `/Applications/CareerOps.app` | OK |
+| App launch | OK |
+| Onboarding triggers when profile files absent | OK |
+
+### 新增功能驗證
+
+| 功能 | 驗證方式 | 結果 |
+|---|---|---|
+| Job preferences step (`'preferences'`) | unit test + onboarding flow | OK |
+| Profile generation preview with tabs | unit test (4 cases) | OK |
+| Folder drop via `list_intake_candidates` | unit test + Rust test | OK |
+| Import state retention on Back | unit test | OK |
+| `others` intake category | unit test | OK |
+
+### GUI walkthrough
+
+Computer-use 座標對焦問題（Finder 覆蓋）導致自動化 GUI walkthrough 未完成。
+Welcome 畫面正確顯示，後續步驟需手動驗證。
+
+### 備份還原
+
+- 備份位置：`~/Documents/CareerOps.pre-redesign-2026-09-02/`
+- 還原至 `~/Documents/CareerOps/`：OK
+
+### Commits
+
+| Hash | Message |
+|---|---|
+| `c9871e26` | feat(desktop): add job preferences step to onboarding |
+| `9d1144ee` | feat(desktop): preview and apply generated profile files |
+| `551857fd` | feat(desktop): import whole folders and keep the staged list when navigating back |
