@@ -167,6 +167,30 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
     }
   }, [root, initialTask]);
 
+  // Retry after reopening a failed evaluate task from the header chip must
+  // reuse the args/label/languageContext it was originally started with —
+  // re-running `start()` here would be a silent no-op, since the input/
+  // jdText/languages state above is empty on a freshly-mounted (remounted
+  // via App's `key={activeTaskId}`) instance that never went through the
+  // "paste a URL and click Analyse" flow.
+  const retryEvaluate = useCallback(async () => {
+    setStartError(null);
+    try {
+      const current = taskId ? getTask(taskId) : null;
+      setTaskId(
+        await startTask(
+          'evaluate',
+          current?.args ?? {},
+          root,
+          current?.label ?? 'Evaluating',
+          current?.languageContext,
+        ),
+      );
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : String(err));
+    }
+  }, [root, taskId]);
+
   const pasteReady = jdText.trim().length >= 200;
 
   if (taskId === null) {
@@ -186,6 +210,18 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
                 setFetchState({ kind: 'idle' });
               }
             }}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              if (e.metaKey || e.ctrlKey) {
+                e.preventDefault();
+                start();
+                return;
+              }
+              if (!e.shiftKey && isUrl(input)) {
+                e.preventDefault();
+                start();
+              }
+            }}
             autoFocus
           />
           <button
@@ -193,9 +229,12 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
             onClick={start}
             disabled={!input.trim() || starting || (fetchState.kind === 'blocked' && !pasteReady)}
           >
-            Analyse
+            {fetchState.kind === 'fetching' ? 'Fetching…' : 'Analyse'}
           </button>
         </div>
+        {fetchState.kind === 'fetching' && (
+          <p className="setup-hint" role="status">Fetching the posting…</p>
+        )}
         {fetchState.kind === 'blocked' && (
           <div className="eval-blocked" role="alert">
             <p>Could not read this page automatically ({fetchState.reason}). Paste the job description below.</p>
@@ -247,7 +286,7 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
     <TaskScreen
       taskId={taskId}
       title={isBatchTask ? 'Processing pending jobs' : 'Evaluating'}
-      onRetry={isBatchTask ? retryBatch : start}
+      onRetry={isBatchTask ? retryBatch : retryEvaluate}
       doneAction={{ label: 'Back to pipeline', onClick: onDone }}
       onCancelled={isBatchTask ? onDone : () => setTaskId(null)}
     />
