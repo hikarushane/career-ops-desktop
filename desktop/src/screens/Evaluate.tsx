@@ -78,7 +78,7 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
           }
         : undefined;
 
-      if (fetchState.kind === 'blocked') {
+      if (fetchState.kind === 'blocked' && fetchState.url === value) {
         if (jdText.trim().length < 200) return;
         const capture = await saveJobCapture(
           root,
@@ -94,7 +94,15 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
             languageContext,
           ),
         );
+        setFetchState({ kind: 'idle' });
+        setJdText('');
         return;
+      }
+
+      if (fetchState.kind === 'blocked') {
+        // The input changed since the block; the stale paste box no longer
+        // applies to the current value. Reset and fall through below.
+        setFetchState({ kind: 'idle' });
       }
 
       if (!isUrl(value)) {
@@ -139,6 +147,8 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
     }
   }, [input, jdText, fetchState, root, languages, jobLanguage, starting]);
 
+  const pasteReady = jdText.trim().length >= 200;
+
   if (taskId === null) {
     return (
       <div className="eval-screen">
@@ -149,10 +159,20 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
             rows={2}
             placeholder="Paste a job URL, or paste the full job description..."
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setInput(next);
+              if (fetchState.kind === 'blocked' && next.trim() !== fetchState.url) {
+                setFetchState({ kind: 'idle' });
+              }
+            }}
             autoFocus
           />
-          <button className="btn-primary" onClick={start} disabled={!input.trim() || starting}>
+          <button
+            className="btn-primary"
+            onClick={start}
+            disabled={!input.trim() || starting || (fetchState.kind === 'blocked' && !pasteReady)}
+          >
             Analyse
           </button>
         </div>
@@ -164,7 +184,9 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
               value={jdText}
               onChange={(e) => setJdText(e.target.value)}
               placeholder="Paste the job description"
+              aria-label="Paste the job description"
             />
+            <p className="setup-hint">{jdText.trim().length} / 200 characters minimum</p>
           </div>
         )}
         {startError && <p className="intake-error" role="alert">{startError}</p>}
@@ -203,7 +225,7 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
 
   return (
     <TaskScreen
-      taskId={taskId ?? initialTaskId ?? null}
+      taskId={taskId}
       title="Evaluating"
       onRetry={start}
       doneAction={{ label: 'Back to pipeline', onClick: onDone }}
