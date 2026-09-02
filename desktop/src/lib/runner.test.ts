@@ -68,7 +68,12 @@ function emit(event: string, payload: unknown) {
 
 async function finishTask(success = true) {
   await vi.waitFor(() => expect(mocks.listeners.has('task-finished')).toBe(true));
-  emit('task-finished', { task_id: 'task-1', exit_code: success ? 0 : 1, success } satisfies TaskFinishedEvent);
+  emit('task-finished', {
+    task_id: 'task-1',
+    exit_code: success ? 0 : 1,
+    success,
+    outcome: { ok: success, detail: '', artifacts: [] },
+  } satisfies TaskFinishedEvent);
 }
 
 async function emitOutput(stream: 'stdout' | 'stderr', data: string) {
@@ -82,7 +87,12 @@ describe('runTask', () => {
     const finished = vi.fn();
     mocks.invokeRunTask.mockImplementationOnce(async () => {
       emit('task-output', { task_id: 'task-1', stream: 'stdout', data: 'early' } satisfies TaskOutputEvent);
-      emit('task-finished', { task_id: 'task-1', exit_code: 0, success: true } satisfies TaskFinishedEvent);
+      emit('task-finished', {
+        task_id: 'task-1',
+        exit_code: 0,
+        success: true,
+        outcome: { ok: true, detail: '', artifacts: [] },
+      } satisfies TaskFinishedEvent);
       return { task_id: 'task-1' };
     });
 

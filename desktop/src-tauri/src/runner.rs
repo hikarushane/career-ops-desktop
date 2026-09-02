@@ -102,10 +102,21 @@ struct GenerationStaging {
     staging: TempDir,
 }
 
+#[derive(Serialize, Clone)]
+pub struct TaskSnapshot {
+    pub task_id: String,
+    pub task_type: String,
+    pub label: String,
+    pub started_at: u64,
+    pub state: String,
+    pub last_summary: String,
+}
+
 pub struct RunnerState {
     pids: Mutex<HashMap<String, u32>>,
     counter: Mutex<u64>,
     generations: Mutex<HashMap<String, GenerationStaging>>,
+    tasks: Mutex<Vec<TaskSnapshot>>,
 }
 
 impl RunnerState {
@@ -114,8 +125,46 @@ impl RunnerState {
             pids: Mutex::new(HashMap::new()),
             counter: Mutex::new(0),
             generations: Mutex::new(HashMap::new()),
+            tasks: Mutex::new(Vec::new()),
         }
     }
+
+    pub fn register(&self, task_id: String, task_type: &str, label: &str) {
+        let mut tasks = self.tasks.lock().unwrap();
+        tasks.insert(
+            0,
+            TaskSnapshot {
+                task_id,
+                task_type: task_type.into(),
+                label: label.into(),
+                started_at: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0),
+                state: "running".into(),
+                last_summary: String::new(),
+            },
+        );
+        tasks.truncate(20);
+    }
+
+    pub fn finish(&self, task_id: &str, success: bool, summary: &str) {
+        if let Ok(mut tasks) = self.tasks.lock() {
+            if let Some(t) = tasks.iter_mut().find(|t| t.task_id == task_id) {
+                t.state = if success { "done".into() } else { "failed".into() };
+                t.last_summary = summary.into();
+            }
+        }
+    }
+
+    pub fn snapshots(&self) -> Vec<TaskSnapshot> {
+        self.tasks.lock().map(|t| t.clone()).unwrap_or_default()
+    }
+}
+
+#[tauri::command]
+pub fn list_tasks(state: tauri::State<'_, RunnerState>) -> Vec<TaskSnapshot> {
+    state.snapshots()
 }
 
 #[derive(Serialize, Clone)]
@@ -130,11 +179,19 @@ struct TaskOutput {
     data: String,
 }
 
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct TaskOutcome {
+    pub ok: bool,
+    pub detail: String,
+    pub artifacts: Vec<String>,
+}
+
 #[derive(Serialize, Clone)]
 struct TaskFinished {
     task_id: String,
     exit_code: Option<i32>,
     success: bool,
+    outcome: TaskOutcome,
 }
 
 struct TaskDef {
@@ -196,6 +253,108 @@ fn get_task_def(task_type: &str) -> Option<TaskDef> {
             required_args: &["preferences", "analysisLanguage"],
         }),
         _ => None,
+    }
+}
+
+pub struct ArtifactSnapshot {
+    files: HashMap<String, std::time::SystemTime>,
+    pending: usize,
+}
+
+fn list_files(dir: &Path, prefix: &str, out: &mut HashMap<String, std::time::SystemTime>) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Ok(meta) = entry.metadata() {
+                    let rel = format!("{prefix}/{}", entry.file_name().to_string_lossy());
+                    out.insert(rel, meta.modified().unwrap_or(std::time::UNIX_EPOCH));
+                }
+            }
+        }
+    }
+}
+
+fn count_pending(workspace: &Path) -> usize {
+    let text = fs::read_to_string(workspace.join("data/pipeline.md")).unwrap_or_default();
+    text.lines().filter(|l| l.trim_start().starts_with("- [ ]")).count()
+}
+
+fn watched_dirs(task_type: &str) -> &'static [&'static str] {
+    match task_type {
+        "evaluate" | "batch" => &["reports"],
+        "scan" => &["data"],
+        t if t.starts_with("interview") => &["interview-prep"],
+        _ => &[],
+    }
+}
+
+pub fn snapshot_artifacts(workspace: &Path, task_type: &str) -> ArtifactSnapshot {
+    let mut files = HashMap::new();
+    for dir in watched_dirs(task_type) {
+        list_files(&workspace.join(dir), dir, &mut files);
+    }
+    ArtifactSnapshot { files, pending: count_pending(workspace) }
+}
+
+pub fn judge_outcome(workspace: &Path, task_type: &str, before: &ArtifactSnapshot) -> TaskOutcome {
+    let after = snapshot_artifacts(workspace, task_type);
+    let mut artifacts: Vec<String> = after
+        .files
+        .iter()
+        .filter(|(k, t)| before.files.get(*k).map(|b| b < *t).unwrap_or(true))
+        .map(|(k, _)| k.clone())
+        .collect();
+    artifacts.sort();
+    match task_type {
+        "evaluate" => {
+            let reports: Vec<String> =
+                artifacts.iter().filter(|a| a.starts_with("reports/")).cloned().collect();
+            if reports.is_empty() {
+                TaskOutcome {
+                    ok: false,
+                    detail: "The AI finished without producing a report.".into(),
+                    artifacts,
+                }
+            } else {
+                TaskOutcome { ok: true, detail: reports[0].clone(), artifacts }
+            }
+        }
+        "batch" => {
+            let processed = before.pending.saturating_sub(after.pending);
+            let ok = processed > 0 || !artifacts.is_empty();
+            let detail = if ok {
+                format!("Processed {processed} of {}", before.pending)
+            } else {
+                "No pending job was processed.".into()
+            };
+            TaskOutcome { ok, detail, artifacts }
+        }
+        "scan" => {
+            let ok = !artifacts.is_empty();
+            TaskOutcome {
+                ok,
+                detail: if ok {
+                    "Pipeline updated.".into()
+                } else {
+                    "The scan finished without updating the pipeline.".into()
+                },
+                artifacts,
+            }
+        }
+        "profile-generate" => TaskOutcome { ok: true, detail: "Staging ready.".into(), artifacts },
+        _ => {
+            let ok = !artifacts.is_empty();
+            TaskOutcome {
+                ok,
+                detail: if ok {
+                    artifacts[0].clone()
+                } else {
+                    "The AI finished without writing anything.".into()
+                },
+                artifacts,
+            }
+        }
     }
 }
 
@@ -670,6 +829,7 @@ pub struct RunTaskInput {
     path: String,
     language_context: Option<LanguageContext>,
     model_options: Option<ModelOptions>,
+    label: Option<String>,
 }
 
 fn canonical_workspace(path: &str) -> Result<PathBuf, String> {
@@ -865,11 +1025,17 @@ pub fn run_task(
         *c += 1;
         format!("task-{c}")
     };
+    state.register(
+        task_id.clone(),
+        &input.task_type,
+        input.label.as_deref().unwrap_or(&input.task_type),
+    );
 
     let mut cmd_args = cmd_args_base;
     cmd_args.push(prompt);
 
     let workspace = canonical_workspace(&input.path)?;
+    let before = snapshot_artifacts(&workspace, &input.task_type);
     if !workspace.join(".git").exists() {
         let _ = std::process::Command::new("git")
             .args(["init", "--quiet"])
@@ -927,6 +1093,8 @@ pub fn run_task(
     {
         let tid = task_id.clone();
         let a = app.clone();
+        let workspace_for_thread = workspace.clone();
+        let task_type_for_thread = input.task_type.clone();
         std::thread::spawn(move || {
             let mut reported: HashSet<&'static str> = HashSet::new();
             let exit_code = loop {
@@ -953,13 +1121,16 @@ pub fn run_task(
             if let Some(thread) = stderr_thread {
                 let _ = thread.join();
             }
+            let outcome = if is_generation {
+                TaskOutcome { ok: true, detail: "Staging ready.".into(), artifacts: vec![] }
+            } else {
+                judge_outcome(&workspace_for_thread, &task_type_for_thread, &before)
+            };
+            let success = exit_code == Some(0) && outcome.ok;
+            a.state::<RunnerState>().finish(&tid, success, &outcome.detail);
             let _ = a.emit(
                 "task-finished",
-                TaskFinished {
-                    task_id: tid.clone(),
-                    exit_code,
-                    success: exit_code == Some(0),
-                },
+                TaskFinished { task_id: tid.clone(), exit_code, success, outcome },
             );
             if let Ok(mut pids) = a.state::<RunnerState>().pids.lock() {
                 pids.remove(&tid);
@@ -1038,9 +1209,10 @@ mod tests {
 
     use super::{
         apply_generation_at, build_prompt, copy_document_sources, create_generation_staging,
-        generation_is_complete, get_task_def, inspect_generation, language_context_instruction,
-        packaged_runtime_paths_for_executable, provider_args, render_generation_prompt,
-        LanguageContext, ModelOptions, PackagedJsRuntime,
+        generation_is_complete, get_task_def, inspect_generation, judge_outcome,
+        language_context_instruction, packaged_runtime_paths_for_executable, provider_args,
+        render_generation_prompt, snapshot_artifacts, LanguageContext, ModelOptions,
+        PackagedJsRuntime, RunnerState,
     };
 
     #[test]
@@ -1370,5 +1542,39 @@ mod tests {
         assert!(prompt.contains("language.analysis to zh-TW"));
         assert!(prompt.contains("portals.yml"));
         assert!(!prompt.contains("intake.mjs"));
+    }
+
+    #[test]
+    fn evaluate_outcome_requires_a_new_report() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("reports")).unwrap();
+        fs::write(dir.path().join("reports/001-old.md"), "x").unwrap();
+        let before = snapshot_artifacts(dir.path(), "evaluate");
+        let none = judge_outcome(dir.path(), "evaluate", &before);
+        assert!(!none.ok);
+        fs::write(dir.path().join("reports/002-acme-2026-09-02.md"), "y").unwrap();
+        let ok = judge_outcome(dir.path(), "evaluate", &before);
+        assert!(ok.ok);
+        assert_eq!(ok.artifacts, vec!["reports/002-acme-2026-09-02.md".to_owned()]);
+    }
+
+    #[test]
+    fn batch_outcome_counts_pending_drop() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("data")).unwrap();
+        fs::write(dir.path().join("data/pipeline.md"), "## Pending\n- [ ] https://a\n- [ ] https://b\n## Processed\n").unwrap();
+        let before = snapshot_artifacts(dir.path(), "batch");
+        fs::write(dir.path().join("data/pipeline.md"), "## Pending\n- [ ] https://b\n## Processed\n- [x] #1 | https://a\n").unwrap();
+        let out = judge_outcome(dir.path(), "batch", &before);
+        assert!(out.ok);
+        assert!(out.detail.contains("Processed 1 of 2"));
+    }
+
+    #[test]
+    fn task_registry_keeps_the_latest_twenty() {
+        let state = RunnerState::new();
+        for i in 0..25 { state.register(format!("task-{i}"), "scan", "Scan"); }
+        assert_eq!(state.snapshots().len(), 20);
+        assert_eq!(state.snapshots()[0].task_id, "task-24");
     }
 }

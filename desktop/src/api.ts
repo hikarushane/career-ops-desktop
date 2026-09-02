@@ -228,10 +228,22 @@ export type TaskOutputEvent = {
   data: string;
 };
 
+export type TaskOutcome = { ok: boolean; detail: string; artifacts: string[] };
+
 export type TaskFinishedEvent = {
   task_id: string;
   exit_code: number | null;
   success: boolean;
+  outcome: TaskOutcome;
+};
+
+export type TaskSnapshot = {
+  task_id: string;
+  task_type: TaskType;
+  label: string;
+  started_at: number;
+  state: 'running' | 'done' | 'failed';
+  last_summary: string;
 };
 
 export type LanguageOption = {
@@ -275,14 +287,19 @@ export function runTask(
   path: string,
   languageContext?: LanguageContext,
   modelOptions?: ModelOptions,
+  label?: string,
 ) {
   return invoke<TaskStarted>('run_task', {
-    input: { taskType, providerId, args, path, languageContext, modelOptions },
+    input: { taskType, providerId, args, path, languageContext, modelOptions, label },
   });
 }
 
 export function cancelTask(taskId: string) {
   return invoke<void>('cancel_task', { taskId });
+}
+
+export function listTasks() {
+  return invoke<TaskSnapshot[]>('list_tasks');
 }
 
 export function getGenerationResult(taskId: string) {

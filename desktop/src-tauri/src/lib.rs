@@ -48,6 +48,7 @@ pub fn run() {
             sidecar::resolve_job_language,
             runner::run_task,
             runner::cancel_task,
+            runner::list_tasks,
             runner::generation_result,
             runner::apply_generation,
             runner::discard_generation,
