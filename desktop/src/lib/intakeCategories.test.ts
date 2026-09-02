@@ -6,7 +6,7 @@ import {
 } from './intakeCategories';
 
 describe('intake categories', () => {
-  it('keeps the eight staged-evidence folders stable', () => {
+  it('keeps the staged-evidence folders stable', () => {
     expect(INTAKE_CATEGORIES).toEqual([
       { id: 'cv', label: 'CV / Resume', folder: 'cv' },
       { id: 'work', label: 'Work records', folder: 'work' },
@@ -16,7 +16,13 @@ describe('intake categories', () => {
       { id: 'references', label: 'References', folder: 'references' },
       { id: 'certificates', label: 'Certificates', folder: 'certificates' },
       { id: 'portfolio', label: 'Portfolio / Projects', folder: 'portfolio' },
+      { id: 'others', label: 'Other', folder: 'others' },
     ]);
+  });
+
+  it('offers an others category that maps to documents/others', () => {
+    expect(INTAKE_CATEGORIES.map((c) => c.id)).toContain('others');
+    expect(folderFor('others')).toBe('others');
   });
 
   it('does not rename existing user-facing folder names', () => {
