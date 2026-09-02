@@ -23,6 +23,7 @@ func TestFetchPostingLinkedInUsesGuestEndpoint(t *testing.T) {
 	}))
 	defer srv.Close()
 	linkedinGuestBase = srv.URL // test hook
+	t.Cleanup(func() { linkedinGuestBase = "https://www.linkedin.com" })
 	got, err := fetchPosting("https://www.linkedin.com/jobs/view/technischer-projektkoordinator-4459290748?trk=x", srv.Client())
 	if err != nil {
 		t.Fatal(err)
@@ -61,5 +62,51 @@ func TestFetchPostingBlockedOnShortOrLoginWall(t *testing.T) {
 	var fe *fetchError
 	if !errors.As(err, &fe) || fe.code != "blocked" {
 		t.Fatalf("want blocked, got %v", err)
+	}
+}
+
+// TestFetchPostingCapsRedirects exercises the default client built inside
+// fetchPosting (client == nil), which is where the redirect cap lives. The
+// httptest server always redirects to itself, so a working cap is the only
+// thing that stops this from hanging; without CheckRedirect, Go's built-in
+// default of 10 redirects would also eventually stop it, but only after
+// hitting the network 10 times instead of 5, and would report it as a
+// generic "stopped after 10 redirects" error rather than the client's own
+// too-many-redirects error at the boundary this test pins.
+func TestFetchPostingCapsRedirects(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, srv.URL, http.StatusFound)
+	}))
+	defer srv.Close()
+	_, err := fetchPosting(srv.URL, nil)
+	var fe *fetchError
+	if !errors.As(err, &fe) || fe.code != "network" {
+		t.Fatalf("want network error from redirect cap, got %v", err)
+	}
+}
+
+// TestLinkedInJobIDExtraction pins linkedInJobID to the trailing job ID in
+// a /jobs/view/... path or a currentJobId= query parameter, rejecting an
+// earlier 6+ digit run (e.g. a requisition number or year) embedded before
+// it in the slug.
+func TestLinkedInJobIDExtraction(t *testing.T) {
+	cases := []struct {
+		url  string
+		want string
+		ok   bool
+	}{
+		{"https://www.linkedin.com/jobs/view/data-analyst-2024001-at-acme-4459290748", "4459290748", true},
+		{"https://www.linkedin.com/jobs/view/4459290748/", "4459290748", true},
+		{"https://www.linkedin.com/jobs/view/4459290748?trk=x", "4459290748", true},
+		{"https://www.linkedin.com/jobs/search/?currentJobId=4459290748&keywords=pm", "4459290748", true},
+		{"https://www.linkedin.com/jobs/view/engineer-web3-2024-4459290748", "4459290748", true},
+		{"https://www.linkedin.com/company/acme/", "", false},
+	}
+	for _, c := range cases {
+		got, ok := linkedInJobID(c.url)
+		if ok != c.ok || got != c.want {
+			t.Errorf("linkedInJobID(%q) = (%q, %v), want (%q, %v)", c.url, got, ok, c.want, c.ok)
+		}
 	}
 }

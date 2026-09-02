@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -38,11 +39,31 @@ func (e *fetchError) Error() string { return e.code + ": " + e.message }
 // linkedinGuestBase is a test hook: production code never overrides it.
 var linkedinGuestBase = "https://www.linkedin.com"
 
-var linkedinIDRe = regexp.MustCompile(`(?:/jobs/view/[^/?#]*?-?|currentJobId=)(\d{6,})`)
+// linkedinIDRe anchors the captured digit run to a path/query boundary
+// ((?:[/?#&]|$)) so it lands on the trailing job ID, not an earlier 6+ digit
+// run embedded in a slug (e.g. a year or a requisition number that happens
+// to precede the real ID). "&" is included alongside the brief's "/?#"
+// because the currentJobId= branch is matched inside a query string, where
+// the very next character after the value is almost always "&" (another
+// param) or end-of-string, never "/", "?" or "#".
+var linkedinIDRe = regexp.MustCompile(`(?:/jobs/view/(?:[^/?#]*-)?|currentJobId=)(\d{6,})(?:[/?#&]|$)`)
 var loginWallRe = regexp.MustCompile(`(?i)\b(sign in to continue|authwall|log in to view|login required|join now to see)\b`)
 
 const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 const minPostingChars = 400
+const maxRedirects = 5
+
+// linkedInJobID extracts the trailing numeric job ID from a LinkedIn job URL,
+// whether it appears in a /jobs/view/... path segment or a currentJobId=
+// query parameter. It returns ok=false when no ID-shaped run is anchored to
+// a path/query boundary.
+func linkedInJobID(rawURL string) (string, bool) {
+	m := linkedinIDRe.FindStringSubmatch(rawURL)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
 
 // fetchPosting downloads url and extracts a title/company/location/text
 // tuple. client may be nil, in which case a default 15s-timeout client is
@@ -54,11 +75,19 @@ func fetchPosting(raw string, client *http.Client) (FetchPostingResult, error) {
 		return FetchPostingResult{}, &fetchError{"usage", "not an http(s) URL"}
 	}
 	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Second}
+		client = &http.Client{
+			Timeout: 15 * time.Second,
+			CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+				if len(via) >= maxRedirects {
+					return errors.New("too many redirects")
+				}
+				return nil
+			},
+		}
 	}
 	if strings.Contains(u.Host, "linkedin.com") {
-		if m := linkedinIDRe.FindStringSubmatch(u.String()); m != nil {
-			return fetchLinkedInGuest(m[1], client)
+		if id, ok := linkedInJobID(u.String()); ok {
+			return fetchLinkedInGuest(id, client)
 		}
 	}
 	doc, err := get(u.String(), client)
