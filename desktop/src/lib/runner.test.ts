@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => {
     invokeCancelTask: vi.fn(),
     getGenerationResult: vi.fn(),
     getPreferredProvider: vi.fn(),
+    getModel: vi.fn(async () => 'opus'),
+    getEffort: vi.fn(async () => 'high'),
+    getFastMode: vi.fn(async () => true),
     listeners,
     listen: vi.fn(async (event: string, callback: (event: { payload: unknown }) => void) => {
       listeners.set(event, callback);
@@ -27,7 +30,12 @@ vi.mock('../api', async (importOriginal) => {
   };
 });
 vi.mock('@tauri-apps/api/event', () => ({ listen: mocks.listen }));
-vi.mock('./providers', () => ({ getPreferredProvider: mocks.getPreferredProvider }));
+vi.mock('./providers', () => ({
+  getPreferredProvider: mocks.getPreferredProvider,
+  getModel: mocks.getModel,
+  getEffort: mocks.getEffort,
+  getFastMode: mocks.getFastMode,
+}));
 
 const completeResult: GenerationResult = {
   taskId: 'task-1',
@@ -85,6 +93,13 @@ describe('runTask', () => {
 
     expect(output).toEqual(['early']);
     expect(finished).toHaveBeenCalledWith(0, true);
+  });
+
+  it('sends the stored model options with every task', async () => {
+    const pending = runTask('scan', {}, '/w', { onFinished: vi.fn() });
+    await finishTask(true);
+    await pending;
+    expect(mocks.invokeRunTask).toHaveBeenLastCalledWith('scan', 'claude', {}, '/w', undefined, { model: 'opus', effort: 'high', fastMode: true });
   });
 });
 
@@ -152,6 +167,6 @@ describe('generateProfile', () => {
       feedback: 'Shorter summary',
       previous_cv: '# Old',
       previous_profile_yml: '(not written)',
-    }), '/w', undefined);
+    }), '/w', undefined, expect.any(Object));
   });
 });

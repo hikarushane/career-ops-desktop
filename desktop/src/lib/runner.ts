@@ -10,8 +10,14 @@ import {
   type GenerationProgressEvent,
   type GenerationResult,
   type GenerationTarget,
+  type ModelOptions,
 } from '../api';
-import { getPreferredProvider } from './providers';
+import { getEffort, getFastMode, getModel, getPreferredProvider } from './providers';
+
+export async function currentModelOptions(): Promise<ModelOptions> {
+  const [model, effort, fastMode] = await Promise.all([getModel(), getEffort(), getFastMode()]);
+  return { model, effort, fastMode };
+}
 
 export type TaskCallbacks = {
   onStarted?: (taskId: string) => void;
@@ -70,7 +76,7 @@ export async function runTask(
   }
 
   try {
-    const started = await invokeRunTask(taskType, provider.id, args, path, languageContext);
+    const started = await invokeRunTask(taskType, provider.id, args, path, languageContext, await currentModelOptions());
     taskId = started.task_id;
     callbacks?.onStarted?.(taskId);
   } catch (reason) {
