@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - **Branch:** work on `release/desktop-v0.5.0` (the working tree is already dirty with Phase A UI changes and the `conflict: null` fix; do not revert or "clean" them). Stage only the files each commit step lists. Never `git add -A`, `git add .`, or `git commit -a`.
-- **Never touch the real user data** in `/Users/shane_yeh/Projects/career-ops`: `cv.md`, `config/profile.yml`, `modes/_profile.md`, `documents/`, `.git/`. Never touch `~/.config/careerops/release/`. Rust tests use `tempfile::TempDir`; TS tests mock `../api`.
+- **Never touch the real user data** in `~/Projects/career-ops`: `cv.md`, `config/profile.yml`, `modes/_profile.md`, `documents/`, `.git/`. Never touch `~/.config/careerops/release/`. Rust tests use `tempfile::TempDir`; TS tests mock `../api`.
 - **`rm` is aliased to trash.** Use `rm <path>` with no flags. Never `\rm -rf`, `/bin/rm`, `command rm`.
 - **Verification commands:** Rust `cd desktop/src-tauri && cargo test --lib`; TS `cd desktop && npx vitest run` and `npx tsc --noEmit`. Baseline before Task 1: cargo 92 pass; vitest 193 pass, 1 known failure (`release-pipeline.test.ts:281`, out of scope, must stay the only failure).
 - **Commit messages in English**, Conventional Commits prefix, ending with the `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` trailer.

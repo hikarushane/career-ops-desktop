@@ -976,7 +976,7 @@ describe('summarize', () => {
   it('turns tool calls into plain language', () => {
     expect(summarize(ev('WebFetch', 'https://www.stepstone.de/jobs/123'))).toBe('Reading www.stepstone.de');
     expect(summarize(ev('Read', '/w/documents/cv/cv.md'))).toBe('Reading cv.md');
-    expect(summarize(ev('Write', '/Users/x/CareerOps/reports/042-acme.md'))).toBe('Writing reports/042-acme.md');
+    expect(summarize(ev('Write', '/home/x/CareerOps/reports/042-acme.md'))).toBe('Writing reports/042-acme.md');
     expect(summarize(ev('Bash', 'node merge-tracker.mjs'))).toBe('Updating tracker');
     expect(summarize(ev('Bash', 'node generate-pdf.mjs out.html out.pdf'))).toBe('Generating PDF');
     expect(summarize(ev('Bash', 'ls -la'))).toBe('Running ls');

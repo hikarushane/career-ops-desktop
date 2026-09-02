@@ -11,7 +11,7 @@ Paste this as the first message of a new Claude Code session.
 
 ### 安全規則（絕對優先）
 
-- **絕對不能修改、移動、刪除** `/Users/shane_yeh/Projects/career-ops` 裡的：
+- **絕對不能修改、移動、刪除** `~/Projects/career-ops` 裡的：
   `cv.md`、`config/profile.yml`、`modes/_profile.md`、`documents/`、`.git/`
 - 不要碰 `~/.config/careerops/release/`（signing infrastructure）
 - 不要印出 secrets
@@ -42,7 +42,7 @@ rm ~/Library/WebKit/io.career-ops.desktop
 ### Step 3：Build
 
 ```bash
-cd /Users/shane_yeh/Projects/career-ops/desktop
+cd ~/Projects/career-ops/desktop
 npm run tauri:build
 ```
 
@@ -56,7 +56,7 @@ Build 結尾的 `TAURI_SIGNING_PRIVATE_KEY` 警告可以忽略（本地 dev buil
 
 ```bash
 rm /Applications/CareerOps.app
-cp -R /Users/shane_yeh/Projects/career-ops/desktop/src-tauri/target/release/bundle/macos/CareerOps.app /Applications/CareerOps.app
+cp -R ~/Projects/career-ops/desktop/src-tauri/target/release/bundle/macos/CareerOps.app /Applications/CareerOps.app
 ```
 
 先 `rm` 再 `cp -R`，不能只 `cp -R`（會 merge 殘留檔案）。
