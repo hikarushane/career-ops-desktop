@@ -457,10 +457,6 @@ pub fn default_workspace_path(app: tauri::AppHandle) -> Result<String, String> {
 pub fn inspect_workspace(path: String) -> Result<WorkspaceInspection, String> {
     let workspace = PathBuf::from(&path);
     let kind = inspect_workspace_path(&workspace)?;
-    if kind == WorkspaceKind::Careerops {
-        crate::runner::reconcile_intake_transactions(&workspace)?;
-    }
-
     Ok(WorkspaceInspection { path, kind })
 }
 
