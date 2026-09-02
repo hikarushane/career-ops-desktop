@@ -43,7 +43,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
       getModel().then(setModelState),
       getEffort().then(setEffortState),
       getFastMode().then(setFastState),
-    ]).then(() => setSettingsLoaded(true));
+    ]).catch(() => {}).finally(() => setSettingsLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
       .then(({ models: result, degraded }) => {
         if (!active) return;
         setCatalog(result);
-        setCustomModel(model !== '' && !result.some((m) => m.id === model));
+        if (model !== '' && !result.some((m) => m.id === model)) setCustomModel(true);
         setCatalogState(degraded ? 'error' : 'ready');
       })
       .catch(() => {
@@ -70,7 +70,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
     try {
       const { models: result, degraded } = await getModelCatalog(preferredId, { force: true });
       setCatalog(result);
-      setCustomModel(model !== '' && !result.some((m) => m.id === model));
+      if (model !== '' && !result.some((m) => m.id === model)) setCustomModel(true);
       setCatalogState(degraded ? 'error' : 'ready');
     } catch {
       setCatalogState('error');

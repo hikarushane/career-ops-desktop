@@ -119,6 +119,20 @@ function findSelect(node: unknown, id: string): ElementNode | undefined {
   return findSelect(element.props?.children, id);
 }
 
+function findById(node: unknown, id: string): ElementNode | undefined {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findById(child, id);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof node !== 'object' || node === null) return undefined;
+  const element = node as ElementNode;
+  if (element.props?.id === id) return element;
+  return findById(element.props?.children, id);
+}
+
 // State order: tab, providers, preferredId, model, effort, fastMode, updateCheck,
 // catalog, catalogState, customModel, settingsLoaded
 const CLAUDE_PROVIDER = { id: 'claude', displayName: 'Claude Code', binary: 'claude', headlessCmd: 'claude -p', state: 'ready' };
@@ -155,5 +169,22 @@ describe('ProfileSettings AI tab', () => {
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     expect(textContent(tree)).toMatch(/Could not verify models; showing defaults\./);
+  });
+
+  // NOTE: this only proves the RENDER honors an already-true customModel;
+  // it cannot exercise the derivation effects themselves (useEffect bodies
+  // never run under this positional-hook harness), so it does not by itself
+  // prove the derivation can no longer flip customModel back to false — that
+  // guarantee comes from the source read (`if (...) setCustomModel(true)`
+  // never calls setCustomModel(false)).
+  it('keeps an explicit Custom selection when the model is already in the catalog', () => {
+    hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
+      CATALOG, 'ready', true, true]);
+    hooks.beginRender();
+    const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    const select = findSelect(tree, 'ai-model');
+    expect(select?.props?.value).toBe('__custom');
+    const customInput = findById(tree, 'ai-model-custom');
+    expect(customInput).toBeDefined();
   });
 });
