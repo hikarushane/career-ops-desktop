@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import AgentActivity from './AgentActivity';
 import type { TaskRecord } from '../lib/taskStore';
 
-vi.mock('react', async (orig) => ({ ...(await orig<typeof import('react')>()), useState: (v: unknown) => [v, () => {}], useEffect: () => {} }));
+vi.mock('react', async (orig) => ({ ...(await orig<typeof import('react')>()), useState: (v: unknown) => [typeof v === 'function' ? (v as () => unknown)() : v, () => {}], useEffect: () => {} }));
 
 function textContent(node: unknown): string {
   if (Array.isArray(node)) return node.map(textContent).join(' ');
@@ -18,8 +18,7 @@ const base: TaskRecord = { taskId: 't', taskType: 'evaluate', label: 'Acme', sta
 describe('AgentActivity', () => {
   it('shows the latest real activity while running', () => {
     const text = textContent(AgentActivity({ task: base, onCancel: vi.fn(), onRetry: vi.fn() }));
-    expect(text).toMatch(/Running/);
-    expect(text).toMatch(/Writing reports\/042-acme\.md/);
+    expect(text).toMatch(/Running · 1m 0[45]s · Writing reports\/042-acme\.md/);
     expect(text).not.toMatch(/Generating evaluation/);
   });
   it('shows the outcome detail when failed with exit 0', () => {

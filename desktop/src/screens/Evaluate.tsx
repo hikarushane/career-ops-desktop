@@ -32,6 +32,8 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
   const [languages, setLanguages] = useState<LanguageSettings | null>(null);
   const [jobLanguage, setJobLanguage] = useState('');
   const [detectedLanguage, setDetectedLanguage] = useState<JobLanguageResolution | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const documentLanguageRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
@@ -50,17 +52,25 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
   }, [root, url]);
 
   const start = useCallback(async () => {
-    if (!url.trim()) return;
+    if (!url.trim() || starting) return;
 
-    const languageContext = languages
-      ? {
-          analysisLanguage: languages.analysisLanguage,
-          ...(jobLanguage ? { jobLanguage, jobLanguageSource: 'manual-override', jobLanguageConfidence: 1 } : {}),
-        }
-      : undefined;
+    setStartError(null);
+    setStarting(true);
+    try {
+      const languageContext = languages
+        ? {
+            analysisLanguage: languages.analysisLanguage,
+            ...(jobLanguage ? { jobLanguage, jobLanguageSource: 'manual-override', jobLanguageConfidence: 1 } : {}),
+          }
+        : undefined;
 
-    setTaskId(await startTask('evaluate', { url: url.trim() }, root, labelFor(url), languageContext));
-  }, [url, root, languages, jobLanguage]);
+      setTaskId(await startTask('evaluate', { url: url.trim() }, root, labelFor(url), languageContext));
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStarting(false);
+    }
+  }, [url, root, languages, jobLanguage, starting]);
 
   if (taskId === null) {
     return (
@@ -72,13 +82,14 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
             placeholder="Paste job URL..."
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && start()}
+            onKeyDown={(e) => e.key === 'Enter' && !starting && start()}
             autoFocus
           />
-          <button className="btn-primary" onClick={start} disabled={!url.trim()}>
+          <button className="btn-primary" onClick={start} disabled={!url.trim() || starting}>
             Analyse
           </button>
         </div>
+        {startError && <p className="intake-error" role="alert">{startError}</p>}
         {languages && (
           <section className="document-language-picker">
             <label>
@@ -113,6 +124,12 @@ export default function Evaluate({ root, initialUrl, onDone }: Props) {
   }
 
   return (
-    <TaskScreen taskId={taskId} title="Evaluating" onRetry={start} doneAction={{ label: 'Back to pipeline', onClick: onDone }} />
+    <TaskScreen
+      taskId={taskId}
+      title="Evaluating"
+      onRetry={start}
+      doneAction={{ label: 'Back to pipeline', onClick: onDone }}
+      onCancelled={() => setTaskId(null)}
+    />
   );
 }

@@ -23,16 +23,20 @@ export default function AgentActivity({ task, onCancel, onRetry }: Props) {
   const lastText = [...task.events].reverse().find((e) => e.kind === 'text');
   const latest = activity[activity.length - 1];
 
-  const headline = task.state === 'running'
-    ? `Running · ${elapsed(task.startedAt, now)}${latest ? ` · ${summarize(latest)}` : ''}`
+  const stateWord = task.state === 'running' ? 'Running' : task.state === 'done' ? 'Done' : 'Failed';
+  const summaryText = task.state === 'running'
+    ? (latest ? summarize(latest) : '')
     : task.state === 'done'
-      ? `Done · ${task.outcome?.detail ?? ''}`
-      : `Failed · ${task.outcome?.detail ?? `exit code ${task.exitCode ?? 'unknown'}`}`;
+      ? (task.outcome?.detail ?? '')
+      : (task.outcome?.detail ?? `exit code ${task.exitCode ?? 'unknown'}`);
 
   return (
     <div className={`agent-activity state-${task.state}`}>
       <p className="agent-headline" role="status" aria-live="polite">
-        {task.state === 'done' && <CheckIcon size={14} />}{headline}
+        {task.state === 'done' && <CheckIcon size={14} />}
+        {stateWord}
+        {task.state === 'running' && <span aria-hidden="true">{`· ${elapsed(task.startedAt, now)}`}</span>}
+        {summaryText && `· ${summaryText}`}
       </p>
       {task.state === 'failed' && lastText && (
         <blockquote className="agent-last-text">{lastText.summary}</blockquote>
