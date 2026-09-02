@@ -131,6 +131,8 @@ body {
   cursor: pointer; padding: 4px 8px;
 }
 .btn-ghost:hover { color: var(--color-text-primary); }
+.btn-ghost:disabled { opacity: 0.5; cursor: default; }
+.btn-ghost:disabled:hover { color: var(--color-text-secondary); }
 button:focus-visible,
 select:focus-visible,
 summary:focus-visible {
@@ -652,6 +654,14 @@ summary:focus-visible {
 }
 .ai-input:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 .ai-input::placeholder { color: var(--color-text-secondary); }
+.ai-input:disabled { opacity: 0.5; cursor: default; }
+select#ai-model {
+  width: 220px; padding: 8px 12px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-control);
+  background: var(--color-surface-subtle); color: var(--color-text-primary);
+  font: 400 13px var(--font-sans);
+}
+select#ai-model:disabled { opacity: 0.5; cursor: default; }
 .ai-segment {
   display: flex; border: 1px solid var(--color-border); border-radius: var(--radius-control); overflow: hidden;
 }
@@ -666,12 +676,14 @@ summary:focus-visible {
 .ai-segment button.selected {
   background: var(--color-primary); color: #fff;
 }
+.ai-segment button:disabled { opacity: 0.5; cursor: default; }
 .ai-toggle {
   position: relative; width: 44px; height: 24px; border-radius: 12px;
   border: none; padding: 0; cursor: pointer;
   background: var(--color-border); transition: background 0.2s;
 }
 .ai-toggle[aria-checked="true"] { background: var(--color-primary); }
+.ai-toggle:disabled { opacity: 0.5; cursor: default; }
 .ai-toggle-thumb {
   position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
   border-radius: 50%; background: #fff;

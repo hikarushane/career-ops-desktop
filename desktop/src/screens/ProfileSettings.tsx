@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { ProviderEntry } from '../api';
+import type { ProviderEntry, ModelEntry } from '../api';
 import {
   detectProviders, getPreferredId, setPreferredId,
   getModel, setModel as saveModel,
@@ -7,10 +7,14 @@ import {
   getFastMode, setFastMode as saveFastMode,
   type EffortLevel,
 } from '../lib/providers';
+import { getModelCatalog, fastModeAllowed } from '../lib/models';
 import { checkForUpdate, type UpdateState, initialState } from '../lib/updater';
 import { openWorkspaceFolder } from '../lib/workspace';
 import AnalysisLanguageField from '../components/AnalysisLanguageField';
 import WorkspaceSettings from './WorkspaceSettings';
+
+/** Providers whose runner does not consume --model/--effort/--settings fastMode at all. */
+const NO_MODEL_SETTINGS_PROVIDERS = new Set(['opencode', 'copilot', 'qwen', 'grok']);
 
 type Props = {
   root: string;
@@ -27,6 +31,9 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
   const [effort, setEffortState] = useState<EffortLevel>('medium');
   const [fastMode, setFastState] = useState(false);
   const [updateCheck, setUpdateCheck] = useState<UpdateState>(initialState());
+  const [catalog, setCatalog] = useState<ModelEntry[]>([]);
+  const [catalogState, setCatalogState] = useState<'loading' | 'ready' | 'error'>('ready');
+  const [customModel, setCustomModel] = useState(false);
 
   useEffect(() => {
     detectProviders().then(setProviders);
@@ -36,10 +43,50 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
     getFastMode().then(setFastState);
   }, []);
 
+  useEffect(() => {
+    if (tab !== 'ai' || !preferredId) return;
+    let active = true;
+    setCatalogState('loading');
+    getModelCatalog(preferredId, { force: false })
+      .then((result) => {
+        if (!active) return;
+        setCatalog(result);
+        setCatalogState('ready');
+      })
+      .catch(() => {
+        if (!active) return;
+        setCatalogState('error');
+      });
+    return () => { active = false; };
+  }, [tab, preferredId]);
+
+  const refreshCatalog = useCallback(async () => {
+    if (!preferredId) return;
+    setCatalogState('loading');
+    try {
+      const result = await getModelCatalog(preferredId, { force: true });
+      setCatalog(result);
+      setCatalogState('ready');
+    } catch {
+      setCatalogState('error');
+    }
+  }, [preferredId]);
+
   const selectProvider = useCallback(async (id: string) => {
     await setPreferredId(id);
     setPreferred(id);
   }, []);
+
+  const modelSettingsSupported = !!preferredId && !NO_MODEL_SETTINGS_PROVIDERS.has(preferredId);
+  const effortDisabled = !modelSettingsSupported || preferredId === 'agy';
+  const fastOk = fastModeAllowed(preferredId ?? '', model, catalog);
+
+  useEffect(() => {
+    if (!fastOk && fastMode) {
+      setFastState(false);
+      saveFastMode(false);
+    }
+  }, [fastOk, fastMode]);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'background', label: 'My Background' },
@@ -119,19 +166,63 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
 
             <h2 style={{ marginTop: 32 }}>Model Settings</h2>
 
+            {!modelSettingsSupported && (
+              <p className="setup-hint">Model settings are not supported for this provider.</p>
+            )}
+
             <div className="ai-setting-row">
               <label htmlFor="ai-model">Model</label>
-              <input
+              <select
                 id="ai-model"
-                type="text"
-                className="ai-input"
-                placeholder="Default (provider decides)"
-                value={model}
+                disabled={!modelSettingsSupported}
+                value={customModel ? '__custom' : model}
                 onChange={(e) => {
+                  if (e.target.value === '__custom') { setCustomModel(true); return; }
+                  setCustomModel(false);
                   setModelState(e.target.value);
                   saveModel(e.target.value);
                 }}
-              />
+              >
+                <option value="">Provider default</option>
+                {catalog.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}{m.available === null ? ' (unverified)' : ''}
+                  </option>
+                ))}
+                <option value="__custom">Custom…</option>
+              </select>
+            </div>
+
+            {customModel && (
+              <div className="ai-setting-row">
+                <label htmlFor="ai-model-custom">Custom model id</label>
+                <input
+                  id="ai-model-custom"
+                  type="text"
+                  className="ai-input"
+                  placeholder="Model id"
+                  disabled={!modelSettingsSupported}
+                  value={model}
+                  onChange={(e) => {
+                    setModelState(e.target.value);
+                    saveModel(e.target.value);
+                  }}
+                />
+              </div>
+            )}
+
+            {catalogState === 'loading' && (
+              <p className="setup-hint">Checking which models your account can use…</p>
+            )}
+            {catalogState === 'error' && (
+              <p className="setup-hint">Could not verify models; showing defaults.</p>
+            )}
+
+            <div className="ai-setting-row">
+              <label>Refresh</label>
+              <button className="btn-ghost" disabled={!modelSettingsSupported} onClick={refreshCatalog}>
+                Refresh
+              </button>
             </div>
 
             <div className="ai-setting-row">
@@ -142,6 +233,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
                     key={lvl}
                     role="radio"
                     aria-checked={effort === lvl}
+                    disabled={effortDisabled}
                     onClick={() => { setEffortState(lvl); saveEffort(lvl); }}
                   >
                     {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
@@ -157,11 +249,15 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
                 role="switch"
                 aria-checked={fastMode}
                 className="ai-toggle"
+                disabled={!fastOk}
                 onClick={() => { setFastState(!fastMode); saveFastMode(!fastMode); }}
               >
                 <span className="ai-toggle-thumb" />
               </button>
             </div>
+            {!fastOk && (
+              <p className="setup-hint">Fast mode is available for Claude Opus models only.</p>
+            )}
           </div>
         )}
 
