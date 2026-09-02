@@ -58,6 +58,7 @@ const USER_DIRECTORIES: &[&str] = &[
     "documents/references",
     "documents/certificates",
     "documents/portfolio",
+    "documents/others",
     "data",
     "reports",
     "output",
@@ -74,6 +75,7 @@ fn intake_category_folder(category: &str) -> Result<&'static str, String> {
         "references" => Ok("references"),
         "certificates" => Ok("certificates"),
         "portfolio" => Ok("portfolio"),
+        "others" => Ok("others"),
         _ => Err("intake category is not allowed".to_owned()),
     }
 }
@@ -1607,6 +1609,7 @@ mod tests {
         assert!(workspace.join("documents/references").is_dir());
         assert!(workspace.join("documents/certificates").is_dir());
         assert!(workspace.join("documents/portfolio").is_dir());
+        assert!(workspace.join("documents/others").is_dir());
         assert!(workspace.join("data").is_dir());
         assert!(workspace.join("reports").is_dir());
         assert!(workspace.join("output").is_dir());

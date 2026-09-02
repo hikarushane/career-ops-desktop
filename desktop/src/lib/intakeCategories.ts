@@ -6,7 +6,8 @@ export type IntakeCategoryId =
   | 'linkedin'
   | 'references'
   | 'certificates'
-  | 'portfolio';
+  | 'portfolio'
+  | 'others';
 
 export type IntakeCategory = {
   id: IntakeCategoryId;
@@ -23,6 +24,7 @@ export const INTAKE_CATEGORIES: readonly IntakeCategory[] = [
   { id: 'references', label: 'References', folder: 'references' },
   { id: 'certificates', label: 'Certificates', folder: 'certificates' },
   { id: 'portfolio', label: 'Portfolio / Projects', folder: 'portfolio' },
+  { id: 'others', label: 'Other', folder: 'others' },
 ] as const;
 
 export function folderFor(category: IntakeCategoryId): string {
