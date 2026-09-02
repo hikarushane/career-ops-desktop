@@ -372,6 +372,8 @@ summary:focus-visible {
   border: 1px solid var(--color-surface-muted); border-radius: 0.8rem; background: var(--color-surface-subtle);
   font: 0.8rem/1.45 var(--font-mono); white-space: pre-wrap; word-break: break-word;
 }
+.feedback-dialog { margin-top: 12px; padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-canvas); display: grid; gap: 8px; }
+.feedback-dialog textarea { width: 100%; font: 400 13px var(--font-sans); padding: 8px; }
 
 /* --- Home screen (follows .progress-grid padding convention) --- */
 .home-screen { padding: 20px 32px; }

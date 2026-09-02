@@ -94,7 +94,7 @@ function render() {
 
 describe('ProfileGeneration', () => {
   it('shows a preview with one tab per generated file when generation completes', () => {
-    hooks.reset(['preview', 'task-1', ['cv.md'], completeResult, 'cv.md', null, false]);
+    hooks.reset(['preview', 'task-1', ['cv.md'], completeResult, 'cv.md', null, false, false, '']);
     const tree = render();
     const text = textContent(tree);
     expect(text).toContain('Review your profile');
@@ -105,7 +105,7 @@ describe('ProfileGeneration', () => {
 
   it('flags files the deterministic check rejected', () => {
     const invalid = { ...completeResult, complete: false, files: completeResult.files.map((f, i) => (i === 1 ? { ...f, valid: false, issue: 'YAML does not parse' } : f)) };
-    hooks.reset(['preview', 'task-1', [], invalid, 'config/profile.yml', null, false]);
+    hooks.reset(['preview', 'task-1', [], invalid, 'config/profile.yml', null, false, false, '']);
     const text = textContent(render());
     expect(text).toContain('YAML does not parse');
   });
@@ -113,7 +113,7 @@ describe('ProfileGeneration', () => {
   it('applies the staged files and completes', async () => {
     api.applyGeneration.mockResolvedValue(['cv.md']);
     const onComplete = vi.fn();
-    hooks.reset(['preview', 'task-1', [], completeResult, 'cv.md', null, false]);
+    hooks.reset(['preview', 'task-1', [], completeResult, 'cv.md', null, false, false, '']);
     const tree = ProfileGeneration({ root: '/w', preferences: EMPTY_PREFERENCES, onComplete, onSkip: vi.fn() }) as ElementNode;
     const apply = findElement(tree, (el) => textContent(el) === 'Apply');
     await (apply?.props as { onClick?: () => Promise<void> }).onClick?.();
@@ -122,7 +122,7 @@ describe('ProfileGeneration', () => {
   });
 
   it('shows the error with retry and skip when generation fails', () => {
-    hooks.reset(['error', null, [], null, 'cv.md', 'AI provider authentication failed.', false]);
+    hooks.reset(['error', null, [], null, 'cv.md', 'AI provider authentication failed.', false, false, '']);
     const tree = render();
     expect(textContent(tree)).toContain('authentication failed');
     expect(findElement(tree, (el) => textContent(el) === 'Try again')).toBeTruthy();
@@ -130,9 +130,29 @@ describe('ProfileGeneration', () => {
   });
 
   it('counts written files while running', () => {
-    hooks.reset(['running', 'task-1', ['cv.md', 'config/profile.yml'], null, 'cv.md', null, false]);
+    hooks.reset(['running', 'task-1', ['cv.md', 'config/profile.yml'], null, 'cv.md', null, false, false, '']);
     hooks.beginRender();
     const tree = ProfileGeneration({ root: '/w', preferences: EMPTY_PREFERENCES, onComplete: vi.fn(), onSkip: vi.fn() }) as ElementNode;
     expect(textContent(tree)).toMatch(/2 of 4 files written/);
+  });
+
+  it('opens the feedback dialog and regenerates with the typed instructions', async () => {
+    const result: GenerationResult = { taskId: 'task-1', complete: true, files: [
+      { path: 'cv.md', content: '# CV', valid: true, issue: null },
+      { path: 'config/profile.yml', content: 'a: 1', valid: true, issue: null },
+      { path: 'modes/_profile.md', content: '# P', valid: true, issue: null },
+      { path: 'portals.yml', content: 'b: 2', valid: true, issue: null },
+    ] };
+    hooks.reset(['preview', 'task-1', [], result, 'cv.md', null, false, true, 'Shorter summary']);
+    hooks.beginRender();
+    api.languageSettings.mockResolvedValue({ analysisLanguage: 'en', options: [] });
+    api.generateProfile.mockResolvedValue(result);
+    api.discardGeneration.mockResolvedValue(undefined);
+    const tree = ProfileGeneration({ root: '/w', preferences: EMPTY_PREFERENCES, onComplete: vi.fn(), onSkip: vi.fn() }) as ElementNode;
+    const send = findElement(tree, (el) => textContent(el) === 'Regenerate');
+    expect(send).toBeDefined();
+    await send?.props?.onClick?.();
+    expect(api.generateProfile).toHaveBeenCalledWith('/w', expect.any(String), 'en', expect.any(Object),
+      expect.objectContaining({ instructions: 'Shorter summary', previous: expect.objectContaining({ 'cv.md': '# CV' }) }));
   });
 });

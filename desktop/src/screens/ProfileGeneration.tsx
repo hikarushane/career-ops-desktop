@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { applyGeneration, discardGeneration, languageSettings, type GenerationResult, type GenerationTarget } from '../api';
-import { cancelTask, generateProfile } from '../lib/runner';
+import { cancelTask, generateProfile, type GenerationFeedback } from '../lib/runner';
 import { preferencesToPrompt, type JobPreferences } from '../lib/jobPreferences';
 import { CheckIcon } from '../components/icons';
 
@@ -23,10 +23,12 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
   const [selected, setSelected] = useState<GenerationTarget>('cv.md');
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
   const started = useRef(false);
   const activeTask = useRef<string | null>(null);
 
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (feedback?: GenerationFeedback) => {
     setPhase('running');
     setError(null);
     setWritten([]);
@@ -41,7 +43,7 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
       const generated = await generateProfile(root, preferencesToPrompt(preferences), analysisLanguage, {
         onStarted: (id) => { activeTask.current = id; setTaskId(id); },
         onFileWritten: (file) => setWritten((current) => (current.includes(file) ? current : [...current, file])),
-      });
+      }, feedback);
       setResult(generated);
       setSelected(generated.files.find((file) => file.content !== null)?.path ?? 'cv.md');
       setPhase('preview');
@@ -85,6 +87,16 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
     setTaskId(null);
     void generate();
   }, [taskId, generate]);
+
+  const regenerateWithFeedback = useCallback(() => {
+    if (!result) return;
+    const previous = Object.fromEntries(result.files.map((f) => [f.path, f.content])) as Record<GenerationTarget, string | null>;
+    if (taskId) void discardGeneration(taskId).catch(() => {});
+    activeTask.current = null;
+    setTaskId(null);
+    setFeedbackOpen(false);
+    void generate({ instructions: feedbackText, previous });
+  }, [result, taskId, feedbackText, generate]);
 
   const skip = useCallback(() => {
     if (taskId) void discardGeneration(taskId).catch(() => {});
@@ -168,9 +180,23 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
         <button className="btn-primary" onClick={apply} disabled={applying || !result.files.some((file) => file.content !== null)}>
           {applying ? <span className="animated-dots">Applying</span> : 'Apply'}
         </button>
-        <button className="btn-secondary" onClick={regenerate} disabled={applying}>Regenerate</button>
+        <button className="btn-secondary" onClick={() => setFeedbackOpen(true)} disabled={applying}>Regenerate with feedback…</button>
+        <button className="btn-secondary" onClick={regenerate} disabled={applying}>Regenerate from scratch</button>
         <button className="btn-ghost" onClick={skip} disabled={applying}>Skip for now</button>
       </div>
+
+      {feedbackOpen && (
+        <div className="feedback-dialog" role="dialog" aria-label="What should change?">
+          <label>
+            <span>Tell the AI what to change</span>
+            <textarea rows={4} value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)} placeholder="Shorter summary, add the 2023 project, use British spelling" />
+          </label>
+          <div className="setup-actions">
+            <button className="btn-primary" onClick={regenerateWithFeedback} disabled={!feedbackText.trim()}>Regenerate</button>
+            <button className="btn-ghost" onClick={() => setFeedbackOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

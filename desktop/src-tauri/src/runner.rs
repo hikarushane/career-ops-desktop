@@ -45,6 +45,41 @@ Write modes/_profile.md and every narrative field in {analysisLanguage}. Write c
 
 Rules: never invent employers, titles, dates, degrees, or numbers. Reformulate and reorganise, never fabricate. Do not run scripts, install anything, or write any other file. When finished, print one line per file you wrote."#;
 
+const PROFILE_FEEDBACK_SECTION: &str = r#"
+
+A previous attempt produced the files below. The user reviewed them and asks for these changes:
+{feedback}
+Keep everything the user did not ask to change.
+
+Previous cv.md:
+---
+{previous_cv}
+---
+Previous config/profile.yml:
+---
+{previous_profile_yml}
+---
+Previous modes/_profile.md:
+---
+{previous_profile_md}
+---
+Previous portals.yml:
+---
+{previous_portals}
+---"#;
+
+fn render_generation_prompt(args: &HashMap<String, String>) -> String {
+    let mut prompt = build_prompt(PROFILE_GENERATE_PROMPT, args);
+    if args.get("feedback").map(|f| !f.trim().is_empty()).unwrap_or(false) {
+        let mut filled = args.clone();
+        for key in ["previous_cv", "previous_profile_yml", "previous_profile_md", "previous_portals"] {
+            filled.entry(key.to_owned()).or_insert_with(|| "(not written)".to_owned());
+        }
+        prompt.push_str(&build_prompt(PROFILE_FEEDBACK_SECTION, &filled));
+    }
+    prompt
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerationFile {
@@ -779,7 +814,7 @@ pub fn run_task(
 
     let language_instruction = language_context_instruction(input.language_context.as_ref())?;
     let prompt = if is_generation {
-        build_prompt(task_def.prompt_template, &input.args)
+        render_generation_prompt(&input.args)
     } else {
         format!(
             "{}\n\n{}",
@@ -968,8 +1003,24 @@ mod tests {
         apply_generation_at, build_prompt, copy_document_sources, create_generation_staging,
         generation_args, generation_is_complete, get_task_def, headless_args,
         inspect_generation, language_context_instruction, packaged_runtime_paths_for_executable,
-        LanguageContext, PackagedJsRuntime,
+        render_generation_prompt, LanguageContext, PackagedJsRuntime,
     };
+
+    #[test]
+    fn feedback_section_is_included_only_when_feedback_is_given() {
+        let mut args = HashMap::new();
+        args.insert("preferences".to_owned(), "- Regions: DE".to_owned());
+        args.insert("analysisLanguage".to_owned(), "en".to_owned());
+        let without = render_generation_prompt(&args);
+        assert!(!without.contains("A previous attempt"));
+
+        args.insert("feedback".to_owned(), "Use British spelling".to_owned());
+        args.insert("previous_cv".to_owned(), "# Old CV".to_owned());
+        let with = render_generation_prompt(&args);
+        assert!(with.contains("A previous attempt produced the files below"));
+        assert!(with.contains("Use British spelling"));
+        assert!(with.contains("# Old CV"));
+    }
 
     #[test]
     fn packaged_runtime_resolves_launcher_and_resource_binary() {
