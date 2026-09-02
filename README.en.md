@@ -142,12 +142,13 @@ Release publishing fails closed until the fork repository, updater endpoint, pub
 | --- | --- |
 | **Onboarding** | Import background documents, configure AI, choose analysis language, and get ready without editing YAML by hand. |
 | **AI provider** | Detect and use supported local AI CLIs such as Codex through a provider abstraction instead of hard-coding one agent. |
-| **Job evaluation** | Paste a job URL and run the CareerOps evaluation flow from the app. |
-| **Job discovery** | Run scanner and batch workflows with visible progress, deduplication, failures, and ranked results. |
+| **Job evaluation** | Paste a job URL and the app fetches the posting itself first (LinkedIn through its public guest endpoint, other sites over plain HTTP); only when a site blocks that does it ask you to paste the job description. You can also paste a full JD directly. The AI evaluation starts only after the text is captured. |
+| **Job discovery** | Run the scanner from the UI; the **Process pending jobs** card on Home shows how many entries in `data/pipeline.md` are pending or need attention and starts a batch run. |
+| **Task center** | Evaluations, scans, batch runs, and interview tasks keep running when you switch screens; the header task chip shows running / done / failed and takes you back to that task's activity log. The log shows which files the AI is actually reading and writing, and success means a report was produced, not merely a zero exit code. |
 | **Applications** | Browse the existing CareerOps pipeline, reports, statuses, PDFs, and progress in a native interface. |
 | **Interview** | Use Prep Planner, Practice, and Debrief workflows from the desktop app. |
 | **Language system** | Choose the language used to read analysis while CVs, cover letters, and interview materials follow each job description's language. |
-| **Help and settings** | Manage profile, sources, AI provider, language, and help content inside the app. |
+| **Help and settings** | Manage profile, sources, AI provider, language, and help content inside the app. In Settings → AI the Model field is a dropdown: agy is read from `agy models`, while claude and codex candidates are probed with one tiny live call each to see which your account can use (cached for 24 hours; Refresh re-probes). Fast mode is available only for Claude Opus models, and Effort does not apply to agy. |
 | **Human in the loop** | CareerOps can evaluate, draft, and recommend, but the user keeps the final decision and submission step. The desktop layer never submits an application or sends outreach on your behalf. <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. --> |
 
 ## Language behavior
@@ -226,6 +227,7 @@ CareerOps Desktop keeps the upstream human-in-the-loop model.
 - Status changes use guarded write paths rather than arbitrary Markdown rewriting.
 - The desktop layer does not submit job applications or send outreach automatically.
 - AI provider credentials are handled by the provider's own local CLI authentication where supported.
+- When the desktop app launches an AI CLI for a task (evaluate, scan, batch, profile generation) it skips that CLI's step-by-step permission prompts (for example claude's `--dangerously-skip-permissions`) and loads only project-level settings, not the MCP servers from your user-level configuration. This lets the AI read and write reports and the tracker inside your workspace folder; it still never submits an application.
 - CareerOps core files remain the canonical source instead of being duplicated into a separate desktop database.
 
 ## For developers
