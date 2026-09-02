@@ -27,6 +27,7 @@ tauri-plugin-dialog = "2.7.2"
 tauri-plugin-store = "2.4.4"
 cap-std = "4.0.3"
 cap-fs-ext = "4.0.3"
+serde_yaml = "0.9"
 tempfile = "3"
 libc = "0.2"
 
