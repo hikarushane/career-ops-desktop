@@ -34,6 +34,10 @@ export default function JobPreferences({ value, onChange, onContinue }: Props) {
           <input value={value.keywords} onChange={(e) => set('keywords', e.target.value)} placeholder="Manufacturing Engineer, Project Leader" />
         </label>
         <label>
+          <span>Industry or domain</span>
+          <input value={value.industries} onChange={(e) => set('industries', e.target.value)} placeholder="Automotive, Semiconductor, Medical devices" />
+        </label>
+        <label>
           <span>Expected salary</span>
           <input value={value.salary} onChange={(e) => set('salary', e.target.value)} placeholder="EUR 70k-85k gross per year" />
         </label>
