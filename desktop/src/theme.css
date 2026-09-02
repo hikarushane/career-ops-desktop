@@ -431,7 +431,7 @@ summary:focus-visible {
 .agent-step { display: flex; align-items: center; gap: 8px; font: 600 13px var(--font-sans); letter-spacing: 0.13px; color: var(--color-text-secondary); }
 .agent-step.active { color: var(--color-text-primary); }
 .agent-step.done { color: var(--color-primary); }
-.agent-step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-surface-muted); display: inline-flex; align-items: center; justify-content: center; color: #fff; }
+.agent-step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-surface-muted); display: inline-flex; align-items: center; justify-content: center; color: var(--color-text-on-primary-dark); }
 .agent-step.active .agent-step-dot { background: var(--color-primary); }
 .agent-step.done .agent-step-dot { background: var(--color-primary); width: 14px; height: 14px; }
 .agent-activity-actions { display: flex; gap: 8px; }
