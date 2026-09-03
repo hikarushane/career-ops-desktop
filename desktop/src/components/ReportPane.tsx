@@ -5,17 +5,22 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { openJobUrl } from '../lib/opener';
 import { isError, readReport, type Application, type ReportResult } from '../api';
 import type { TaskRecord } from '../lib/taskStore';
+import StatusSelect from './StatusSelect';
 
 type Props = {
   root: string;
   app: Application | null;
   onStartTask: (taskType: 'pdf' | 'cover', args: Record<string, string>, label: string) => Promise<void>;
   runningTaskFor: (taskType: 'pdf' | 'cover') => TaskRecord | null;
+  /** Same write path as the board/table StatusSelect (set-status with expectStatus guard). */
+  onStatusChange: (app: Application, next: string) => void;
+  /** True while a status write for this row is in flight. */
+  pending: boolean;
 };
 
 const TONE_OPTIONS = ['Formal', 'Direct', 'Conversational', 'Mirror the JD'] as const;
 
-export default function ReportPane({ root, app, onStartTask, runningTaskFor }: Props) {
+export default function ReportPane({ root, app, onStartTask, runningTaskFor, onStatusChange, pending }: Props) {
   const [report, setReport] = useState<ReportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The tracker parser (dashboard/internal/data/career.go) sets ReportPath
@@ -112,6 +117,16 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor }: P
         <div className="report-header">
           <div className="report-company">{app.company}</div>
           <div className="report-role">{app.role}</div>
+          {/* Status is editable here too, so a card opened from the board
+              can be moved on without going back to it. */}
+          <div className="report-status">
+            <StatusSelect
+              value={app.status}
+              normStatus={app.normStatus}
+              disabled={pending || !app.reportNumber}
+              onChange={(next) => onStatusChange(app, next)}
+            />
+          </div>
         </div>
         <dl>
           <dt>Archetype</dt><dd>{app.archetype || '—'}</dd>

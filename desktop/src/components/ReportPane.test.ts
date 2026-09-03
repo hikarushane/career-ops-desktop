@@ -3,6 +3,7 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import type { Application } from '../api';
 import type { TaskRecord } from '../lib/taskStore';
 import ReportPane from './ReportPane';
+import StatusSelect from './StatusSelect';
 
 // Positional useState harness (see WorkspaceSettings.test.ts / BackgroundImport.test.ts
 // for the established pattern in this codebase). Slot order, in declaration order in
@@ -79,6 +80,8 @@ type ElementNode = {
     children?: unknown;
     onClick?: () => void | Promise<void>;
     onSubmit?: (e: { preventDefault: () => void }) => void;
+    onChange?: (next: string) => void;
+    value?: string;
     disabled?: boolean;
     title?: string;
   };
@@ -145,7 +148,7 @@ describe('ReportPane CV / cover letter actions', () => {
     const runningTaskFor = vi.fn(() => null);
     hooks.reset(DEFAULT_STATE);
     hooks.beginRender();
-    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor }) as ElementNode;
+    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor, onStatusChange: vi.fn(), pending: false }) as ElementNode;
 
     findButton(tree, 'Generate CV')?.props?.onClick?.();
 
@@ -160,6 +163,8 @@ describe('ReportPane CV / cover letter actions', () => {
       app: baseApp({ pdfPath: 'output/cv-acme.pdf' }),
       onStartTask: vi.fn(),
       runningTaskFor: vi.fn(() => null),
+      onStatusChange: vi.fn(),
+      pending: false,
     }) as ElementNode;
 
     await findButton(tree, 'View CV')?.props?.onClick?.();
@@ -175,6 +180,8 @@ describe('ReportPane CV / cover letter actions', () => {
       app: baseApp(),
       onStartTask: vi.fn(),
       runningTaskFor: vi.fn((t: string) => (t === 'pdf' ? ({ taskId: 't1' } as TaskRecord) : null)),
+      onStatusChange: vi.fn(),
+      pending: false,
     }) as ElementNode;
 
     const btn = findButton(tree, 'Generating CV…');
@@ -186,7 +193,7 @@ describe('ReportPane CV / cover letter actions', () => {
     const onStartTask = vi.fn();
     hooks.reset([null, null, false, true, 'Loves the mission', 'Scale the eval pipeline', 'Ship a thin slice first', 'Direct']);
     hooks.beginRender();
-    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null) }) as ElementNode;
+    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null), onStatusChange: vi.fn(), pending: false }) as ElementNode;
 
     findForm(tree)?.props?.onSubmit?.({ preventDefault: () => {} });
 
@@ -205,6 +212,8 @@ describe('ReportPane CV / cover letter actions', () => {
       app: baseApp({ coverLetterPath: 'output/acme-cover.pdf' }),
       onStartTask: vi.fn(),
       runningTaskFor: vi.fn(() => null),
+      onStatusChange: vi.fn(),
+      pending: false,
     }) as ElementNode;
 
     await findButton(tree, 'View cover letter')?.props?.onClick?.();
@@ -220,6 +229,8 @@ describe('ReportPane CV / cover letter actions', () => {
       app: baseApp({ reportNumber: '' }),
       onStartTask: vi.fn(),
       runningTaskFor: vi.fn(() => null),
+      onStatusChange: vi.fn(),
+      pending: false,
     }) as ElementNode;
 
     const btn = findButton(tree, 'Generate cover letter');
@@ -231,12 +242,12 @@ describe('ReportPane CV / cover letter actions', () => {
     const onStartTask = vi.fn().mockRejectedValue(new Error('No AI provider available.'));
     hooks.reset(DEFAULT_STATE);
     hooks.beginRender();
-    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null) }) as ElementNode;
+    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null), onStatusChange: vi.fn(), pending: false }) as ElementNode;
 
     await findButton(tree, 'Generate CV')?.props?.onClick?.();
 
     hooks.beginRender();
-    const updated = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null) }) as ElementNode;
+    const updated = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null), onStatusChange: vi.fn(), pending: false }) as ElementNode;
     expect(textContent(updated)).toContain('No AI provider available.');
   });
 
@@ -244,12 +255,12 @@ describe('ReportPane CV / cover letter actions', () => {
     const onStartTask = vi.fn().mockRejectedValue(new Error('ForbiddenPath'));
     hooks.reset([null, null, false, true, 'Loves the mission', 'Scale the eval pipeline', 'Ship a thin slice first', 'Direct']);
     hooks.beginRender();
-    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null) }) as ElementNode;
+    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null), onStatusChange: vi.fn(), pending: false }) as ElementNode;
 
     await findForm(tree)?.props?.onSubmit?.({ preventDefault: () => {} });
 
     hooks.beginRender();
-    const updated = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null) }) as ElementNode;
+    const updated = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null), onStatusChange: vi.fn(), pending: false }) as ElementNode;
     expect(findForm(updated)).toBeDefined();
     expect(textContent(updated)).toContain('ForbiddenPath');
   });
@@ -257,7 +268,7 @@ describe('ReportPane CV / cover letter actions', () => {
   it('resets the cover-letter form when a different report is selected', () => {
     hooks.reset([null, null, false, true, 'Loves the mission', 'Scale the eval pipeline', 'Ship a thin slice first', 'Direct']);
     hooks.beginRender();
-    ReportPane({ root: '/w', app: baseApp({ reportNumber: '042' }), onStartTask: vi.fn(), runningTaskFor: vi.fn(() => null) });
+    ReportPane({ root: '/w', app: baseApp({ reportNumber: '042' }), onStartTask: vi.fn(), runningTaskFor: vi.fn(() => null), onStatusChange: vi.fn(), pending: false });
 
     // Select a different report -- React would re-run the effect because
     // reportNumber (a dependency) changed.
@@ -267,6 +278,8 @@ describe('ReportPane CV / cover letter actions', () => {
       app: baseApp({ reportNumber: '043', company: 'Globex' }),
       onStartTask: vi.fn(),
       runningTaskFor: vi.fn(() => null),
+      onStatusChange: vi.fn(),
+      pending: false,
     });
     hooks.runLastEffect();
 
@@ -276,9 +289,48 @@ describe('ReportPane CV / cover letter actions', () => {
       app: baseApp({ reportNumber: '043', company: 'Globex' }),
       onStartTask: vi.fn(),
       runningTaskFor: vi.fn(() => null),
+      onStatusChange: vi.fn(),
+      pending: false,
     }) as ElementNode;
 
     expect(findForm(updated)).toBeUndefined();
     expect(findButton(updated, 'Generate cover letter')).toBeDefined();
+  });
+});
+
+describe('ReportPane status select', () => {
+  function findStatusSelect(tree: unknown): ElementNode | undefined {
+    return findAll(tree, (el) => el.type === StatusSelect)[0];
+  }
+
+  it('changes the status from the report header through the same write path as the board', () => {
+    const onStatusChange = vi.fn();
+    const app = baseApp();
+    hooks.reset(DEFAULT_STATE);
+    hooks.beginRender();
+    const tree = ReportPane({ root: '/w', app, onStartTask: vi.fn(), runningTaskFor: vi.fn(() => null), onStatusChange, pending: false }) as ElementNode;
+
+    const select = findStatusSelect(tree);
+    expect(select?.props?.value).toBe('Evaluated');
+    expect(select?.props?.disabled).toBe(false);
+    select?.props?.onChange?.('Applied');
+
+    expect(onStatusChange).toHaveBeenCalledWith(app, 'Applied');
+  });
+
+  it('disables the header status select while a write for this row is pending', () => {
+    hooks.reset(DEFAULT_STATE);
+    hooks.beginRender();
+    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask: vi.fn(), runningTaskFor: vi.fn(() => null), onStatusChange: vi.fn(), pending: true }) as ElementNode;
+
+    expect(findStatusSelect(tree)?.props?.disabled).toBe(true);
+  });
+
+  it('disables the header status select for a row without a report number', () => {
+    hooks.reset(DEFAULT_STATE);
+    hooks.beginRender();
+    const tree = ReportPane({ root: '/w', app: baseApp({ reportNumber: '' }), onStartTask: vi.fn(), runningTaskFor: vi.fn(() => null), onStatusChange: vi.fn(), pending: false }) as ElementNode;
+
+    expect(findStatusSelect(tree)?.props?.disabled).toBe(true);
   });
 });

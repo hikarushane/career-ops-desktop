@@ -156,6 +156,8 @@ export default function Pipeline({
               app={selectedApp}
               onStartTask={onStartTask}
               runningTaskFor={runningTaskFor}
+              onStatusChange={changeStatus}
+              pending={selectedApp !== null && pendingRow === selectedApp.reportNumber}
             />
           </Drawer>
         </>
@@ -177,6 +179,8 @@ export default function Pipeline({
             app={selectedApp}
             onStartTask={onStartTask}
             runningTaskFor={runningTaskFor}
+            onStatusChange={changeStatus}
+            pending={selectedApp !== null && pendingRow === selectedApp.reportNumber}
           />
         </div>
       )}
