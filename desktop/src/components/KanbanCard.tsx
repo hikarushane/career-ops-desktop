@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { Application } from '../api';
 import { scoreBand } from '../lib/filters';
 import { CheckIcon } from './icons';
@@ -10,6 +10,9 @@ type Props = {
   onSelect: (reportNumber: string) => void;
   onStatusChange: (app: Application, next: string) => void;
   pending: boolean;
+  /** True while this card is the one the board is dragging. */
+  dragging: boolean;
+  onDragPointerDown: (reportNumber: string, e: ReactPointerEvent<HTMLElement>) => void;
 };
 
 /**
@@ -22,23 +25,21 @@ type Props = {
  * read-only chip): status-change is this app's one write path, and the
  * Kanban board must not lose it relative to Flat/table view.
  * See desktop/STITCH-PROMPT.md §6.3.
+ *
+ * Deliberately not `draggable`: that would start a native WebKit drag,
+ * which swallows the pointer events the board's drag session is built on
+ * (see lib/kanbanDnd.ts for why HTML5 drag-and-drop is unavailable here).
  */
-export default function KanbanCard({ app, selected, onSelect, onStatusChange, pending }: Props) {
-  const [dragging, setDragging] = useState(false);
+export default function KanbanCard({ app, selected, onSelect, onStatusChange, pending, dragging, onDragPointerDown }: Props) {
   const band = scoreBand(app.score);
   const fillPct = Math.max(0, Math.min(100, (app.score / 5) * 100));
+  const draggable = !!app.reportNumber && !pending;
 
   return (
     <article
-      className={`kanban-card${dragging ? ' kanban-card--dragging' : ''}`}
+      className={`kanban-card${draggable ? ' kanban-card--draggable' : ''}${dragging ? ' kanban-card--dragging' : ''}`}
       aria-selected={selected}
-      draggable={!!app.reportNumber && !pending}
-      onDragStart={(e) => {
-        e.dataTransfer.setData('text/plain', app.reportNumber);
-        e.dataTransfer.effectAllowed = 'move';
-        setDragging(true);
-      }}
-      onDragEnd={() => setDragging(false)}
+      onPointerDown={(e) => { if (draggable) onDragPointerDown(app.reportNumber, e); }}
       onClick={() => app.reportNumber && onSelect(app.reportNumber)}
       role="button"
       tabIndex={0}

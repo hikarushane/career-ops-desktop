@@ -422,11 +422,21 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* Kanban drag-and-drop: a card dragged onto a status column (or its
-   collapsed chip) changes status. Drop target gets the §7 focus-ring
-   treatment in the primary color; the dragged card fades. */
-.kanban-card[draggable='true'] { cursor: grab; }
-.kanban-card--dragging { opacity: 0.5; }
+/* Kanban drag-and-drop (pointer-driven, see lib/kanbanDnd.ts): a card
+   dragged onto a status column (or its collapsed chip) changes status.
+   Drop target gets the §7 focus-ring treatment in the primary color. The
+   source card fades and stops catching the pointer, so elementFromPoint
+   resolves to the column beneath it and the release cannot register as a
+   click on the card; a fixed ghost follows the pointer instead. */
+.kanban-card--draggable { cursor: grab; }
+.kanban-board--dragging { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+.kanban-board--dragging .kanban-card { cursor: grabbing; }
+.kanban-card--dragging { opacity: 0.5; pointer-events: none; }
+.kanban-card--ghost {
+  position: fixed; z-index: 12; pointer-events: none;
+  width: var(--kanban-column-width); box-sizing: border-box;
+  box-shadow: var(--shadow-action);
+}
 .kanban-column--drop-target .kanban-column-body,
 .kanban-column-collapsed.kanban-column--drop-target {
   outline: 2px solid var(--color-primary); outline-offset: -2px;
