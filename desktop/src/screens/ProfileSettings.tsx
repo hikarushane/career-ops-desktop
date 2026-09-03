@@ -35,6 +35,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
   const [catalogState, setCatalogState] = useState<'loading' | 'ready' | 'error'>('ready');
   const [customModel, setCustomModel] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [rawFilesError, setRawFilesError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -90,6 +91,15 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
     setCustomModel(false);
   }, []);
 
+  const openRawFiles = useCallback(async () => {
+    setRawFilesError(null);
+    try {
+      await openWorkspaceFolder(root);
+    } catch (reason) {
+      setRawFilesError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [root]);
+
   const modelSettingsSupported = !!preferredId && !NO_MODEL_SETTINGS_PROVIDERS.has(preferredId);
   const effortDisabled = !modelSettingsSupported || preferredId === 'agy';
   const fastOk = fastModeAllowed(preferredId ?? '', model, catalog);
@@ -130,9 +140,10 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
             <p className="setup-hint">
               Edit your profile through the AI assistant, or open the raw files for advanced editing.
             </p>
-            <button className="btn-secondary" onClick={() => openWorkspaceFolder(root)}>
+            <button className="btn-secondary" onClick={openRawFiles}>
               Open raw files
             </button>
+            {rawFilesError && <p className="intake-error" role="alert">{rawFilesError}</p>}
           </div>
         )}
 

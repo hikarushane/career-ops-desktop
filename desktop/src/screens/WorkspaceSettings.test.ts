@@ -106,6 +106,16 @@ describe('WorkspaceSettings', () => {
     expect(mockedOpenPath).toHaveBeenCalledWith(currentPath);
   });
 
+  it('surfaces an opener scope failure instead of an unhandled rejection', async () => {
+    mockedOpenPath.mockRejectedValue(new Error('ForbiddenPath'));
+    const initial = renderComponent(() => WorkspaceSettings({ path: currentPath, onWorkspaceChanged: vi.fn() }));
+
+    await button(initial, 'Open Folder').props?.onClick?.();
+    const updated = renderComponent(() => WorkspaceSettings({ path: currentPath, onWorkspaceChanged: vi.fn() }));
+
+    expect(findElement(updated, (element) => element.props?.role === 'alert')?.props?.children).toBe('ForbiddenPath');
+  });
+
   it('activates a selected existing CareerOps workspace', async () => {
     const onWorkspaceChanged = vi.fn().mockResolvedValue(undefined);
     mockedOpen.mockResolvedValue('/existing/path');
