@@ -58,23 +58,9 @@ var knownProviders = []providerSpec{
 		"npm install -g @openai/codex",
 		"https://github.com/openai/codex",
 		"Open Terminal and run: codex"},
-	{"opencode", "OpenCode", "opencode", "opencode run", []string{"--version"},
-		"npm install -g opencode-ai",
-		"https://opencode.ai",
-		"Open Terminal and run: opencode"},
-	{"copilot", "Copilot CLI", "copilot", "copilot -p", []string{"--version"},
-		"npm install -g @githubnext/github-copilot-cli",
-		"https://githubnext.com/projects/copilot-cli",
-		"Open Terminal and run: copilot auth"},
-	{"qwen", "Qwen", "qwen", "qwen -p", []string{"--version"},
-		"", "https://github.com/anthropics/qwen",
-		"Open Terminal and run: qwen"},
 	{"agy", "Antigravity CLI", "agy", "agy -p", []string{"--version"},
 		"", "https://agentskills.io",
 		"Open Terminal and run: agy"},
-	{"grok", "Grok Build CLI", "grok", "grok -p", []string{"--version"},
-		"", "https://grok.x.ai",
-		"Open Terminal and run: grok"},
 }
 
 func augmentUserPATH() {

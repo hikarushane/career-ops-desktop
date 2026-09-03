@@ -486,8 +486,6 @@ fn provider_args(provider_id: &str, options: &ModelOptions) -> Option<Vec<String
         // (the prompt is appended after these args by run_task).
         "agy" => vec!["--dangerously-skip-permissions", "--output-format", "stream-json"],
         "codex" => vec!["exec", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "--json"],
-        "opencode" => vec!["run"],
-        "copilot" | "qwen" | "grok" => vec!["-p"],
         _ => return None,
     };
     let mut args: Vec<String> = base.into_iter().map(str::to_owned).collect();
