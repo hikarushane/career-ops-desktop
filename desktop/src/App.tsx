@@ -5,6 +5,7 @@ import {
 } from './api';
 import { loadActiveRoot, pickWorkspace, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
+import { batchArgs, batchTaskLabel } from './lib/batch';
 import { dismiss, initTaskStore, startTask, useRunningTasks, useTasks } from './lib/taskStore';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
@@ -156,7 +157,7 @@ export default function App() {
       batchStartInFlight = true;
       void (async () => {
         try {
-          const id = await startTask('batch', {}, root!, `Batch (${data!.pipelineSummary.pending} pending)`);
+          const id = await startTask('batch', batchArgs(), root!, batchTaskLabel(data!.pipelineSummary.pending));
           setEvalUrl(undefined);
           setActiveTaskId(id);
           setScreen('evaluate');

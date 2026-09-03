@@ -223,9 +223,13 @@ fn get_task_def(task_type: &str) -> Option<TaskDef> {
             prompt_template: "Run career-ops scan mode.",
             required_args: &[],
         }),
+        // Bounded on purpose: a single print-mode turn cannot evaluate a
+        // whole inbox (45 entries × several minutes each), and an unbounded
+        // run that dies mid-way leaves nothing behind. Process a few, one at
+        // a time, so every finished entry is on disk before the next starts.
         "batch" => Some(TaskDef {
-            prompt_template: "Run career-ops batch mode to process pending pipeline entries.",
-            required_args: &[],
+            prompt_template: "Run career-ops pipeline mode on data/pipeline.md, but process at most {limit} pending entries in this run: take the first {limit} `- [ ]` rows of the Pending section, run the liveness check only on those, then evaluate them one at a time — write each report, tracker line, and Processed row before starting the next — and stop after {limit}. Leave the remaining pending rows untouched for the next run.",
+            required_args: &["limit"],
         }),
         "pdf" => Some(TaskDef {
             prompt_template: "Generate the tailored CV PDF for report {report} by executing the full pipeline from modes/pdf.md the way modes/auto-pipeline.md Step 3 does. Resolve the report with node find.mjs {report}; the JD is the capture that node jd-capture.mjs {report} resolves (or the JD section of the report). Run non-interactively: do not ask questions, proceed past the skill-gap notice, and do NOT offer or generate the cover letter. Pass --report {report} to generate-pdf.mjs so data/pdf-index.tsv is updated, then set the tracker PDF column to ✅ with node set-status.mjs or merge-tracker.mjs as pdf mode specifies. Print the PDF path on the last line.",
@@ -511,6 +515,9 @@ fn provider_args(provider_id: &str, options: &ModelOptions) -> Option<Vec<String
             if let Some(m) = non_empty(&options.model) {
                 args.extend(["--model".into(), m.into()]);
             }
+            // agy's print mode gives up after 5 minutes by default; a batch
+            // of full evaluations (or a scan with agent handoffs) needs more.
+            args.extend(["--print-timeout".into(), "30m".into()]);
             args.push("-p".into());
         }
         _ => {}
@@ -1551,6 +1558,29 @@ mod tests {
     }
 
     #[test]
+    fn agy_print_mode_gets_a_long_timeout() {
+        // agy's print mode aborts after 5 minutes by default — a batch of
+        // full evaluations never finished inside that (see the 2026-09-03
+        // "No pending job was processed" run).
+        let agy = provider_args("agy", &ModelOptions::default()).unwrap();
+        assert!(agy.windows(2).any(|w| w == ["--print-timeout", "30m"]), "{agy:?}");
+        assert_eq!(agy.last().map(String::as_str), Some("-p"));
+        assert!(!provider_args("claude", &ModelOptions::default()).unwrap().contains(&"--print-timeout".to_owned()));
+    }
+
+    #[test]
+    fn batch_prompt_bounds_the_run_to_limit_entries() {
+        let def = get_task_def("batch").expect("batch task def");
+        assert_eq!(def.required_args, &["limit"]);
+        let mut args = HashMap::new();
+        args.insert("limit".to_owned(), "3".to_owned());
+        let prompt = build_prompt(def.prompt_template, &args);
+        assert!(prompt.contains("at most 3"), "{prompt}");
+        assert!(prompt.contains("one at a time"), "{prompt}");
+        assert!(!prompt.contains("{limit}"), "{prompt}");
+    }
+
+    #[test]
     fn provider_args_map_model_effort_and_fast_mode_per_provider() {
         let opts = ModelOptions { model: Some("opus".into()), effort: Some("high".into()), fast_mode: true };
         let claude = provider_args("claude", &opts).unwrap();
@@ -1697,36 +1727,6 @@ mod tests {
     }
 
     #[test]
-    fn unwatched_task_types_keep_exit_code_semantics() {
-        let dir = tempfile::tempdir().unwrap();
-        let before = snapshot_artifacts(dir.path(), "deep");
-        let out = judge_outcome(dir.path(), "deep", &before);
-        assert!(out.ok);
-    }
-
-    #[test]
-    fn pdf_outcome_requires_a_new_output_file() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::create_dir_all(dir.path().join("output")).unwrap();
-        let before = snapshot_artifacts(dir.path(), "pdf");
-        let none = judge_outcome(dir.path(), "pdf", &before);
-        assert!(!none.ok);
-        fs::write(dir.path().join("output/x.pdf"), "y").unwrap();
-        let ok = judge_outcome(dir.path(), "pdf", &before);
-        assert!(ok.ok);
-        assert_eq!(ok.detail, "output/x.pdf");
-    }
-
-    #[test]
-    fn pdf_outcome_ignores_a_cover_letter_artifact() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::create_dir_all(dir.path().join("output")).unwrap();
-        let before = snapshot_artifacts(dir.path(), "pdf");
-        fs::write(dir.path().join("output/acme-role-cover.pdf"), "y").unwrap();
-        let none = judge_outcome(dir.path(), "pdf", &before);
-        assert!(!none.ok, "a cover-letter artifact must not satisfy the pdf task");
-    }
-    #[test]
     fn scan_outcome_counts_new_inbox_entries() {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dir.path().join("data")).unwrap();
@@ -1764,6 +1764,36 @@ mod tests {
         assert!(!out.ok);
     }
 
+    #[test]
+    fn unwatched_task_types_keep_exit_code_semantics() {
+        let dir = tempfile::tempdir().unwrap();
+        let before = snapshot_artifacts(dir.path(), "deep");
+        let out = judge_outcome(dir.path(), "deep", &before);
+        assert!(out.ok);
+    }
+
+    #[test]
+    fn pdf_outcome_requires_a_new_output_file() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("output")).unwrap();
+        let before = snapshot_artifacts(dir.path(), "pdf");
+        let none = judge_outcome(dir.path(), "pdf", &before);
+        assert!(!none.ok);
+        fs::write(dir.path().join("output/x.pdf"), "y").unwrap();
+        let ok = judge_outcome(dir.path(), "pdf", &before);
+        assert!(ok.ok);
+        assert_eq!(ok.detail, "output/x.pdf");
+    }
+
+    #[test]
+    fn pdf_outcome_ignores_a_cover_letter_artifact() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("output")).unwrap();
+        let before = snapshot_artifacts(dir.path(), "pdf");
+        fs::write(dir.path().join("output/acme-role-cover.pdf"), "y").unwrap();
+        let none = judge_outcome(dir.path(), "pdf", &before);
+        assert!(!none.ok, "a cover-letter artifact must not satisfy the pdf task");
+    }
 
     #[test]
     fn pdf_outcome_checks_the_basename_not_the_full_path() {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import TaskScreen from './TaskScreen';
+import { batchArgs } from '../lib/batch';
 import { getTask, startTask } from '../lib/taskStore';
 import {
   fetchPosting,
@@ -161,7 +162,7 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
   const retryBatch = useCallback(async () => {
     setStartError(null);
     try {
-      setTaskId(await startTask('batch', {}, root, initialTask?.label ?? 'Batch processing'));
+      setTaskId(await startTask('batch', initialTask?.args ?? batchArgs(), root, initialTask?.label ?? 'Batch processing'));
     } catch (err) {
       setStartError(err instanceof Error ? err.message : String(err));
     }
