@@ -679,6 +679,8 @@ select#ai-model:disabled { opacity: 0.5; cursor: default; }
   background: var(--color-primary); color: #fff;
 }
 .ai-segment button:disabled { opacity: 0.5; cursor: default; }
+.cover-form { display: grid; gap: 8px; margin-top: 12px; }
+.cover-form textarea { width: 100%; font: 400 13px var(--font-sans); padding: 8px; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
 .ai-toggle {
   position: relative; width: 44px; height: 24px; border-radius: 12px;
   border: none; padding: 0; cursor: pointer;

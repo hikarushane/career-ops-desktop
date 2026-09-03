@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { openPath, openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { isError, readReport, type Application, type ReportResult } from '../api';
+import type { TaskRecord } from '../lib/taskStore';
 
-type Props = { root: string; app: Application | null };
+type Props = {
+  root: string;
+  app: Application | null;
+  onStartTask: (taskType: 'pdf' | 'cover', args: Record<string, string>, label: string) => Promise<void>;
+  runningTaskFor: (taskType: 'pdf' | 'cover') => TaskRecord | null;
+};
 
-export default function ReportPane({ root, app }: Props) {
+const TONE_OPTIONS = ['Formal', 'Direct', 'Conversational', 'Mirror the JD'] as const;
+
+export default function ReportPane({ root, app, onStartTask, runningTaskFor }: Props) {
   const [report, setReport] = useState<ReportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The tracker parser (dashboard/internal/data/career.go) sets ReportPath
@@ -16,6 +24,11 @@ export default function ReportPane({ root, app }: Props) {
   // `io-error` (main.go:104-105). That is a tracker integrity problem, not
   // an ordinary "no report" row — see the two distinct messages below.
   const [missing, setMissing] = useState(false);
+  const [coverFormOpen, setCoverFormOpen] = useState(false);
+  const [why, setWhy] = useState('');
+  const [problem, setProblem] = useState('');
+  const [approach, setApproach] = useState('');
+  const [tone, setTone] = useState<string>(TONE_OPTIONS[0]);
 
   useEffect(() => {
     setReport(null);
@@ -45,6 +58,24 @@ export default function ReportPane({ root, app }: Props) {
     return <div className="report" style={{ color: 'var(--color-text-secondary)' }}>Select a card or row to read its report.</div>;
   }
 
+  async function reveal(path: string) {
+    setError(null);
+    try {
+      await revealItemInDir(path);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  const pdfTask = runningTaskFor('pdf');
+  const coverTask = runningTaskFor('cover');
+  const canSubmitCover = why.trim() !== '' && problem.trim() !== '' && approach.trim() !== '';
+
+  function submitCoverLetter() {
+    onStartTask('cover', { report: app!.reportNumber, why, problem, approach, tone }, `Cover letter · ${app!.company}`);
+    setCoverFormOpen(false);
+  }
+
   return (
     <div className="report">
       <div className="report-card">
@@ -68,15 +99,71 @@ export default function ReportPane({ root, app }: Props) {
           </button>
 
           {app.pdfPath ? (
-            <button className="btn-secondary" onClick={() => openPath(`${root}/${app.pdfPath}`)}>Open PDF</button>
+            <button className="btn-secondary" onClick={() => reveal(`${root}/${app.pdfPath}`)}>View CV</button>
+          ) : pdfTask ? (
+            <button className="btn-secondary" disabled>Generating CV…</button>
           ) : (
-            // generate-pdf.mjs takes its output path from the caller, so a
-            // company with no unique match gets the folder, not a guess.
-            <button className="btn-secondary" onClick={() => openPath(`${root}/output`)}>
-              {app.hasPdf ? 'Open output folder' : 'No PDF'}
+            <button
+              className="btn-secondary"
+              disabled={!app.reportNumber}
+              title={!app.reportNumber ? 'No report number' : undefined}
+              onClick={() => onStartTask('pdf', { report: app.reportNumber }, `CV · ${app.company}`)}
+            >
+              Generate CV
             </button>
           )}
+
+          {app.coverLetterPath ? (
+            <button className="btn-secondary" onClick={() => reveal(`${root}/${app.coverLetterPath}`)}>View cover letter</button>
+          ) : coverTask ? (
+            <button className="btn-secondary" disabled>Generating cover letter…</button>
+          ) : (
+            <button className="btn-secondary" onClick={() => setCoverFormOpen((open) => !open)}>Generate cover letter</button>
+          )}
         </div>
+
+        {coverFormOpen && !app.coverLetterPath && !coverTask && (
+          <form
+            className="cover-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitCoverLetter();
+            }}
+          >
+            <textarea
+              placeholder="Why this role or company? 1–2 angles"
+              value={why}
+              onChange={(e) => setWhy(e.target.value)}
+            />
+            <textarea
+              placeholder="What problem would you solve for them?"
+              value={problem}
+              onChange={(e) => setProblem(e.target.value)}
+            />
+            <textarea
+              placeholder="Your opening move on day one, 1–2 sentences"
+              value={approach}
+              onChange={(e) => setApproach(e.target.value)}
+            />
+            <div className="ai-segment" role="radiogroup">
+              {TONE_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="radio"
+                  aria-checked={tone === option}
+                  onClick={() => setTone(option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+            <div className="report-actions">
+              <button type="submit" className="btn-primary" disabled={!canSubmitCover}>Write cover letter</button>
+              <button type="button" className="btn-ghost" onClick={() => setCoverFormOpen(false)}>Cancel</button>
+            </div>
+          </form>
+        )}
       </div>
 
       {error && <pre className="code-block" style={{ color: 'var(--color-accent-red)' }}>{error}</pre>}

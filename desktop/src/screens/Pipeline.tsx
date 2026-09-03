@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isError, setStatus, type Application, type ListResult } from '../api';
 import {
   applyFilterAndSort, countForFilter, TABS,
   type FilterKey, type SortKey, type ViewMode,
 } from '../lib/filters';
+import { startTask, useRunningTasks, useTasks } from '../lib/taskStore';
 import AppTable from '../components/AppTable';
 import Drawer from '../components/Drawer';
 import KanbanBoard from '../components/KanbanBoard';
@@ -22,6 +23,9 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
   const [selected, setSelected] = useState<string | null>(initialSelected ?? null);
   const [pendingRow, setPendingRow] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<{ stale: boolean; message: string } | null>(null);
+  const running = useRunningTasks();
+  const tasks = useTasks();
+  const handledTaskIds = useRef<Set<string>>(new Set());
 
   const rows = useMemo(
     () => applyFilterAndSort(data.applications, filter, sort, view, query),
@@ -56,6 +60,38 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
     [root, onReload],
   );
 
+  const onStartTask = useCallback(
+    async (taskType: 'pdf' | 'cover', args: Record<string, string>, label: string) => {
+      await startTask(taskType, args, root, label);
+    },
+    [root],
+  );
+
+  const runningTaskFor = useCallback(
+    (taskType: 'pdf' | 'cover') =>
+      running.find((t) => t.taskType === taskType && t.args.report === selected) ?? null,
+    [running, selected],
+  );
+
+  // Once a pdf/cover task the report pane is watching finishes, reload so
+  // pdfPath/coverLetterPath (resolved server-side) come back and the action
+  // buttons flip from "Generate…" to "View…". Keyed on the joined ids of
+  // finished pdf/cover tasks (not `tasks` itself) so this only re-runs when
+  // that specific set changes; the ref guards each id to exactly one reload
+  // even though the effect's dependency is a plain string, not the task list.
+  const finishedPdfCoverTaskIds = tasks
+    .filter((t) => t.state !== 'running' && (t.taskType === 'pdf' || t.taskType === 'cover'))
+    .map((t) => t.taskId)
+    .join(',');
+
+  useEffect(() => {
+    const ids = finishedPdfCoverTaskIds ? finishedPdfCoverTaskIds.split(',') : [];
+    const unhandled = ids.filter((id) => !handledTaskIds.current.has(id));
+    if (unhandled.length === 0) return;
+    for (const id of unhandled) handledTaskIds.current.add(id);
+    onReload();
+  }, [finishedPdfCoverTaskIds, onReload]);
+
   return (
     <div className="pane">
       <MetricsBar metrics={data.metrics} />
@@ -87,6 +123,8 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
             <ReportPane
               root={root}
               app={rows.find((a) => a.reportNumber === selected) ?? null}
+              onStartTask={onStartTask}
+              runningTaskFor={runningTaskFor}
             />
           </Drawer>
         </>
@@ -106,6 +144,8 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
           <ReportPane
             root={root}
             app={rows.find((a) => a.reportNumber === selected) ?? null}
+            onStartTask={onStartTask}
+            runningTaskFor={runningTaskFor}
           />
         </div>
       )}
