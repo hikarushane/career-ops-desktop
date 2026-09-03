@@ -34,6 +34,14 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor }: P
     setReport(null);
     setError(null);
     setMissing(false);
+    // A different report was selected -- discard any in-progress cover
+    // letter answers rather than let them get submitted under the newly
+    // selected row.
+    setCoverFormOpen(false);
+    setWhy('');
+    setProblem('');
+    setApproach('');
+    setTone(TONE_OPTIONS[0]);
     if (!app?.reportPath) return;
 
     let cancelled = false;
@@ -52,7 +60,7 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor }: P
     return () => {
       cancelled = true;
     };
-  }, [root, app?.reportPath]);
+  }, [root, app?.reportPath, app?.reportNumber]);
 
   if (!app) {
     return <div className="report" style={{ color: 'var(--color-text-secondary)' }}>Select a card or row to read its report.</div>;
@@ -71,9 +79,27 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor }: P
   const coverTask = runningTaskFor('cover');
   const canSubmitCover = why.trim() !== '' && problem.trim() !== '' && approach.trim() !== '';
 
-  function submitCoverLetter() {
-    onStartTask('cover', { report: app!.reportNumber, why, problem, approach, tone }, `Cover letter · ${app!.company}`);
-    setCoverFormOpen(false);
+  async function generateCV() {
+    setError(null);
+    try {
+      await onStartTask('pdf', { report: app!.reportNumber }, `CV · ${app!.company}`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  async function submitCoverLetter() {
+    setError(null);
+    try {
+      await onStartTask('cover', { report: app!.reportNumber, why, problem, approach, tone }, `Cover letter · ${app!.company}`);
+      // Close only once the task actually started; a rejection (e.g. no AI
+      // provider configured, or the opener scope refusing a later reveal)
+      // must leave the form open with the answers intact so nothing typed
+      // gets silently discarded.
+      setCoverFormOpen(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
   }
 
   return (
@@ -107,7 +133,7 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor }: P
               className="btn-secondary"
               disabled={!app.reportNumber}
               title={!app.reportNumber ? 'No report number' : undefined}
-              onClick={() => onStartTask('pdf', { report: app.reportNumber }, `CV · ${app.company}`)}
+              onClick={() => generateCV()}
             >
               Generate CV
             </button>
@@ -118,7 +144,14 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor }: P
           ) : coverTask ? (
             <button className="btn-secondary" disabled>Generating cover letter…</button>
           ) : (
-            <button className="btn-secondary" onClick={() => setCoverFormOpen((open) => !open)}>Generate cover letter</button>
+            <button
+              className="btn-secondary"
+              disabled={!app.reportNumber}
+              title={!app.reportNumber ? 'No report number' : undefined}
+              onClick={() => setCoverFormOpen((open) => !open)}
+            >
+              Generate cover letter
+            </button>
           )}
         </div>
 

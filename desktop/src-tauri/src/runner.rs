@@ -316,6 +316,15 @@ pub fn snapshot_artifacts(workspace: &Path, task_type: &str) -> ArtifactSnapshot
     ArtifactSnapshot { files, pending: count_pending(workspace) }
 }
 
+// artifact_basename_lower returns the lowercased filename component of an
+// artifact path recorded by snapshot_artifacts (always "/"-separated,
+// regardless of platform). Used so a "cover" match only fires on the
+// filename itself, never on a containing directory that happens to mention
+// "cover" (e.g. a "cover-drafts" staging folder holding an unrelated PDF).
+fn artifact_basename_lower(path: &str) -> String {
+    path.rsplit('/').next().unwrap_or(path).to_lowercase()
+}
+
 pub fn judge_outcome(workspace: &Path, task_type: &str, before: &ArtifactSnapshot) -> TaskOutcome {
     if watched_dirs(task_type).is_empty() {
         return TaskOutcome { ok: true, detail: "Finished.".into(), artifacts: vec![] };
@@ -367,7 +376,10 @@ pub fn judge_outcome(workspace: &Path, task_type: &str, before: &ArtifactSnapsho
         "pdf" => {
             let pdfs: Vec<String> = artifacts
                 .iter()
-                .filter(|a| a.ends_with(".pdf") && !a.to_lowercase().contains("cover"))
+                .filter(|a| {
+                    let base = artifact_basename_lower(a);
+                    base.ends_with(".pdf") && !base.contains("cover")
+                })
                 .cloned()
                 .collect();
             if pdfs.is_empty() {
@@ -381,8 +393,14 @@ pub fn judge_outcome(workspace: &Path, task_type: &str, before: &ArtifactSnapsho
             }
         }
         "cover" => {
-            let covers: Vec<String> =
-                artifacts.iter().filter(|a| a.to_lowercase().contains("cover")).cloned().collect();
+            let covers: Vec<String> = artifacts
+                .iter()
+                .filter(|a| {
+                    let base = artifact_basename_lower(a);
+                    base.ends_with(".pdf") && base.contains("cover")
+                })
+                .cloned()
+                .collect();
             if covers.is_empty() {
                 TaskOutcome {
                     ok: false,
@@ -1695,6 +1713,21 @@ mod tests {
     }
 
     #[test]
+    fn pdf_outcome_checks_the_basename_not_the_full_path() {
+        // A directory segment that happens to contain "cover" (e.g. a
+        // "cover-drafts" staging folder) must not disqualify a real CV PDF
+        // whose own filename doesn't mention "cover" -- only the basename
+        // is relevant.
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("output/cover-drafts")).unwrap();
+        let before = snapshot_artifacts(dir.path(), "pdf");
+        fs::write(dir.path().join("output/cover-drafts/x.pdf"), "y").unwrap();
+        let ok = judge_outcome(dir.path(), "pdf", &before);
+        assert!(ok.ok, "a cv pdf nested under a directory named \"cover-drafts\" must still count");
+        assert_eq!(ok.detail, "output/cover-drafts/x.pdf");
+    }
+
+    #[test]
     fn cover_outcome_requires_a_cover_named_artifact() {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dir.path().join("output")).unwrap();
@@ -1702,6 +1735,12 @@ mod tests {
         fs::write(dir.path().join("output/x.pdf"), "y").unwrap();
         let none = judge_outcome(dir.path(), "cover", &before);
         assert!(!none.ok, "a plain CV artifact must not satisfy the cover task");
+        // A non-pdf artifact whose basename contains "cover" (e.g. stray
+        // notes) must not satisfy the cover task either -- it has to be a
+        // .pdf.
+        fs::write(dir.path().join("output/acme-notes-cover.txt"), "n").unwrap();
+        let still_none = judge_outcome(dir.path(), "cover", &before);
+        assert!(!still_none.ok, "a non-pdf cover-named artifact must not satisfy the cover task");
         fs::write(dir.path().join("output/acme-role-cover.pdf"), "z").unwrap();
         let ok = judge_outcome(dir.path(), "cover", &before);
         assert!(ok.ok);
