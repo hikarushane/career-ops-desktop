@@ -228,8 +228,12 @@ fn get_task_def(task_type: &str) -> Option<TaskDef> {
             required_args: &[],
         }),
         "pdf" => Some(TaskDef {
-            prompt_template: "Generate a CV/PDF for report {report} using pdf mode.",
+            prompt_template: "Generate the tailored CV PDF for report {report} by executing the full pipeline from modes/pdf.md the way modes/auto-pipeline.md Step 3 does. Resolve the report with node find.mjs {report}; the JD is the capture that node jd-capture.mjs {report} resolves (or the JD section of the report). Run non-interactively: do not ask questions, proceed past the skill-gap notice, and do NOT offer or generate the cover letter. Pass --report {report} to generate-pdf.mjs so data/pdf-index.tsv is updated, then set the tracker PDF column to ✅ with node set-status.mjs or merge-tracker.mjs as pdf mode specifies. Print the PDF path on the last line.",
             required_args: &["report"],
+        }),
+        "cover" => Some(TaskDef {
+            prompt_template: "Write the cover letter for report {report} by running modes/cover.md in slug mode non-interactively. The candidate has already answered the four Step 6 prompts, so do not ask them again and treat these as final: A (why this role/company): {why}. B (problem to solve): {problem}. C (approach): {approach}. D (tone): {tone}. Skip Step 4/5 confirmations; do the research, draft, then generate the PDF with node generate-cover-letter.mjs --payload ... --out output/{company-slug}-{role-slug}-cover.pdf --report {report}. Print the PDF path on the last line.",
+            required_args: &["report", "why", "problem", "approach", "tone"],
         }),
         "deep" => Some(TaskDef {
             prompt_template: "Run career-ops deep research mode for {company}.",
@@ -298,7 +302,7 @@ fn watched_dirs(task_type: &str) -> &'static [&'static str] {
     match task_type {
         "evaluate" | "batch" => &["reports"],
         "scan" => &["data"],
-        "pdf" => &["output"],
+        "pdf" | "cover" => &["output"],
         t if t.starts_with("interview") => &["interview-prep"],
         _ => &[],
     }
@@ -358,6 +362,35 @@ pub fn judge_outcome(workspace: &Path, task_type: &str, before: &ArtifactSnapsho
                     "The scan finished without updating the pipeline.".into()
                 },
                 artifacts,
+            }
+        }
+        "pdf" => {
+            let pdfs: Vec<String> = artifacts
+                .iter()
+                .filter(|a| a.ends_with(".pdf") && !a.to_lowercase().contains("cover"))
+                .cloned()
+                .collect();
+            if pdfs.is_empty() {
+                TaskOutcome {
+                    ok: false,
+                    detail: "The AI finished without producing a CV PDF.".into(),
+                    artifacts,
+                }
+            } else {
+                TaskOutcome { ok: true, detail: pdfs[0].clone(), artifacts }
+            }
+        }
+        "cover" => {
+            let covers: Vec<String> =
+                artifacts.iter().filter(|a| a.to_lowercase().contains("cover")).cloned().collect();
+            if covers.is_empty() {
+                TaskOutcome {
+                    ok: false,
+                    detail: "The AI finished without producing a cover letter.".into(),
+                    artifacts,
+                }
+            } else {
+                TaskOutcome { ok: true, detail: covers[0].clone(), artifacts }
             }
         }
         _ => {
@@ -1247,7 +1280,7 @@ mod tests {
         add_agy_workspace_dir, apply_generation_at, build_prompt, copy_document_sources, create_generation_staging,
         generation_is_complete, get_task_def, inspect_generation, judge_outcome,
         language_context_instruction, packaged_runtime_paths_for_executable, provider_args,
-        render_generation_prompt, snapshot_artifacts, LanguageContext, ModelOptions,
+        render_generation_prompt, snapshot_artifacts, watched_dirs, LanguageContext, ModelOptions,
         PackagedJsRuntime, RunnerState,
     };
 
@@ -1648,6 +1681,67 @@ mod tests {
         fs::write(dir.path().join("output/x.pdf"), "y").unwrap();
         let ok = judge_outcome(dir.path(), "pdf", &before);
         assert!(ok.ok);
+        assert_eq!(ok.detail, "output/x.pdf");
+    }
+
+    #[test]
+    fn pdf_outcome_ignores_a_cover_letter_artifact() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("output")).unwrap();
+        let before = snapshot_artifacts(dir.path(), "pdf");
+        fs::write(dir.path().join("output/acme-role-cover.pdf"), "y").unwrap();
+        let none = judge_outcome(dir.path(), "pdf", &before);
+        assert!(!none.ok, "a cover-letter artifact must not satisfy the pdf task");
+    }
+
+    #[test]
+    fn cover_outcome_requires_a_cover_named_artifact() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("output")).unwrap();
+        let before = snapshot_artifacts(dir.path(), "cover");
+        fs::write(dir.path().join("output/x.pdf"), "y").unwrap();
+        let none = judge_outcome(dir.path(), "cover", &before);
+        assert!(!none.ok, "a plain CV artifact must not satisfy the cover task");
+        fs::write(dir.path().join("output/acme-role-cover.pdf"), "z").unwrap();
+        let ok = judge_outcome(dir.path(), "cover", &before);
+        assert!(ok.ok);
+        assert_eq!(ok.detail, "output/acme-role-cover.pdf");
+    }
+
+    #[test]
+    fn cover_task_def_requires_the_four_answers_and_report() {
+        let def = get_task_def("cover").expect("cover task def");
+        assert_eq!(def.required_args, &["report", "why", "problem", "approach", "tone"]);
+        let mut args = HashMap::new();
+        args.insert("report".to_owned(), "042".to_owned());
+        args.insert("why".to_owned(), "Loves the mission".to_owned());
+        args.insert("problem".to_owned(), "Scale the eval pipeline".to_owned());
+        args.insert("approach".to_owned(), "Ship a thin slice first".to_owned());
+        args.insert("tone".to_owned(), "Direct".to_owned());
+        let prompt = build_prompt(def.prompt_template, &args);
+        assert!(prompt.contains("modes/cover.md"));
+        assert!(prompt.contains("Loves the mission"));
+        assert!(prompt.contains("Scale the eval pipeline"));
+        assert!(prompt.contains("Ship a thin slice first"));
+        assert!(prompt.contains("Direct"));
+        assert!(prompt.contains("do not ask them again"));
+    }
+
+    #[test]
+    fn pdf_task_def_runs_noninteractively_and_skips_the_cover_letter() {
+        let def = get_task_def("pdf").expect("pdf task def");
+        let mut args = HashMap::new();
+        args.insert("report".to_owned(), "042".to_owned());
+        let prompt = build_prompt(def.prompt_template, &args);
+        assert!(prompt.contains("modes/pdf.md"));
+        assert!(prompt.contains("do not ask questions"));
+        assert!(prompt.contains("do NOT offer or generate the cover letter"));
+    }
+
+    #[test]
+    fn cover_and_pdf_watch_the_output_directory() {
+        assert_eq!(watched_dirs("pdf"), &["output"]);
+        assert_eq!(watched_dirs("cover"), &["output"]);
     }
 
     #[test]

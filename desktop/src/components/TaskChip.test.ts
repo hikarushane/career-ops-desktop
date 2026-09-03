@@ -23,6 +23,22 @@ describe('TaskChip', () => {
     expect(textContent(TaskChip({ tasks: [t({})], onOpen: vi.fn(), onDismiss: vi.fn() }))).toMatch(/Evaluating Acme · 2m/);
   });
 
+  it('names a running pdf task "Generating CV"', () => {
+    expect(textContent(TaskChip({
+      tasks: [t({ taskType: 'pdf', label: 'CV · Acme' })],
+      onOpen: vi.fn(),
+      onDismiss: vi.fn(),
+    }))).toMatch(/Generating CV CV · Acme · 2m/);
+  });
+
+  it('names a running cover task "Writing cover letter"', () => {
+    expect(textContent(TaskChip({
+      tasks: [t({ taskType: 'cover', label: 'Cover letter · Acme' })],
+      onOpen: vi.fn(),
+      onDismiss: vi.fn(),
+    }))).toMatch(/Writing cover letter Cover letter · Acme · 2m/);
+  });
+
   it('counts multiple running tasks', () => {
     const multi = TaskChip({
       tasks: [t({}), t({ taskId: 'b', taskType: 'scan', label: 'Scan' })],

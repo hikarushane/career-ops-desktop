@@ -237,6 +237,7 @@ export type TaskType =
   | 'scan'
   | 'batch'
   | 'pdf'
+  | 'cover'
   | 'deep'
   | 'interview-prep'
   | 'interview-plan'

@@ -2,6 +2,7 @@ import type { TaskRecord } from '../lib/taskStore';
 
 const VERBS: Record<string, string> = {
   evaluate: 'Evaluating', scan: 'Scanning', batch: 'Processing', 'profile-generate': 'Generating profile',
+  pdf: 'Generating CV', cover: 'Writing cover letter',
 };
 function verb(type: string) { return VERBS[type] ?? (type.startsWith('interview') ? 'Preparing' : 'Running'); }
 function minutes(startedAt: number) { return `${Math.max(0, Math.floor((Date.now() - startedAt) / 60_000))}m`; }
