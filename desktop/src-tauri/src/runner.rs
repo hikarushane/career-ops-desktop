@@ -485,7 +485,7 @@ fn provider_args(provider_id: &str, options: &ModelOptions) -> Option<Vec<String
         // agy's `-p` takes the prompt as its value, so it must be the last flag
         // (the prompt is appended after these args by run_task).
         "agy" => vec!["--dangerously-skip-permissions", "--output-format", "stream-json"],
-        "codex" => vec!["exec", "--skip-git-repo-check", "--full-auto", "--json"],
+        "codex" => vec!["exec", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "--json"],
         "opencode" => vec!["run"],
         "copilot" | "qwen" | "grok" => vec!["-p"],
         _ => return None,
@@ -1549,7 +1549,12 @@ mod tests {
         assert!(claude.windows(2).any(|w| w == ["--output-format", "stream-json"]));
         assert!(claude.contains(&"--verbose".to_owned()));
         let codex = provider_args("codex", &opts).unwrap();
-        assert!(codex.contains(&"--full-auto".to_owned()) && codex.contains(&"--json".to_owned()));
+        // codex 0.150 dropped `exec --full-auto` (exit 2: unexpected argument);
+        // the non-interactive equivalent of the other providers' skip-permissions
+        // flag is --dangerously-bypass-approvals-and-sandbox.
+        assert!(codex.contains(&"--dangerously-bypass-approvals-and-sandbox".to_owned()), "{codex:?}");
+        assert!(!codex.contains(&"--full-auto".to_owned()));
+        assert!(codex.contains(&"--json".to_owned()));
         let agy = provider_args("agy", &opts).unwrap();
         assert!(agy.windows(2).any(|w| w == ["--output-format", "stream-json"]));
         // agy's -p consumes the next argument as the prompt, so it must come last.
