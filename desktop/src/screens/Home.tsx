@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { ListResult } from '../api';
+import { processPendingLabel } from '../lib/batch';
 import { SearchIcon } from '../components/icons';
 
 type Props = {
@@ -59,7 +60,7 @@ export default function Home({ root: _root, data, onNavigate, batchStarting }: P
           <h2>Process pending jobs</h2>
           <p>{`${data.pipelineSummary.pending} pending in your inbox${data.pipelineSummary.failed > 0 ? ` · ${data.pipelineSummary.failed} need attention` : ''}.`}</p>
           <button className="btn-secondary" disabled={data.pipelineSummary.pending === 0 || !!batchStarting} onClick={() => onNavigate('batch')}>
-            Process pending jobs
+            {processPendingLabel(data.pipelineSummary.pending)}
           </button>
         </div>
       </section>

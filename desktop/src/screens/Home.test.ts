@@ -79,7 +79,7 @@ describe('Home', () => {
       onNavigate,
     }) as ElementNode;
     expect(textContent(tree)).toMatch(/7 pending/);
-    findButton(tree, 'Process pending jobs')?.props?.onClick?.();
+    findButton(tree, 'Evaluate all pending')?.props?.onClick?.();
     expect(onNavigate).toHaveBeenCalledWith('batch');
   });
 
@@ -97,7 +97,7 @@ describe('Home', () => {
       },
       onNavigate: vi.fn(),
     }) as ElementNode;
-    expect(findButton(tree, 'Process pending jobs')?.props?.disabled).toBe(true);
+    expect(findButton(tree, 'Evaluate all pending')?.props?.disabled).toBe(true);
   });
 
   it('surfaces failed pipeline entries needing attention', () => {
