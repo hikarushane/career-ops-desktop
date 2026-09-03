@@ -148,7 +148,10 @@ func runList(root string) (ListResult, error) {
 				}
 			}
 		}
-		if paths := data.ResolvePDFs(root, a, manifest); len(paths) > 0 {
+		if paths := data.ResolvePDFsFromEntries(root, a, entriesByPath); len(paths) > 0 {
+			item.PDFPath = paths[0]
+			item.HasPDF = true
+		} else if paths := data.ResolvePDFs(root, a, manifest); len(paths) > 0 {
 			item.PDFPath = paths[0]
 			item.HasPDF = true
 		}
