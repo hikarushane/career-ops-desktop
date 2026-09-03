@@ -70,7 +70,7 @@
      app's status groups; see STITCH-PROMPT.md §6.3. */
   --kanban-column-width: 285px;
   --kanban-column-gap: 13px;
-  --drawer-width: 480px;
+  --drawer-width: 640px;
 }
 
 /* Status colors — career-ops's 8 canonical statuses mapped onto DESIGN.md's

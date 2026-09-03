@@ -176,6 +176,12 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
   white-space: nowrap;
 }
 
+/* Flat view: table on the left, report on the right at the drawer's width
+   (so the report reads the same in both views). 4e429aca dropped this rule
+   by accident, which left the report stacked below the table. */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) var(--drawer-width); flex: 1; min-height: 0; }
+.split > * { overflow: auto; min-width: 0; }
+
 /* ---------- Kanban board — Grouped view (§6.3) ---------- */
 
 .kanban-board {
@@ -317,13 +323,13 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
   padding: 20px; margin-bottom: 20px;
 }
 .report-header { margin-bottom: 16px; }
+.report-status { margin-top: 8px; }
 .report-company { font: 700 18px var(--font-sans); }
 .report-role { font: 500 14px var(--font-sans); color: var(--color-text-secondary); }
 .report-card dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
 .report-card dt { font: 400 12px var(--font-sans); color: var(--color-text-secondary); }
 .report-card dd { margin: 0; font: 400 14px var(--font-sans); }
 .report-actions { display: flex; gap: 10px; margin-top: 16px; }
-.report-status { margin-top: 8px; }
 
 .btn-primary, .btn-secondary {
   border: 0; border-radius: var(--radius-control);
