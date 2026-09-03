@@ -18,10 +18,17 @@ import ReportPane from './ReportPane';
 const hooks = vi.hoisted(() => {
   let state: unknown[] = [];
   let cursor = 0;
+  // The reset-on-app-change effect is captured, not auto-run, so every
+  // existing test keeps behaving exactly as before (the effect never fires
+  // unless a test explicitly calls runLastEffect()) while a dedicated test
+  // can invoke it to verify what happens when React re-runs it after a
+  // dependency (the selected report) changes.
+  let lastEffect: (() => void) | null = null;
   return {
     reset(initial: unknown[] = []) {
       state = initial;
       cursor = 0;
+      lastEffect = null;
     },
     beginRender() {
       cursor = 0;
@@ -31,6 +38,12 @@ const hooks = vi.hoisted(() => {
       if (index === state.length) state.push(initial);
       return [state[index], (value: unknown) => { state[index] = value; }];
     },
+    useEffect(fn: () => void) {
+      lastEffect = fn;
+    },
+    runLastEffect() {
+      lastEffect?.();
+    },
   };
 });
 
@@ -39,7 +52,7 @@ vi.mock('react', async (importOriginal) => {
   return {
     ...actual,
     useState: hooks.useState,
-    useEffect: () => {},
+    useEffect: hooks.useEffect,
   };
 });
 vi.mock('react-markdown', () => ({ default: () => null }));
@@ -197,5 +210,75 @@ describe('ReportPane CV / cover letter actions', () => {
     await findButton(tree, 'View cover letter')?.props?.onClick?.();
 
     expect(mockedRevealItemInDir).toHaveBeenCalledWith('/w/output/acme-cover.pdf');
+  });
+
+  it('disables "Generate cover letter" with "No report number" when reportNumber is empty', () => {
+    hooks.reset(DEFAULT_STATE);
+    hooks.beginRender();
+    const tree = ReportPane({
+      root: '/w',
+      app: baseApp({ reportNumber: '' }),
+      onStartTask: vi.fn(),
+      runningTaskFor: vi.fn(() => null),
+    }) as ElementNode;
+
+    const btn = findButton(tree, 'Generate cover letter');
+    expect(btn?.props?.disabled).toBe(true);
+    expect(btn?.props?.title).toBe('No report number');
+  });
+
+  it('surfaces an onStartTask rejection when generating the CV', async () => {
+    const onStartTask = vi.fn().mockRejectedValue(new Error('No AI provider available.'));
+    hooks.reset(DEFAULT_STATE);
+    hooks.beginRender();
+    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null) }) as ElementNode;
+
+    await findButton(tree, 'Generate CV')?.props?.onClick?.();
+
+    hooks.beginRender();
+    const updated = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null) }) as ElementNode;
+    expect(textContent(updated)).toContain('No AI provider available.');
+  });
+
+  it('keeps the cover-letter form open and shows the error when onStartTask rejects', async () => {
+    const onStartTask = vi.fn().mockRejectedValue(new Error('ForbiddenPath'));
+    hooks.reset([null, null, false, true, 'Loves the mission', 'Scale the eval pipeline', 'Ship a thin slice first', 'Direct']);
+    hooks.beginRender();
+    const tree = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null) }) as ElementNode;
+
+    await findForm(tree)?.props?.onSubmit?.({ preventDefault: () => {} });
+
+    hooks.beginRender();
+    const updated = ReportPane({ root: '/w', app: baseApp(), onStartTask, runningTaskFor: vi.fn(() => null) }) as ElementNode;
+    expect(findForm(updated)).toBeDefined();
+    expect(textContent(updated)).toContain('ForbiddenPath');
+  });
+
+  it('resets the cover-letter form when a different report is selected', () => {
+    hooks.reset([null, null, false, true, 'Loves the mission', 'Scale the eval pipeline', 'Ship a thin slice first', 'Direct']);
+    hooks.beginRender();
+    ReportPane({ root: '/w', app: baseApp({ reportNumber: '042' }), onStartTask: vi.fn(), runningTaskFor: vi.fn(() => null) });
+
+    // Select a different report -- React would re-run the effect because
+    // reportNumber (a dependency) changed.
+    hooks.beginRender();
+    ReportPane({
+      root: '/w',
+      app: baseApp({ reportNumber: '043', company: 'Globex' }),
+      onStartTask: vi.fn(),
+      runningTaskFor: vi.fn(() => null),
+    });
+    hooks.runLastEffect();
+
+    hooks.beginRender();
+    const updated = ReportPane({
+      root: '/w',
+      app: baseApp({ reportNumber: '043', company: 'Globex' }),
+      onStartTask: vi.fn(),
+      runningTaskFor: vi.fn(() => null),
+    }) as ElementNode;
+
+    expect(findForm(updated)).toBeUndefined();
+    expect(findButton(updated, 'Generate cover letter')).toBeDefined();
   });
 });

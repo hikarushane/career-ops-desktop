@@ -4,6 +4,7 @@ import {
   applyFilterAndSort, countForFilter, TABS,
   type FilterKey, type SortKey, type ViewMode,
 } from '../lib/filters';
+import { isTaskForReport } from '../lib/documentTasks';
 import { startTask, useRunningTasks, useTasks } from '../lib/taskStore';
 import AppTable from '../components/AppTable';
 import Drawer from '../components/Drawer';
@@ -30,6 +31,11 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
   const rows = useMemo(
     () => applyFilterAndSort(data.applications, filter, sort, view, query),
     [data.applications, filter, sort, view, query],
+  );
+
+  const selectedApp = useMemo(
+    () => rows.find((a) => a.reportNumber === selected) ?? null,
+    [rows, selected],
   );
 
   const counts = useMemo(() => {
@@ -68,9 +74,11 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
   );
 
   const runningTaskFor = useCallback(
-    (taskType: 'pdf' | 'cover') =>
-      running.find((t) => t.taskType === taskType && t.args.report === selected) ?? null,
-    [running, selected],
+    (taskType: 'pdf' | 'cover') => {
+      if (!selectedApp) return null;
+      return running.find((t) => isTaskForReport(t, taskType, selectedApp.reportNumber, selectedApp.company)) ?? null;
+    },
+    [running, selectedApp],
   );
 
   // Once a pdf/cover task the report pane is watching finishes, reload so
@@ -89,7 +97,7 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
     const unhandled = ids.filter((id) => !handledTaskIds.current.has(id));
     if (unhandled.length === 0) return;
     for (const id of unhandled) handledTaskIds.current.add(id);
-    onReload();
+    onReload().catch(() => {});
   }, [finishedPdfCoverTaskIds, onReload]);
 
   return (
@@ -122,7 +130,7 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
           <Drawer open={selected !== null} onClose={() => setSelected(null)}>
             <ReportPane
               root={root}
-              app={rows.find((a) => a.reportNumber === selected) ?? null}
+              app={selectedApp}
               onStartTask={onStartTask}
               runningTaskFor={runningTaskFor}
             />
@@ -143,7 +151,7 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
           </div>
           <ReportPane
             root={root}
-            app={rows.find((a) => a.reportNumber === selected) ?? null}
+            app={selectedApp}
             onStartTask={onStartTask}
             runningTaskFor={runningTaskFor}
           />
