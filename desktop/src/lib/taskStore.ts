@@ -11,6 +11,8 @@ export type TaskRecord = {
   state: 'running' | 'done' | 'failed'; events: TaskEvent[]; rawLog: string[];
   outcome: TaskOutcome | null; exitCode: number | null;
   args: Record<string, string>; languageContext?: LanguageContext;
+  /** Restored from the backend registry on startup, not started this session. */
+  hydrated?: true;
 };
 
 const MAX_EVENTS = 500;
@@ -72,6 +74,7 @@ export function initTaskStore(): Promise<void> {
             // does not persist the original args/languageContext — retry on
             // a hydrated task falls back to whatever the screen re-derives.
             args: {},
+            hydrated: true,
           }));
         tasks = [...tasks, ...hydrated];
         notify();

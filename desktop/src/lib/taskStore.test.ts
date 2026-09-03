@@ -103,3 +103,14 @@ describe('taskStore', () => {
     expect(task.outcome?.detail).toBe('Scan complete.');
   });
 });
+
+describe('hydrated tasks', () => {
+  it('flags records restored from the backend registry so drivers never chain off a previous session', async () => {
+    __resetForTests();
+    mocks.listTasks.mockResolvedValueOnce([
+      { task_id: 'old', task_type: 'scan', label: 'Scan', started_at: 1, state: 'done', last_summary: 'x' } as TaskSnapshot,
+    ]);
+    await initTaskStore();
+    expect(getTask('old')?.hydrated).toBe(true);
+  });
+});

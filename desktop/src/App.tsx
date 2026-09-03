@@ -7,7 +7,8 @@ import { loadActiveRoot, pickWorkspace, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
 import type { FilterKey } from './lib/filters';
 import { batchArgs, batchTaskLabel } from './lib/batch';
-import { dismiss, initTaskStore, startTask, useRunningTasks, useTasks } from './lib/taskStore';
+import { nextAfterTask } from './lib/batchDriver';
+import { dismiss, getTask, initTaskStore, startTask, useRunningTasks, useTasks } from './lib/taskStore';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
 import UpdateModal from './components/UpdateModal';
@@ -40,6 +41,13 @@ type Screen =
 // useRunningTasks()-derived boolean cannot, because the task is not
 // registered in the store until after startTask's await resolves.
 let batchStartInFlight = false;
+// Scan/batch tasks whose completion the chain has already acted on, and the
+// inbox size each batch turn started from (batchDriver's no-progress guard).
+// Module-level for the same reason as batchStartInFlight: App.test.ts drives
+// App() with positional useState mocks and no real React renderer, so App
+// must not grow useRef slots.
+const handledChainTasks = new Set<string>();
+const pendingAtStart = new Map<string, number>();
 
 export default function App() {
   const [root, setRoot] = useState<string | null>(null);
@@ -137,6 +145,56 @@ export default function App() {
     }
   }, [refresh, reload, root]);
 
+  // Start one evaluation turn over the inbox and show it. Shared by the
+  // "Evaluate all pending" buttons and the scan→evaluate→evaluate chain.
+  const startBatch = useCallback(async (pending: number) => {
+    // Guard against a double click starting two batch agents over the
+    // same data/pipeline.md (a report-numbering race): bail out
+    // synchronously if a start is already in flight. There is no
+    // dedicated error slot for a batch-start failure either; the
+    // header's workspaceError banner is the only global error surface, so
+    // it is reused here too.
+    if (batchStartInFlight) return;
+    batchStartInFlight = true;
+    try {
+      const id = await startTask('batch', batchArgs(), root!, batchTaskLabel(pending));
+      pendingAtStart.set(id, pending);
+      setEvalUrl(undefined);
+      setActiveTaskId(id);
+      setScreen('evaluate');
+    } catch (e) {
+      setWorkspaceError(e instanceof Error ? e.message : String(e));
+    } finally {
+      batchStartInFlight = false;
+    }
+  }, [root]);
+
+  // The chain: when a scan or a batch turn finishes, re-read the inbox and
+  // let batchDriver decide whether another turn starts. Keyed on the joined
+  // ids of finished scan/batch tasks so it runs once per completion.
+  const finishedChainTaskIds = tasks
+    .filter((t) => t.state !== 'running' && (t.taskType === 'scan' || t.taskType === 'batch') && !t.hydrated)
+    .map((t) => t.taskId)
+    .join(',');
+
+  useEffect(() => {
+    if (!root) return;
+    const unhandled = (finishedChainTaskIds ? finishedChainTaskIds.split(',') : []).filter((id) => !handledChainTasks.has(id));
+    if (unhandled.length === 0) return;
+    for (const id of unhandled) handledChainTasks.add(id);
+    void (async () => {
+      const r = await listApplications(root);
+      if (isError(r)) { setError(r.message); return; }
+      setData(r);
+      for (const id of unhandled) {
+        const task = getTask(id);
+        if (!task) continue;
+        const decision = nextAfterTask(task, { pendingNow: r.pipelineSummary.pending, pendingAtStart: pendingAtStart.get(id) ?? null });
+        if (decision.action === 'start-batch') { await startBatch(r.pipelineSummary.pending); return; }
+      }
+    })();
+  }, [finishedChainTaskIds, root, startBatch]);
+
   const navigate = useCallback((target: string, params?: Record<string, string>) => {
     if (target === 'evaluate') {
       setEvalUrl(params?.url);
@@ -154,30 +212,11 @@ export default function App() {
       setActiveTaskId(null);
       setScreen('scanner');
     } else if (target === 'batch') {
-      // Guard against a double click starting two batch agents over the
-      // same data/pipeline.md (a report-numbering race): bail out
-      // synchronously if a start is already in flight. There is no
-      // dedicated error slot for a batch-start failure either; the
-      // header's workspaceError banner is the only global error surface, so
-      // it is reused here too.
-      if (batchStartInFlight) return;
-      batchStartInFlight = true;
-      void (async () => {
-        try {
-          const id = await startTask('batch', batchArgs(), root!, batchTaskLabel(data!.pipelineSummary.pending));
-          setEvalUrl(undefined);
-          setActiveTaskId(id);
-          setScreen('evaluate');
-        } catch (e) {
-          setWorkspaceError(e instanceof Error ? e.message : String(e));
-        } finally {
-          batchStartInFlight = false;
-        }
-      })();
+      void startBatch(data!.pipelineSummary.pending);
     } else {
       setScreen(target as Screen);
     }
-  }, [root, data]);
+  }, [data, startBatch]);
 
   const evalDone = useCallback(() => {
     reload();
