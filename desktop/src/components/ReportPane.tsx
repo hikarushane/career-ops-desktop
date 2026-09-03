@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { openJobUrl } from '../lib/opener';
 import { isError, readReport, type Application, type ReportResult } from '../api';
 import type { TaskRecord } from '../lib/taskStore';
 
@@ -120,7 +121,7 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor }: P
         </dl>
 
         <div className="report-actions">
-          <button className="btn-primary" disabled={!app.jobUrl} onClick={() => openUrl(app.jobUrl)}>
+          <button className="btn-primary" disabled={!app.jobUrl} onClick={() => { setError(null); void openJobUrl(app.jobUrl).then((e) => e && setError(e)); }}>
             {app.jobUrl ? 'Open job posting' : 'No job URL'}
           </button>
 
