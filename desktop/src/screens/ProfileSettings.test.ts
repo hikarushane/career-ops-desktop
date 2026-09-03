@@ -66,6 +66,11 @@ vi.mock('../lib/workspace', () => workspaceLib);
 
 vi.mock('../components/AnalysisLanguageField', () => ({ default: () => null }));
 vi.mock('./WorkspaceSettings', () => ({ default: () => null }));
+vi.mock('./ProfileGeneration', () => {
+  function ProfileGeneration(props: Record<string, unknown>) { return { type: 'ProfileGeneration', props }; }
+  return { default: ProfileGeneration };
+});
+vi.mock('../lib/jobPreferences', () => ({ EMPTY_PREFERENCES: {} }));
 
 afterEach(() => {
   hooks.reset();
@@ -134,7 +139,21 @@ function findById(node: unknown, id: string): ElementNode | undefined {
 }
 
 // State order: tab, providers, preferredId, model, effort, fastMode, updateCheck,
-// catalog, catalogState, customModel, settingsLoaded, rawFilesError
+// catalog, catalogState, customModel, settingsLoaded, rawFilesError, regenerating
+function findByType(node: unknown, typeName: string): ElementNode | undefined {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findByType(child, typeName);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof node !== 'object' || node === null) return undefined;
+  const element = node as ElementNode;
+  if (element.type === typeName || (typeof element.type === 'function' && (element.type as { name?: string }).name === typeName)) return element;
+  return findByType(element.props?.children, typeName);
+}
+
 function findButton(node: unknown, label: string): ElementNode | undefined {
   if (Array.isArray(node)) {
     for (const child of node) {
@@ -158,7 +177,7 @@ const CATALOG = [
 describe('ProfileSettings AI tab', () => {
   it('disables fast mode for non-opus models and lists only available models', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
-      CATALOG, 'ready', false, true, null]);
+      CATALOG, 'ready', false, true, null, false]);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const toggle = findByRole(tree, 'switch');
@@ -170,7 +189,7 @@ describe('ProfileSettings AI tab', () => {
 
   it('enables fast mode for an opus model', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'opus', 'medium', false, { status: 'idle' },
-      CATALOG, 'ready', false, true, null]);
+      CATALOG, 'ready', false, true, null, false]);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const toggle = findByRole(tree, 'switch');
@@ -179,7 +198,7 @@ describe('ProfileSettings AI tab', () => {
 
   it('shows a degraded-probe hint when the catalog could not be verified', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
-      CATALOG, 'error', false, true, null]);
+      CATALOG, 'error', false, true, null, false]);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     expect(textContent(tree)).toMatch(/Could not verify models; showing defaults\./);
@@ -193,7 +212,7 @@ describe('ProfileSettings AI tab', () => {
   // never calls setCustomModel(false)).
   it('keeps an explicit Custom selection when the model is already in the catalog', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
-      CATALOG, 'ready', true, true, null]);
+      CATALOG, 'ready', true, true, null, false]);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const select = findSelect(tree, 'ai-model');
@@ -204,9 +223,24 @@ describe('ProfileSettings AI tab', () => {
 });
 
 describe('ProfileSettings background tab', () => {
+  it('shows Regenerate profile button that switches to ProfileGeneration', () => {
+    hooks.reset(['background', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, false]);
+    hooks.beginRender();
+    const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    const btn = findButton(tree, 'Regenerate profile');
+    expect(btn).toBeDefined();
+
+    btn?.props?.onClick?.();
+
+    hooks.beginRender();
+    const updated = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    expect(findButton(updated, 'Regenerate profile')).toBeUndefined();
+    expect(findByType(updated, 'ProfileGeneration')).toBeDefined();
+  });
+
   it('surfaces an opener scope failure when opening raw files fails', async () => {
     workspaceLib.openWorkspaceFolder.mockRejectedValue(new Error('ForbiddenPath'));
-    hooks.reset(['background', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null]);
+    hooks.reset(['background', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, false]);
     hooks.beginRender();
     const initial = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
 
