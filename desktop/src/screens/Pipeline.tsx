@@ -1,23 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isError, setStatus, type Application, type ListResult } from '../api';
 import {
-  applyFilterAndSort, countForFilter, TABS,
+  applyFilterAndSort, countForFilter, matchesInboxSearch, TABS,
   type FilterKey, type SortKey, type ViewMode,
 } from '../lib/filters';
 import { isTaskForReport } from '../lib/documentTasks';
 import { startTask, useRunningTasks, useTasks } from '../lib/taskStore';
 import AppTable from '../components/AppTable';
 import Drawer from '../components/Drawer';
+import InboxTable from '../components/InboxTable';
 import KanbanBoard from '../components/KanbanBoard';
 import MetricsBar from '../components/MetricsBar';
 import ReportPane from '../components/ReportPane';
 import Toolbar from '../components/Toolbar';
 
 // onReload is async because Task 11 awaits it after a successful write.
-type Props = { root: string; data: ListResult; onReload: () => Promise<void>; initialSelected?: string };
+type Props = {
+  root: string;
+  data: ListResult;
+  onReload: () => Promise<void>;
+  initialSelected?: string;
+  /** Tab to open on; the scanner's "Review inbox" lands on 'inbox'. */
+  initialFilter?: FilterKey;
+  onProcessPending: () => void;
+  batchStarting: boolean;
+};
 
-export default function Pipeline({ root, data, onReload, initialSelected }: Props) {
-  const [filter, setFilter] = useState<FilterKey>('all');
+export default function Pipeline({
+  root, data, onReload, initialSelected, initialFilter, onProcessPending, batchStarting,
+}: Props) {
+  const [filter, setFilter] = useState<FilterKey>(initialFilter ?? 'all');
   const [sort, setSort] = useState<SortKey>('score');
   const [view, setView] = useState<ViewMode>('grouped');
   const [query, setQuery] = useState('');
@@ -38,11 +50,14 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
     [rows, selected],
   );
 
+  const inbox = useMemo(() => data.inbox ?? [], [data.inbox]);
+
   const counts = useMemo(() => {
     const out = {} as Record<FilterKey, number>;
     for (const t of TABS) out[t.key] = countForFilter(data.applications, t.key, query);
+    out.inbox = inbox.filter((e) => matchesInboxSearch(e, query)).length;
     return out;
-  }, [data.applications, query]);
+  }, [data.applications, inbox, query]);
 
   const changeStatus = useCallback(
     async (app: Application, next: string) => {
@@ -115,7 +130,15 @@ export default function Pipeline({ root, data, onReload, initialSelected }: Prop
           <button onClick={() => setWriteError(null)}>Dismiss</button>
         </div>
       )}
-      {view === 'grouped' ? (
+      {filter === 'inbox' ? (
+        <InboxTable
+          entries={inbox}
+          query={query}
+          onProcessPending={onProcessPending}
+          batchStarting={batchStarting}
+          onOpenError={(message) => setWriteError({ stale: false, message })}
+        />
+      ) : view === 'grouped' ? (
         <>
           <KanbanBoard
             apps={rows}

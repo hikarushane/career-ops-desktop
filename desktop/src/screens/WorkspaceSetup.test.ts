@@ -277,7 +277,7 @@ describe('WorkspaceSetup', () => {
         FunnelStages: [], ScoreBuckets: [], WeeklyActivity: [], ResponseRate: 0, InterviewRate: 0,
         OfferRate: 0, AvgScore: 0, TopScore: 0, TotalOffers: 0, ActiveApps: 0,
       },
-      pipelineSummary: { pending: 0, processed: 0, failed: 0 },
+      pipelineSummary: { pending: 0, processed: 0, failed: 0 }, inbox: [],
     });
     hooks.reset([
       '/current/path',

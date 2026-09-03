@@ -1,15 +1,19 @@
-import type { Application } from '../api';
+import type { Application, InboxEntry } from '../api';
 import { getGroupOrder, getStatusLabels } from './contracts';
 
 export type FilterKey =
+  | 'inbox'
   | 'all' | 'evaluated' | 'applied' | 'interview'
   | 'top' | 'skip' | 'rejected' | 'discarded';
 
 export type SortKey = 'score' | 'date' | 'company' | 'status';
 export type ViewMode = 'grouped' | 'flat';
 
-/** Tab order and labels, from pipeline.go:83-92. */
+/** Tab order and labels, from pipeline.go:83-92, with the desktop-only
+ *  INBOX tab first: scanned postings that no evaluation has turned into a
+ *  tracker row yet, so a scan's results are visible before they are Jobs. */
 export const TABS: { key: FilterKey; label: string }[] = [
+  { key: 'inbox', label: 'INBOX' },
   { key: 'all', label: 'ALL' },
   { key: 'evaluated', label: 'EVALUATED' },
   { key: 'applied', label: 'APPLIED' },
@@ -36,8 +40,23 @@ export function matchesSearch(app: Application, query: string): boolean {
   );
 }
 
+/** Inbox counterpart of matchesSearch: company, role, or location. */
+export function matchesInboxSearch(entry: InboxEntry, query: string): boolean {
+  if (query === '') return true;
+  const q = query.toLowerCase();
+  return (
+    entry.company.toLowerCase().includes(q) ||
+    entry.role.toLowerCase().includes(q) ||
+    entry.location.toLowerCase().includes(q)
+  );
+}
+
 function passesFilter(app: Application, filter: FilterKey): boolean {
   switch (filter) {
+    case 'inbox':
+      // Inbox rows are InboxEntry, not Application; the tab renders them
+      // through InboxTable, so no tracker row ever passes this filter.
+      return false;
     case 'all':
       return true;
     case 'top':

@@ -34,17 +34,23 @@ export default function Toolbar(p: Props) {
         style={{ marginLeft: 'auto', minWidth: 220 }}
       />
 
-      <select value={p.sort} onChange={(e) => p.onSort(e.target.value as SortKey)}>
-        <option value="score">Sort: score</option>
-        <option value="date">Sort: date</option>
-        <option value="company">Sort: company</option>
-        <option value="status">Sort: status</option>
-      </select>
+      {/* Sort and Grouped/Flat act on tracker rows; the inbox has neither
+          scores nor statuses, so they are hidden rather than left inert. */}
+      {p.filter !== 'inbox' && (
+        <>
+          <select value={p.sort} onChange={(e) => p.onSort(e.target.value as SortKey)}>
+            <option value="score">Sort: score</option>
+            <option value="date">Sort: date</option>
+            <option value="company">Sort: company</option>
+            <option value="status">Sort: status</option>
+          </select>
 
-      <select value={p.view} onChange={(e) => p.onView(e.target.value as ViewMode)}>
-        <option value="grouped">Grouped</option>
-        <option value="flat">Flat</option>
-      </select>
+          <select value={p.view} onChange={(e) => p.onView(e.target.value as ViewMode)}>
+            <option value="grouped">Grouped</option>
+            <option value="flat">Flat</option>
+          </select>
+        </>
+      )}
     </div>
   );
 }

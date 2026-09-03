@@ -74,7 +74,7 @@ describe('Home', () => {
         applications: [],
         metrics: { Total: 0, ByStatus: {}, AvgScore: 0, TopScore: 0, WithPDF: 0, Actionable: 0 },
         progress: {} as never,
-        pipelineSummary: { pending: 7, processed: 0, failed: 0 },
+        pipelineSummary: { pending: 7, processed: 0, failed: 0 }, inbox: [],
       },
       onNavigate,
     }) as ElementNode;
@@ -93,7 +93,7 @@ describe('Home', () => {
         applications: [],
         metrics: { Total: 0, ByStatus: {}, AvgScore: 0, TopScore: 0, WithPDF: 0, Actionable: 0 },
         progress: {} as never,
-        pipelineSummary: { pending: 0, processed: 0, failed: 0 },
+        pipelineSummary: { pending: 0, processed: 0, failed: 0 }, inbox: [],
       },
       onNavigate: vi.fn(),
     }) as ElementNode;
@@ -110,7 +110,7 @@ describe('Home', () => {
         applications: [],
         metrics: { Total: 0, ByStatus: {}, AvgScore: 0, TopScore: 0, WithPDF: 0, Actionable: 0 },
         progress: {} as never,
-        pipelineSummary: { pending: 5, processed: 0, failed: 2 },
+        pipelineSummary: { pending: 5, processed: 0, failed: 2 }, inbox: [],
       },
       onNavigate: vi.fn(),
     }) as ElementNode;

@@ -5,6 +5,7 @@ import {
 } from './api';
 import { loadActiveRoot, pickWorkspace, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
+import type { FilterKey } from './lib/filters';
 import { batchArgs, batchTaskLabel } from './lib/batch';
 import { dismiss, initTaskStore, startTask, useRunningTasks, useTasks } from './lib/taskStore';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
@@ -57,6 +58,11 @@ export default function App() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [updateState, setUpdateState] = useState<UpdateState>(initialState);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  // Which Jobs tab to open on. Set to 'inbox' by the scanner's "Review
+  // inbox" so a scan's results are the first thing shown; a plain visit to
+  // Jobs clears it. Declared last so the positional useState mocks in
+  // App.test.ts keep their existing indices.
+  const [pipelineFilter, setPipelineFilter] = useState<FilterKey | undefined>();
   const tasks = useTasks();
   const runningTasks = useRunningTasks();
   const batchRunning = runningTasks.some((t) => t.taskType === 'batch');
@@ -138,6 +144,7 @@ export default function App() {
       setScreen('evaluate');
     } else if (target === 'pipeline') {
       setPipelineSelected(params?.selected);
+      setPipelineFilter(params?.tab as FilterKey | undefined);
       setScreen('pipeline');
     } else if (target === 'scanner') {
       // A fresh visit to the scanner (not a reopen from the header chip)
@@ -251,7 +258,17 @@ export default function App() {
       case 'home':
         return <Home root={root!} data={data!} onNavigate={navigate} batchStarting={batchRunning || batchStartInFlight} />;
       case 'pipeline':
-        return <Pipeline root={root!} data={data!} onReload={reload} initialSelected={pipelineSelected} />;
+        return (
+          <Pipeline
+            root={root!}
+            data={data!}
+            onReload={reload}
+            initialSelected={pipelineSelected}
+            initialFilter={pipelineFilter}
+            onProcessPending={() => navigate('batch')}
+            batchStarting={batchRunning || batchStartInFlight}
+          />
+        );
       case 'progress':
         return <Progress data={data!.progress} />;
       case 'evaluate':
@@ -262,7 +279,9 @@ export default function App() {
             key={activeTaskId ?? 'new'}
             root={root!}
             initialTaskId={activeTaskId}
-            onDone={() => { reload(); setScreen('pipeline'); }}
+            // A scan writes data/pipeline.md (the inbox), never the tracker,
+            // so its results live on the Jobs board's INBOX tab.
+            onDone={() => { reload(); setPipelineFilter('inbox'); setScreen('pipeline'); }}
           />
         );
       case 'interview':
