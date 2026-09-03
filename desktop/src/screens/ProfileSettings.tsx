@@ -12,6 +12,8 @@ import { checkForUpdate, type UpdateState, initialState } from '../lib/updater';
 import { openWorkspaceFolder } from '../lib/workspace';
 import AnalysisLanguageField from '../components/AnalysisLanguageField';
 import WorkspaceSettings from './WorkspaceSettings';
+import ProfileGeneration from './ProfileGeneration';
+import { EMPTY_PREFERENCES } from '../lib/jobPreferences';
 
 /** Providers whose runner does not consume --model/--effort/--settings fastMode at all. */
 const NO_MODEL_SETTINGS_PROVIDERS = new Set(['opencode', 'copilot', 'qwen', 'grok']);
@@ -36,6 +38,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
   const [customModel, setCustomModel] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [rawFilesError, setRawFilesError] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -133,18 +136,31 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
       </nav>
 
       <div className="profile-content">
-        {tab === 'background' && (
+        {tab === 'background' && !regenerating && (
           <div>
             <h2>My Background</h2>
             <p>Your career profile is stored in <code>cv.md</code> and <code>config/profile.yml</code>.</p>
             <p className="setup-hint">
               Edit your profile through the AI assistant, or open the raw files for advanced editing.
             </p>
-            <button className="btn-secondary" onClick={openRawFiles}>
-              Open raw files
-            </button>
+            <div className="setup-actions">
+              <button className="btn-primary" onClick={() => setRegenerating(true)}>
+                Regenerate profile
+              </button>
+              <button className="btn-secondary" onClick={openRawFiles}>
+                Open raw files
+              </button>
+            </div>
             {rawFilesError && <p className="intake-error" role="alert">{rawFilesError}</p>}
           </div>
+        )}
+        {tab === 'background' && regenerating && (
+          <ProfileGeneration
+            root={root}
+            preferences={EMPTY_PREFERENCES}
+            onComplete={() => setRegenerating(false)}
+            onSkip={() => setRegenerating(false)}
+          />
         )}
 
         {tab === 'preferences' && (
