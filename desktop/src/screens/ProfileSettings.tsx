@@ -15,8 +15,6 @@ import WorkspaceSettings from './WorkspaceSettings';
 import ProfileGeneration from './ProfileGeneration';
 import { EMPTY_PREFERENCES } from '../lib/jobPreferences';
 
-/** Providers whose runner does not consume --model/--effort/--settings fastMode at all. */
-const NO_MODEL_SETTINGS_PROVIDERS = new Set(['opencode', 'copilot', 'qwen', 'grok']);
 
 type Props = {
   root: string;
@@ -103,7 +101,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
     }
   }, [root]);
 
-  const modelSettingsSupported = !!preferredId && !NO_MODEL_SETTINGS_PROVIDERS.has(preferredId);
+  const modelSettingsSupported = !!preferredId;
   const effortDisabled = !modelSettingsSupported || preferredId === 'agy';
   const fastOk = fastModeAllowed(preferredId ?? '', model, catalog);
 

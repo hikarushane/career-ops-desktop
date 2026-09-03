@@ -27,8 +27,7 @@ export default function AgentActivity({ task, onCancel, onRetry }: Props) {
   const lastText = [...task.events].reverse().find((e) => e.kind === 'text');
   const latest = activity[activity.length - 1];
   const lastRawLine = task.rawLog.length > 0 ? task.rawLog[task.rawLog.length - 1] : '';
-  // Text-only providers (opencode/copilot/qwen/grok) never emit structured
-  // status/tool events, so the feed and headline fall back to raw stdout.
+  // Providers that never emit structured status/tool events fall back to raw stdout.
 
   const stateWord = task.state === 'running' ? 'Running' : task.state === 'done' ? 'Done' : 'Failed';
   const summaryText = task.state === 'running'
