@@ -140,12 +140,12 @@ CareerOps Desktop 會在背景檢查 fork 的 signed Tauri update feed。找到�
 
 | 功能 | CareerOps Desktop |
 | --- | --- |
-| **Onboarding** | 匯入背景資料、設定 AI、選擇分析語言，不需要手動改 YAML。 |
+| **Onboarding** | 匯入背景資料、設定 AI、選擇分析語言、填求職偏好，不需要手動改 YAML。AI 依你的文件與偏好產生 `cv.md`、`config/profile.yml`、`modes/_profile.md`、`portals.yml` 四個檔，套用前可預覽、可附回饋重產。`portals.yml` 不會沿用範本的公司清單：AI 依你的目標國家與產業填入當地常用的求職平台（例如台灣的 104、1111、CakeResume、就業通、LinkedIn；德國的 StepStone、Indeed、LinkedIn，工程領域另有 get-in-engineering、ingenieur.de）與 15 到 40 家相符的公司。 |
 | **AI Provider** | 透過 provider abstraction 偵測並使用 Codex 等本機 AI CLI，不把 App 綁死在單一 agent。 |
 | **單一職缺分析** | 貼上職缺 URL，App 會先自己抓取職缺內容（LinkedIn 走公開 guest 端點，其他網站走一般 HTTP），抓不到時才請你貼上職缺說明；也可以直接貼整段 JD。抓取成功後才啟動 AI 評估。 |
 | **找職缺** | 在 UI 內執行 scanner；Home 的 **Process pending jobs** 卡片顯示待處理與需注意的筆數，按下即批次處理 `data/pipeline.md` 的職缺。 |
 | **任務中心** | 分析、掃描、批次與面試任務在切換畫面時不會中斷；Header 的任務 chip 顯示進行中／完成／失敗，點一下就回到該任務的活動記錄。活動記錄顯示 AI 實際在讀寫哪些檔案，成功與否以是否真的產出報告判定，而不是只看 exit code。 |
-| **Applications** | 用原生介面瀏覽既有 CareerOps pipeline、報告、狀態、PDF 與進度。 |
+| **Applications** | 用原生介面瀏覽既有 CareerOps pipeline、報告、狀態、PDF 與進度。報告卡上的 **Generate CV** 直接依報告產出客製 CV PDF；**Generate cover letter** 先請你回答四個問題（為什麼這家公司、要解決什麼問題、你的切入做法、語氣）再產出求職信 PDF。檔案產生後按鈕變成 **View CV**／**View cover letter**，在 Finder 或檔案總管中定位檔案。 |
 | **Interview** | 在 Desktop 裡使用 Prep Planner、Practice 與 Debrief。 |
 | **語言系統** | 自己選分析閱讀語言；CV、cover letter、面試材料則跟著每個 JD 的語言。 |
 | **Help / Settings** | 在 App 內管理個人資料、來源、AI Provider、語言與說明文件。Settings → AI 的 Model 是下拉選單：agy 讀取 `agy models`，claude／codex 以一次極小的即時呼叫探測每個候選 model 是否可用（結果快取 24 小時，Refresh 可重探）；Fast mode 只在 Claude Opus 系列可開，Effort 對 agy 不適用。 |
