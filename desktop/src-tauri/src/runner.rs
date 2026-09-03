@@ -362,15 +362,30 @@ pub fn judge_outcome(workspace: &Path, task_type: &str, before: &ArtifactSnapsho
             TaskOutcome { ok, detail, artifacts }
         }
         "scan" => {
-            let ok = !artifacts.is_empty();
-            TaskOutcome {
-                ok,
-                detail: if ok {
-                    "Pipeline updated.".into()
-                } else {
-                    "The scan finished without updating the pipeline.".into()
-                },
-                artifacts,
+            // New offers land in data/pipeline.md as "- [ ]" lines, so the
+            // pending delta is the "New offers added" count. Any change under
+            // data/ (scan-runs.tsv is appended on every run) only proves the
+            // scanner ran; it says nothing about whether the inbox grew.
+            let added = after.pending.saturating_sub(before.pending);
+            if added > 0 {
+                TaskOutcome {
+                    ok: true,
+                    detail: format!("Added {added} new job(s) to the inbox."),
+                    artifacts,
+                }
+            } else if !artifacts.is_empty() {
+                TaskOutcome {
+                    ok: true,
+                    detail: "No new jobs found. Every match was already in the inbox or scan history."
+                        .into(),
+                    artifacts,
+                }
+            } else {
+                TaskOutcome {
+                    ok: false,
+                    detail: "The scan finished without running the scanner.".into(),
+                    artifacts,
+                }
             }
         }
         "pdf" => {
@@ -1711,6 +1726,44 @@ mod tests {
         let none = judge_outcome(dir.path(), "pdf", &before);
         assert!(!none.ok, "a cover-letter artifact must not satisfy the pdf task");
     }
+    #[test]
+    fn scan_outcome_counts_new_inbox_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("data")).unwrap();
+        fs::write(dir.path().join("data/pipeline.md"), "## Pending\n- [ ] https://a\n## Processed\n").unwrap();
+        let before = snapshot_artifacts(dir.path(), "scan");
+        fs::write(dir.path().join("data/pipeline.md"), "## Pending\n- [ ] https://a\n- [ ] https://b\n- [ ] https://c\n## Processed\n").unwrap();
+        let out = judge_outcome(dir.path(), "scan", &before);
+        assert!(out.ok);
+        assert!(out.detail.contains("2 new job"), "{}", out.detail);
+    }
+
+    #[test]
+    fn scan_outcome_reports_zero_new_jobs_as_done_not_updated() {
+        // scan.mjs appends data/scan-runs.tsv on every run, so a scan that
+        // found nothing new still changes data/ — that must not read as
+        // "Pipeline updated".
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("data")).unwrap();
+        fs::write(dir.path().join("data/pipeline.md"), "## Pending\n- [ ] https://a\n## Processed\n").unwrap();
+        let before = snapshot_artifacts(dir.path(), "scan");
+        fs::write(dir.path().join("data/scan-runs.tsv"), "2026-09-03\tcompleted\n").unwrap();
+        let out = judge_outcome(dir.path(), "scan", &before);
+        assert!(out.ok, "finding nothing new is not a failure");
+        assert!(out.detail.contains("No new jobs"), "{}", out.detail);
+        assert!(!out.detail.contains("updated"), "{}", out.detail);
+    }
+
+    #[test]
+    fn scan_outcome_fails_when_nothing_in_data_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("data")).unwrap();
+        fs::write(dir.path().join("data/pipeline.md"), "## Pending\n## Processed\n").unwrap();
+        let before = snapshot_artifacts(dir.path(), "scan");
+        let out = judge_outcome(dir.path(), "scan", &before);
+        assert!(!out.ok);
+    }
+
 
     #[test]
     fn pdf_outcome_checks_the_basename_not_the_full_path() {
