@@ -46,6 +46,7 @@ type ListResult struct {
 	Metrics         model.PipelineMetrics `json:"metrics"`
 	Progress        model.ProgressMetrics `json:"progress"`
 	PipelineSummary PipelineSummary       `json:"pipelineSummary"`
+	Inbox           []InboxEntry          `json:"inbox"`
 }
 
 // slugify reduces a company name to a comparable token: lowercase, with every
@@ -117,6 +118,7 @@ func runList(root string) (ListResult, error) {
 		Metrics:         data.ComputeMetrics(apps),
 		Progress:        data.ComputeProgressMetrics(apps),
 		PipelineSummary: summarizePipeline(root),
+		Inbox:           parseInbox(root),
 	}
 
 	manifest := data.LoadPDFManifest(root)
