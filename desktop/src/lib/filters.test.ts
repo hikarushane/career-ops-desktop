@@ -15,6 +15,7 @@ function app(over: Partial<Application>): Application {
     scoreRaw: '3.0/5',
     hasPdf: false,
     pdfPath: '',
+    coverLetterPath: '',
     reportPath: '',
     reportNumber: '',
     notes: '',

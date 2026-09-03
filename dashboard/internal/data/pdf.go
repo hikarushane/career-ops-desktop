@@ -177,7 +177,7 @@ var rePDFDate = regexp.MustCompile(`(\d{4}-\d{2}-\d{2})\.pdf$`)
 //     offer a picker instead of guessing — one company can have several
 //     role-variant CVs from the same day.
 func ResolvePDFs(careerOpsPath string, app model.CareerApplication, manifest PDFManifest) []string {
-	if entry, ok := manifest.Lookup(app); ok {
+	if entry, ok := manifest.Lookup(app); ok && !isCoverLetterBasename(entry.PDFPath) {
 		if _, err := os.Stat(filepath.Join(careerOpsPath, filepath.FromSlash(entry.PDFPath))); err == nil {
 			return []string{entry.PDFPath}
 		}
@@ -196,6 +196,9 @@ func ResolvePDFs(careerOpsPath string, app model.CareerApplication, manifest PDF
 	var matches []string
 	for _, p := range globbed {
 		base := strings.ToLower(filepath.Base(p))
+		if isCoverLetterBasename(base) {
+			continue
+		}
 		if matchesCompanySlug(base, slug) {
 			if rel, err := filepath.Rel(careerOpsPath, p); err == nil {
 				matches = append(matches, filepath.ToSlash(rel))
@@ -205,6 +208,85 @@ func ResolvePDFs(careerOpsPath string, app model.CareerApplication, manifest PDF
 
 	sortPDFsNewestFirst(careerOpsPath, matches)
 	return matches
+}
+
+// isCoverLetterBasename reports whether p's filename identifies it as a
+// cover letter rather than a CV, so ResolvePDFs never hands one back as the
+// CV and ResolveCoverLetters can recognize one regardless of its directory.
+func isCoverLetterBasename(p string) bool {
+	return strings.Contains(strings.ToLower(filepath.Base(p)), "cover")
+}
+
+// ResolveCoverLetters returns candidate cover-letter PDF paths (relative to
+// careerOpsPath) for an application, best match first.
+//
+// Precedence:
+//  1. Manifest entries (data/pdf-index.tsv, keyed by path so a report can
+//     have both a CV and a cover-letter row) whose normalized report number
+//     matches the application the same way PDFManifest.Lookup matches a CV,
+//     and whose basename contains "cover" — checked for on-disk existence,
+//     newest first when several rows qualify.
+//  2. Filename match: output/*-cover.pdf whose name contains the
+//     kebab-cased company, newest first. This covers cover letters
+//     generated before the manifest recorded them.
+func ResolveCoverLetters(careerOpsPath string, app model.CareerApplication, entriesByPath map[string]PDFManifestEntry) []string {
+	reportKey := normalizeReportKey(app.ReportNumber)
+	numberKey := ""
+	if app.Number > 0 {
+		numberKey = strconv.Itoa(app.Number)
+	}
+
+	var byReportKey, byNumberKey []string
+	for path, entry := range entriesByPath {
+		if !isCoverLetterBasename(path) {
+			continue
+		}
+		entryKey := normalizeReportKey(entry.ReportNumber)
+		if entryKey == "" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(careerOpsPath, filepath.FromSlash(path))); err != nil {
+			continue
+		}
+		switch {
+		case reportKey != "" && entryKey == reportKey:
+			byReportKey = append(byReportKey, path)
+		case numberKey != "" && entryKey == numberKey:
+			byNumberKey = append(byNumberKey, path)
+		}
+	}
+
+	matches := byReportKey
+	if len(matches) == 0 {
+		matches = byNumberKey
+	}
+	if len(matches) > 0 {
+		sortPDFsNewestFirst(careerOpsPath, matches)
+		return matches
+	}
+
+	slug := kebabCase(app.Company)
+	if slug == "" {
+		return nil
+	}
+
+	globbed, err := filepath.Glob(filepath.Join(careerOpsPath, "output", "*-cover.pdf"))
+	if err != nil {
+		return nil
+	}
+
+	var globMatches []string
+	for _, p := range globbed {
+		base := strings.ToLower(filepath.Base(p))
+		if matchesCompanySlug(base, slug) {
+			if rel, err := filepath.Rel(careerOpsPath, p); err == nil {
+				globMatches = append(globMatches, filepath.ToSlash(rel))
+			}
+		}
+	}
+
+	sortPDFsNewestFirst(careerOpsPath, globMatches)
+	return globMatches
 }
 
 // matchesCompanySlug reports whether a generated CV filename refers to the
