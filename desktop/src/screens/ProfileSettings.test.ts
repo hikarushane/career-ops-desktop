@@ -134,7 +134,21 @@ function findById(node: unknown, id: string): ElementNode | undefined {
 }
 
 // State order: tab, providers, preferredId, model, effort, fastMode, updateCheck,
-// catalog, catalogState, customModel, settingsLoaded
+// catalog, catalogState, customModel, settingsLoaded, rawFilesError
+function findButton(node: unknown, label: string): ElementNode | undefined {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findButton(child, label);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof node !== 'object' || node === null) return undefined;
+  const element = node as ElementNode;
+  if (element.type === 'button' && textContent(element.props?.children) === label) return element;
+  return findButton(element.props?.children, label);
+}
+
 const CLAUDE_PROVIDER = { id: 'claude', displayName: 'Claude Code', binary: 'claude', headlessCmd: 'claude -p', state: 'ready' };
 const CATALOG = [
   { id: 'opus', label: 'Opus', available: true, fast: true },
@@ -144,7 +158,7 @@ const CATALOG = [
 describe('ProfileSettings AI tab', () => {
   it('disables fast mode for non-opus models and lists only available models', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
-      CATALOG, 'ready', false, true]);
+      CATALOG, 'ready', false, true, null]);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const toggle = findByRole(tree, 'switch');
@@ -156,7 +170,7 @@ describe('ProfileSettings AI tab', () => {
 
   it('enables fast mode for an opus model', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'opus', 'medium', false, { status: 'idle' },
-      CATALOG, 'ready', false, true]);
+      CATALOG, 'ready', false, true, null]);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const toggle = findByRole(tree, 'switch');
@@ -165,7 +179,7 @@ describe('ProfileSettings AI tab', () => {
 
   it('shows a degraded-probe hint when the catalog could not be verified', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
-      CATALOG, 'error', false, true]);
+      CATALOG, 'error', false, true, null]);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     expect(textContent(tree)).toMatch(/Could not verify models; showing defaults\./);
@@ -179,12 +193,27 @@ describe('ProfileSettings AI tab', () => {
   // never calls setCustomModel(false)).
   it('keeps an explicit Custom selection when the model is already in the catalog', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
-      CATALOG, 'ready', true, true]);
+      CATALOG, 'ready', true, true, null]);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const select = findSelect(tree, 'ai-model');
     expect(select?.props?.value).toBe('__custom');
     const customInput = findById(tree, 'ai-model-custom');
     expect(customInput).toBeDefined();
+  });
+});
+
+describe('ProfileSettings background tab', () => {
+  it('surfaces an opener scope failure when opening raw files fails', async () => {
+    workspaceLib.openWorkspaceFolder.mockRejectedValue(new Error('ForbiddenPath'));
+    hooks.reset(['background', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null]);
+    hooks.beginRender();
+    const initial = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+
+    await findButton(initial, 'Open raw files')?.props?.onClick?.();
+
+    hooks.beginRender();
+    const updated = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    expect(findByRole(updated, 'alert')?.props?.children).toBe('ForbiddenPath');
   });
 });
