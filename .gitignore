@@ -129,6 +129,8 @@ opencode.json
 .mcp.json
 career-dashboard
 career-dashboard.exe
+# Go sidecar build artifact (built locally, e.g. via `go build ./cmd/career-data`)
+dashboard/career-data
 package-lock.json
 !desktop/package-lock.json
 !web/package-lock.json

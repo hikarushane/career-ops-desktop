@@ -289,6 +289,63 @@ func ResolveCoverLetters(careerOpsPath string, app model.CareerApplication, entr
 	return globMatches
 }
 
+// ResolvePDFsFromEntries returns candidate CV PDF paths (relative to
+// careerOpsPath) for an application by scanning every row of
+// data/pdf-index.tsv (via LoadPDFEntriesByPath), not just the single row
+// PDFManifest.Lookup would return.
+//
+// This matters because generate-pdf.mjs rewrites data/pdf-index.tsv from
+// scratch on every run and appends the new row after the old ones, so a
+// report that has both a CV and a later cover-letter row keeps both rows in
+// the file. PDFManifest is keyed by normalized report number with
+// last-row-wins, so PDFManifest.Lookup for that report returns only the
+// newest row -- the cover letter -- and ResolvePDFs correctly refuses to
+// treat it as a CV, falling back to a company-slug glob that can miss a
+// bundle CV or a filename that doesn't happen to contain the slug.
+// Scanning every entry keyed by path instead of by report number recovers
+// the CV row regardless of what was appended after it.
+//
+// Matching uses the same reportKey/numberKey normalisation ResolveCoverLetters
+// uses. Only entries whose file exists on disk and whose basename does not
+// identify a cover letter are considered. Paths are sorted lexically before
+// the stable newest-first sort so ties (equal date stamp and mtime, as in
+// tests) don't depend on map iteration order.
+func ResolvePDFsFromEntries(careerOpsPath string, app model.CareerApplication, entries map[string]PDFManifestEntry) []string {
+	reportKey := normalizeReportKey(app.ReportNumber)
+	numberKey := ""
+	if app.Number > 0 {
+		numberKey = strconv.Itoa(app.Number)
+	}
+
+	var byReportKey, byNumberKey []string
+	for path, entry := range entries {
+		if isCoverLetterBasename(path) {
+			continue
+		}
+		entryKey := normalizeReportKey(entry.ReportNumber)
+		if entryKey == "" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(careerOpsPath, filepath.FromSlash(path))); err != nil {
+			continue
+		}
+		switch {
+		case reportKey != "" && entryKey == reportKey:
+			byReportKey = append(byReportKey, path)
+		case numberKey != "" && entryKey == numberKey:
+			byNumberKey = append(byNumberKey, path)
+		}
+	}
+
+	matches := byReportKey
+	if len(matches) == 0 {
+		matches = byNumberKey
+	}
+	sort.Strings(matches)
+	sortPDFsNewestFirst(careerOpsPath, matches)
+	return matches
+}
+
 // matchesCompanySlug reports whether a generated CV filename refers to the
 // company. Short slugs (< 3 runes) require a full "-slug-" segment so a
 // company like "X" can't match every file; longer slugs use substring

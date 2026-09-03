@@ -103,6 +103,62 @@ func TestRunListResolvesCoverLetterPath(t *testing.T) {
 	}
 }
 
+// TestRunListKeepsTheCVWhenALaterCoverLetterRowSharesTheReport reproduces the
+// generate-pdf.mjs writer behaviour: it rewrites data/pdf-index.tsv from
+// scratch on every run, appending the new row after the old ones instead of
+// replacing them, so "Generate CV" then "Generate cover letter" on the same
+// report leaves BOTH rows in the file. LoadPDFManifest is keyed by report
+// number with last-row-wins, so PDFManifest.Lookup would return only the
+// cover-letter row for report 042 -- and ResolvePDFs correctly refuses to
+// hand that back as a CV (isCoverLetterBasename), falling through to the
+// company-slug glob. Here the tracker's company ("Acme Corp" -> slug
+// "acme-corp") does not appear in the CV's actual filename
+// ("output/cv-acme.pdf"), so the glob fallback also misses, and PDFPath
+// would come back empty even though the CV file is sitting right there.
+// runList must resolve CVs from every matching data/pdf-index.tsv row
+// (LoadPDFEntriesByPath), not just the single collapsed manifest entry.
+func TestRunListKeepsTheCVWhenALaterCoverLetterRowSharesTheReport(t *testing.T) {
+	root := t.TempDir()
+	mustWriteFile(t, filepath.Join(root, "data", "applications.md"), `# Applications Tracker
+
+| # | Date | Company | Role | Score | Status | PDF | Report | Notes |
+|---|------|---------|------|-------|--------|-----|--------|-------|
+| 42 | 2026-07-02 | Acme Corp | Backend Engineer | 4.0/5 | Applied | X | [042](reports/042-acme-2026-07-02.md) | test |
+`)
+	mustWriteFile(t, filepath.Join(root, "data", "pdf-index.tsv"), "042\toutput/cv-acme.pdf\t\tletter\t2026-07-02\n042\toutput/acme-pm-cover.pdf\t\tletter\t2026-07-03\n")
+	mustWriteFile(t, filepath.Join(root, "output", "cv-acme.pdf"), "cv")
+	mustWriteFile(t, filepath.Join(root, "output", "acme-pm-cover.pdf"), "cover")
+
+	res, err := runList(root)
+	if err != nil {
+		t.Fatalf("runList: %v", err)
+	}
+	if len(res.Applications) != 1 {
+		t.Fatalf("len(Applications) = %d, want 1", len(res.Applications))
+	}
+
+	got := res.Applications[0]
+	if got.PDFPath != "output/cv-acme.pdf" {
+		t.Errorf("PDFPath = %q, want %q (the CV row must survive a later cover-letter row for the same report)", got.PDFPath, "output/cv-acme.pdf")
+	}
+	if !got.HasPDF {
+		t.Errorf("expected HasPDF = true")
+	}
+	if got.CoverLetterPath != "output/acme-pm-cover.pdf" {
+		t.Errorf("CoverLetterPath = %q, want %q", got.CoverLetterPath, "output/acme-pm-cover.pdf")
+	}
+}
+
+func mustWriteFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q): %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q): %v", path, err)
+	}
+}
+
 func TestRunListEmitsDerivedStatusFields(t *testing.T) {
 	res, err := runList("testdata/career-ops")
 	if err != nil {
