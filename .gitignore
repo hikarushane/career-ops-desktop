@@ -165,3 +165,8 @@ data/intake-state.json
 .recall/
 graphify-out/
 tmp/
+
+# Working Documentation
+HANDOFF.md
+MEMORY.md
+WIKI_SYNC.md
