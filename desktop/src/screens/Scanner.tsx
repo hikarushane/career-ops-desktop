@@ -36,7 +36,7 @@ export default function Scanner({ root, initialTaskId, onDone }: Props) {
   }, [root, taskId]);
 
   return (
-    <TaskScreen taskId={taskId} title="Find matching jobs" onRetry={retry} doneAction={{ label: 'View results', onClick: onDone }}>
+    <TaskScreen taskId={taskId} title="Find matching jobs" onRetry={retry} doneAction={{ label: 'Review inbox', onClick: onDone }}>
       {!taskId && (
         <>
           <p>Scan configured job sources for new opportunities that match your profile.</p>

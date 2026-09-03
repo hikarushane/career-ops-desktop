@@ -65,12 +65,25 @@ export type DoctorResult = {
   ready: boolean;
 };
 
+/** One unprocessed data/pipeline.md row: a scanned posting no evaluation has
+ *  turned into a tracker row yet (career-data parseInbox). */
+export type InboxEntry = {
+  url: string;
+  company: string;
+  role: string;
+  location: string;
+  postedAt: string;
+  state: 'pending' | 'failed';
+};
+
 export type ListResult = {
   ok: true;
   applications: Application[];
   metrics: Metrics;
   progress: Progress;
   pipelineSummary: { pending: number; processed: number; failed: number };
+  /** null from the sidecar when data/pipeline.md is missing. */
+  inbox: InboxEntry[] | null;
 };
 
 export type ReportResult = {

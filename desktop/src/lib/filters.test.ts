@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Application } from '../api';
-import { applyFilterAndSort, countForFilter, groupByStatus, matchesSearch, scoreBand } from './filters';
+import { applyFilterAndSort, countForFilter, groupByStatus, matchesInboxSearch, matchesSearch, scoreBand, TABS } from './filters';
 
 function app(over: Partial<Application>): Application {
   return {
@@ -163,5 +163,24 @@ describe('scoreBand', () => {
     expect(scoreBand(3.79)).toBe('neutral');
     expect(scoreBand(3.0)).toBe('neutral');
     expect(scoreBand(2.99)).toBe('low');
+  });
+});
+
+describe('inbox', () => {
+  it('puts INBOX first in the tab order so scan results are the first thing on Jobs', () => {
+    expect(TABS[0]).toEqual({ key: 'inbox', label: 'INBOX' });
+  });
+
+  it('matchesInboxSearch matches company, role, or location, case-insensitively', () => {
+    const entry = { url: 'https://a', company: 'n8n', role: 'Head of Solutions', location: 'Berlin', postedAt: '', state: 'pending' as const };
+    expect(matchesInboxSearch(entry, '')).toBe(true);
+    expect(matchesInboxSearch(entry, 'N8N')).toBe(true);
+    expect(matchesInboxSearch(entry, 'solutions')).toBe(true);
+    expect(matchesInboxSearch(entry, 'berlin')).toBe(true);
+    expect(matchesInboxSearch(entry, 'hamburg')).toBe(false);
+  });
+
+  it('countForFilter never counts tracker rows under the inbox tab', () => {
+    expect(countForFilter([app({}), app({})], 'inbox', '')).toBe(0);
   });
 });

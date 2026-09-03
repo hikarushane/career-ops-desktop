@@ -61,3 +61,14 @@ describe('Scanner', () => {
     expect(text).toMatch(/A scan is already running/);
   });
 });
+
+describe('Scanner done action', () => {
+  it('sends the user to review the inbox, where scan results land', () => {
+    hooks.reset(['task-1', false, null]);
+    hooks.beginRender();
+    const tree = Scanner({ root: '/w', initialTaskId: 'task-1', onDone: vi.fn() }) as unknown as {
+      props: { doneAction?: { label: string } };
+    };
+    expect(tree.props.doneAction?.label).toBe('Review inbox');
+  });
+});

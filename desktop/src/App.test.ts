@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import Scanner from './screens/Scanner';
+import { initialState } from './lib/updater';
 
 const mocks = vi.hoisted(() => ({
   doctor: vi.fn(),
@@ -17,6 +19,9 @@ const hooks = vi.hoisted(() => {
     },
     beginRender() {
       cursor = 0;
+    },
+    current() {
+      return state;
     },
     useState(initial: unknown) {
       const index = cursor++;
@@ -67,7 +72,21 @@ const data = {
     OfferRate: 0, AvgScore: 0, TopScore: 0, TotalOffers: 0, ActiveApps: 0,
   },
   pipelineSummary: { pending: 0, processed: 0, failed: 0 },
+  inbox: [],
 };
+
+// Walks an unrendered element tree looking for the first element of `type`.
+function findByType(node: unknown, type: unknown): ElementNode | null {
+  if (!node || typeof node !== 'object') return null;
+  const el = node as ElementNode & { props?: { children?: unknown } };
+  if (el.type === type) return el;
+  const children = el.props?.children;
+  for (const child of Array.isArray(children) ? children : [children]) {
+    const found = findByType(child, type);
+    if (found) return found;
+  }
+  return null;
+}
 
 function render(probe: { missing: string[]; ready: boolean }, onboarded = probe.missing.length === 0) {
   hooks.reset([
@@ -131,5 +150,24 @@ describe('workspace onboarding routing', () => {
     expect(mocks.listApplications).not.toHaveBeenCalled();
     hooks.beginRender();
     expect((App() as ElementNode).type).toBe('main');
+  });
+});
+
+describe('scanner done routing', () => {
+  it('opens the Jobs board on its INBOX tab, where scan results land', () => {
+    mocks.listApplications.mockResolvedValue({ ok: true, ...data });
+    hooks.reset([
+      '/workspace', true, { ok: true, careerOpsPath: '/workspace', trackerPath: null, missing: [], ready: true },
+      null, null, data, 'scanner', true, undefined, undefined,
+      'interview-plan', '', '', null, initialState, false, undefined,
+    ]);
+    hooks.beginRender();
+    const tree = App() as ElementNode;
+    const scanner = findByType(tree, Scanner) as { props: { onDone: () => void } } | null;
+    expect(scanner).not.toBeNull();
+    scanner!.props.onDone();
+    const state = hooks.current();
+    expect(state[6]).toBe('pipeline');
+    expect(state[state.length - 1]).toBe('inbox');
   });
 });

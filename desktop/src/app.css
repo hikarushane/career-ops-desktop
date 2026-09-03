@@ -395,3 +395,29 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
 }
 .rates { display: flex; flex-wrap: wrap; gap: 16px; }
 .rate { flex: 1 1 80px; min-width: 80px; text-align: center; }
+
+/* Pipeline INBOX tab — scanned postings awaiting evaluation (InboxTable).
+   Derived like table.apps: DESIGN.md defines no table; spacing on the 4px
+   grid (§3.5), attention pill on the §5.9 chip geometry. */
+.inbox { display: flex; flex-direction: column; min-height: 0; overflow: auto; padding: 0 32px 24px; }
+.inbox-header { display: flex; align-items: center; gap: 16px; padding: 4px 0 12px; }
+.inbox-summary { margin: 0; flex: 1; font: 500 14px var(--font-sans); color: var(--color-text-secondary); }
+.inbox-empty { margin: 0; padding: 24px 0; font: 400 14px var(--font-sans); color: var(--color-text-secondary); }
+.inbox-location { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-attention {
+  display: inline-block; margin-left: 8px; padding: 0 10px; height: 25px; line-height: 25px;
+  border-radius: var(--radius-control);
+  background: var(--color-accent-amber); color: var(--color-text-on-amber-dark);
+  font: 600 13px var(--font-sans); letter-spacing: 0.13px; white-space: nowrap;
+}
+.btn-link {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--color-accent-teal); font: 600 13px var(--font-sans); letter-spacing: 0.13px;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.btn-link:hover { color: var(--color-primary); }
+.btn-link:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: 4px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
