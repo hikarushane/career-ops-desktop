@@ -39,7 +39,11 @@ Produce exactly these four files in this directory, overwriting any existing cop
 1. cv.md: the master CV, as detailed as the evidence allows. If the documents show distinct career tracks or specialisations, keep one file with a clearly titled section per track so a tailored CV can later be cut from it.
 2. config/profile.yml: follow config/profile.example.yml. Fill only fields backed by the documents or by the preferences above. Set language.analysis to {analysisLanguage}.
 3. modes/_profile.md: follow modes/_profile.template.md: archetypes, North Star, narrative, proof points, location policy, and compensation targets, all derived from the documents and the preferences.
-4. portals.yml: follow templates/portals.example.yml. Set title_filter and location_filter from the preferences and keep the shipped company list. Choose companies in portals.yml that match the candidate's industries first; only fall back to generic tech employers when no industry is given.
+4. portals.yml: follow the STRUCTURE of templates/portals.example.yml (title_filter, location_filter, search_queries, tracked_companies, job_boards, same field names per entry) but do NOT copy its contents. Derive title_filter and location_filter from the preferences. Then build the lists for the candidate's target countries and industries:
+   - job_boards: the platforms people in each target country actually use for this kind of job. Examples: Taiwan → 104, 1111, CakeResume, 就業通, LinkedIn; Germany → StepStone, Indeed, LinkedIn, plus field boards such as get-in-engineering and ingenieur.de for engineers; add the field-specific boards for the candidate's industry in each country. Use the template's entry shape; set provider only when the template documents one for that board, otherwise use scan_method: websearch with a scan_query.
+   - tracked_companies: 15 to 40 real employers in the target countries and industries that plausibly hire for the target roles. Prefer companies whose careers page uses Greenhouse, Lever, Ashby or Workday (use the api field the template shows for those); otherwise scan_method: websearch. Add a one-line notes field saying why the company fits. Use web search when available; if you cannot verify a careers URL, keep the company with scan_method: websearch rather than inventing an API URL.
+   - search_queries: 5 to 10 queries built from the role keywords, target countries and industries.
+   Delete every template entry that does not fit the candidate; do not leave example companies, Polish/US-only boards, or visa-sponsorship queries unless they fit. Keep the file under 300 lines.
 
 Write modes/_profile.md and every narrative field in {analysisLanguage}. Write cv.md in the language used by most of the source documents.
 
@@ -1580,6 +1584,8 @@ mod tests {
         assert!(prompt.contains("- Regions: Germany\n- Keywords: {braces}"));
         assert!(prompt.contains("language.analysis to zh-TW"));
         assert!(prompt.contains("portals.yml"));
+        assert!(prompt.contains("do NOT copy its contents"));
+        assert!(prompt.contains("104"));
         assert!(!prompt.contains("intake.mjs"));
     }
 
