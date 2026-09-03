@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Application } from '../api';
 import { scoreBand } from '../lib/filters';
 import { CheckIcon } from './icons';
@@ -23,13 +24,21 @@ type Props = {
  * See desktop/STITCH-PROMPT.md §6.3.
  */
 export default function KanbanCard({ app, selected, onSelect, onStatusChange, pending }: Props) {
+  const [dragging, setDragging] = useState(false);
   const band = scoreBand(app.score);
   const fillPct = Math.max(0, Math.min(100, (app.score / 5) * 100));
 
   return (
     <article
-      className="kanban-card"
+      className={`kanban-card${dragging ? ' kanban-card--dragging' : ''}`}
       aria-selected={selected}
+      draggable={!!app.reportNumber && !pending}
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', app.reportNumber);
+        e.dataTransfer.effectAllowed = 'move';
+        setDragging(true);
+      }}
+      onDragEnd={() => setDragging(false)}
       onClick={() => app.reportNumber && onSelect(app.reportNumber)}
       role="button"
       tabIndex={0}
