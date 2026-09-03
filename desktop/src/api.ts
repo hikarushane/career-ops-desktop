@@ -15,6 +15,7 @@ export type Application = {
   scoreRaw: string;
   hasPdf: boolean;
   pdfPath: string;
+  coverLetterPath: string;
   reportPath: string;
   reportNumber: string;
   notes: string;

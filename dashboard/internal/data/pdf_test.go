@@ -171,3 +171,45 @@ func TestKebabCase(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveCoverLettersFromManifestExcludesFromCV(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "output/acme-pm-cover.pdf", "pdf")
+	writeFixture(t, root, "data/pdf-index.tsv",
+		"042\toutput/acme-pm-cover.pdf\t\tletter\t2026-06-05\n")
+
+	app := model.CareerApplication{Company: "Acme", ReportNumber: "042"}
+
+	got := ResolveCoverLetters(root, app, LoadPDFEntriesByPath(root))
+	if len(got) != 1 || got[0] != "output/acme-pm-cover.pdf" {
+		t.Fatalf("expected cover letter manifest match, got %v", got)
+	}
+
+	// The same manifest row must never be handed back by ResolvePDFs: a
+	// cover letter must not masquerade as the CV.
+	cvGot := ResolvePDFs(root, app, LoadPDFManifest(root))
+	if len(cvGot) != 0 {
+		t.Fatalf("expected cover letter path excluded from CV resolution, got %v", cvGot)
+	}
+}
+
+func TestResolveCoverLettersGlobFallback(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "output/acme-pm-cover.pdf", "pdf")
+
+	app := model.CareerApplication{Company: "Acme"}
+	got := ResolveCoverLetters(root, app, LoadPDFEntriesByPath(root))
+	if len(got) != 1 || got[0] != "output/acme-pm-cover.pdf" {
+		t.Fatalf("expected glob fallback cover letter match, got %v", got)
+	}
+}
+
+func TestResolveCoverLettersNoMatch(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "output/cv-acme.pdf", "pdf")
+
+	app := model.CareerApplication{Company: "Acme"}
+	if got := ResolveCoverLetters(root, app, LoadPDFEntriesByPath(root)); len(got) != 0 {
+		t.Fatalf("expected no cover letter match when only a CV exists, got %v", got)
+	}
+}

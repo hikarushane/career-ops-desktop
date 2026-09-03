@@ -64,6 +64,45 @@ func TestRunListParsesFixture(t *testing.T) {
 	}
 }
 
+func TestRunListResolvesPDFPathWithoutTrackerCheckmark(t *testing.T) {
+	res, err := runList("testdata/career-ops")
+	if err != nil {
+		t.Fatalf("runList: %v", err)
+	}
+
+	// Row 2 (Acme) carries a ❌ in the tracker's PDF column, but
+	// testdata/career-ops/output/cv-acme.pdf exists on disk. PDFPath (and
+	// HasPDF) must be resolved from the filesystem for every application,
+	// not gated on the tracker emoji.
+	acme := res.Applications[1]
+	if acme.Company != "Acme" {
+		t.Fatalf("expected Applications[1] to be Acme, got %q", acme.Company)
+	}
+	if acme.PDFPath != "output/cv-acme.pdf" {
+		t.Errorf("Acme PDFPath = %q, want %q", acme.PDFPath, "output/cv-acme.pdf")
+	}
+	if !acme.HasPDF {
+		t.Errorf("expected Acme HasPDF = true once a matching CV file is resolved on disk")
+	}
+}
+
+func TestRunListResolvesCoverLetterPath(t *testing.T) {
+	res, err := runList("testdata/career-ops")
+	if err != nil {
+		t.Fatalf("runList: %v", err)
+	}
+
+	// testdata/career-ops/output/offerpad-cover.pdf exists with no matching
+	// data/pdf-index.tsv row, so this exercises the glob fallback.
+	offerpad := res.Applications[0]
+	if offerpad.Company != "Offerpad" {
+		t.Fatalf("expected Applications[0] to be Offerpad, got %q", offerpad.Company)
+	}
+	if offerpad.CoverLetterPath != "output/offerpad-cover.pdf" {
+		t.Errorf("Offerpad CoverLetterPath = %q, want %q", offerpad.CoverLetterPath, "output/offerpad-cover.pdf")
+	}
+}
+
 func TestRunListEmitsDerivedStatusFields(t *testing.T) {
 	res, err := runList("testdata/career-ops")
 	if err != nil {

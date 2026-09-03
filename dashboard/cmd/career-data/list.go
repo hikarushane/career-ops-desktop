@@ -16,25 +16,26 @@ var errNoTracker = errors.New("tracker not found")
 // Application is the wire form of model.CareerApplication plus a resolved PDF
 // path. Field order matches the tracker's column order for readability.
 type Application struct {
-	Number       int     `json:"number"`
-	Date         string  `json:"date"`
-	Company      string  `json:"company"`
-	Role         string  `json:"role"`
-	Status       string  `json:"status"`
-	NormStatus   string  `json:"normStatus"`
-	StatusPrio   int     `json:"statusPriority"`
-	Score        float64 `json:"score"`
-	ScoreRaw     string  `json:"scoreRaw"`
-	HasPDF       bool    `json:"hasPdf"`
-	PDFPath      string  `json:"pdfPath"`
-	ReportPath   string  `json:"reportPath"`
-	ReportNumber string  `json:"reportNumber"`
-	Notes        string  `json:"notes"`
-	JobURL       string  `json:"jobUrl"`
-	Archetype    string  `json:"archetype"`
-	TlDr         string  `json:"tldr"`
-	Remote       string  `json:"remote"`
-	CompEstimate string  `json:"compEstimate"`
+	Number          int     `json:"number"`
+	Date            string  `json:"date"`
+	Company         string  `json:"company"`
+	Role            string  `json:"role"`
+	Status          string  `json:"status"`
+	NormStatus      string  `json:"normStatus"`
+	StatusPrio      int     `json:"statusPriority"`
+	Score           float64 `json:"score"`
+	ScoreRaw        string  `json:"scoreRaw"`
+	HasPDF          bool    `json:"hasPdf"`
+	PDFPath         string  `json:"pdfPath"`
+	CoverLetterPath string  `json:"coverLetterPath"`
+	ReportPath      string  `json:"reportPath"`
+	ReportNumber    string  `json:"reportNumber"`
+	Notes           string  `json:"notes"`
+	JobURL          string  `json:"jobUrl"`
+	Archetype       string  `json:"archetype"`
+	TlDr            string  `json:"tldr"`
+	Remote          string  `json:"remote"`
+	CompEstimate    string  `json:"compEstimate"`
 }
 
 // ListResult is the full payload the frontend loads on startup and after every
@@ -119,6 +120,7 @@ func runList(root string) (ListResult, error) {
 	}
 
 	manifest := data.LoadPDFManifest(root)
+	entriesByPath := data.LoadPDFEntriesByPath(root)
 
 	for _, a := range apps {
 		item := Application{
@@ -146,10 +148,12 @@ func runList(root string) (ListResult, error) {
 				}
 			}
 		}
-		if a.HasPDF {
-			if paths := data.ResolvePDFs(root, a, manifest); len(paths) > 0 {
-				item.PDFPath = paths[0]
-			}
+		if paths := data.ResolvePDFs(root, a, manifest); len(paths) > 0 {
+			item.PDFPath = paths[0]
+			item.HasPDF = true
+		}
+		if coverPaths := data.ResolveCoverLetters(root, a, entriesByPath); len(coverPaths) > 0 {
+			item.CoverLetterPath = coverPaths[0]
 		}
 		out.Applications = append(out.Applications, item)
 	}
