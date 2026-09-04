@@ -112,6 +112,77 @@ func TestFetchPostingDecodesNonUTF8Charset(t *testing.T) {
 // a /jobs/view/... path or a currentJobId= query parameter, rejecting an
 // earlier 6+ digit run (e.g. a requisition number or year) embedded before
 // it in the slug.
+// StepStone (and other boards that render the posting client-side) serve a
+// static page whose first <article> is a ~250-character teaser card, while
+// the full description lives only in the schema.org JobPosting JSON-LD.
+func TestFetchPostingPrefersJSONLDJobPosting(t *testing.T) {
+	desc := strings.Repeat(`<p>Responsibilities and requirements text.</p>\n`, 30)
+	body := `<html><head><title>Projektkoordinator (m/w/d) - Job in Ispringen</title>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting","title":"Projektkoordinator (m/w/d)",
+"hiringOrganization":{"@type":"Organization","name":"PPM GmbH"},
+"jobLocation":{"@type":"Place","address":{"@type":"PostalAddress","addressLocality":"Ispringen","addressCountry":"DE"}},
+"description":"<h4>Einleitung</h4>` + desc + `"}</script></head>
+<body><article><h2>Similar job</h2><p>teaser card</p></article><div id="app"></div></body></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }))
+	defer srv.Close()
+	got, err := fetchPosting(srv.URL+"/stellenangebote--x.html", srv.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Source != "json-ld" || got.Title != "Projektkoordinator (m/w/d)" || got.Company != "PPM GmbH" || got.Location != "Ispringen" {
+		t.Fatalf("got %+v", got)
+	}
+	if !strings.Contains(got.Text, "Einleitung") || !strings.Contains(got.Text, "Responsibilities") {
+		t.Fatalf("description text missing: %q", got.Text[:120])
+	}
+	if strings.Contains(got.Text, "<p>") || strings.Contains(got.Text, "teaser card") {
+		t.Fatalf("tags should be stripped and the teaser ignored: %q", got.Text[:120])
+	}
+}
+
+func TestFetchPostingFindsJobPostingInsideGraph(t *testing.T) {
+	desc := strings.Repeat(`<li>Requirement</li>`, 60)
+	body := `<html><head><script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","name":"x"},{"@type":["JobPosting","Thing"],"title":"Data Engineer","hiringOrganization":{"name":"Acme"},"jobLocation":[{"address":"Berlin, DE"}],"description":"<ul>` + desc + `</ul>"}]}</script></head><body></body></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }))
+	defer srv.Close()
+	got, err := fetchPosting(srv.URL, srv.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Source != "json-ld" || got.Title != "Data Engineer" || got.Company != "Acme" || got.Location != "Berlin, DE" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+// A JSON-LD block that only carries a teaser must not win over a full <main>.
+func TestFetchPostingFallsBackToHTMLWhenJSONLDIsShort(t *testing.T) {
+	body := `<html><head><title>Role - Board</title><script type="application/ld+json">{"@type":"JobPosting","title":"Role","description":"Short teaser only."}</script></head><body><main><h1>Role</h1>` + strings.Repeat("<p>Full responsibilities and requirements text.</p>", 30) + `</main></body></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }))
+	defer srv.Close()
+	got, err := fetchPosting(srv.URL, srv.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Source != "html" || !strings.Contains(got.Text, "Full responsibilities") {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+// Without <main> or JSON-LD, the largest <article> is the posting, not the
+// first one.
+func TestFetchPostingPicksLargestArticle(t *testing.T) {
+	body := `<html><head><title>Role</title></head><body><article><p>Related job teaser.</p></article><article><h1>Role</h1>` + strings.Repeat("<p>Main posting body text.</p>", 30) + `</article></body></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }))
+	defer srv.Close()
+	got, err := fetchPosting(srv.URL, srv.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Source != "html" || !strings.Contains(got.Text, "Main posting body") || strings.Contains(got.Text, "Related job teaser") {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 func TestLinkedInJobIDExtraction(t *testing.T) {
 	cases := []struct {
 		url  string
