@@ -145,9 +145,14 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
     onSkip();
   }, [taskId, onSkip]);
 
+  // Top-left Back on every phase: same as Skip/Cancel — cancels the run and
+  // discards the staged draft, nothing reaches the workspace.
+  const back = <button type="button" className="btn-ghost screen-back" onClick={skip} disabled={applying}>&larr; Back</button>;
+
   if (phase === 'running') {
     return (
       <div className="setup-screen">
+        {back}
         <h1><span className="animated-dots">{copy.running}</span></h1>
         <p className="setup-subtitle">{copy.runningHint}</p>
         <p className="setup-hint" role="status" aria-live="polite">{`${written.length} of ${TARGETS.length} files written`}</p>
@@ -173,6 +178,7 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
   if (phase === 'error' || !result) {
     return (
       <div className="setup-screen">
+        {back}
         <h1>Generation failed</h1>
         <p className="setup-subtitle">Nothing was written to your workspace. You can try again or skip this step.</p>
         {error && <pre className="intake-error" role="alert">{error}</pre>}
@@ -188,6 +194,7 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
 
   return (
     <div className="setup-screen generation-preview">
+      {back}
       <h1>{copy.review}</h1>
       <p className="setup-subtitle">
         {result.complete

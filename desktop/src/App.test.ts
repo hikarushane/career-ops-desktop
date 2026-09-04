@@ -232,6 +232,33 @@ describe('coming back to a running task', () => {
     expect(taskStore.startTask).not.toHaveBeenCalled();
   });
 
+  it('shows the running scan or batch when Home is pressed, and Back reaches the plain Home', () => {
+    taskStore.running = [{ taskId: 'task-s', taskType: 'scan', args: {} }];
+    expect(findByType(renderAt('pipeline'), Home)).toBeNull();
+    const nav = findByType(renderAt('pipeline'), 'nav') as unknown as { props: { children: { props: { onClick: () => void } }[] } } | null;
+    nav!.props.children[0].props.onClick();
+    let state = hooks.current();
+    expect(state[6]).toBe('scanner');
+    expect(state[13]).toBe('task-s');
+    hooks.beginRender();
+    const scanner = findByType(App() as ElementNode, Scanner) as unknown as { props: { onBack: () => void } } | null;
+    scanner!.props.onBack();
+    expect(hooks.current()[6]).toBe('home');
+
+    taskStore.running = [{ taskId: 'task-b', taskType: 'batch', args: {} }];
+    const homeScreen = findByType(renderAt('home'), Home) as unknown as { props: { onNavigate: (s: string) => void } } | null;
+    homeScreen!.props.onNavigate('home');
+    state = hooks.current();
+    expect(state[6]).toBe('evaluate');
+    expect(state[13]).toBe('task-b');
+  });
+
+  it('titles the header after the parent of a sub-screen', () => {
+    const tree = renderAt('scanner') as ElementNode & { props?: { children?: unknown } };
+    const header = findByType(tree, 'header') ?? (tree.props?.children as ElementNode[])?.[0];
+    expect(JSON.stringify(header)).toContain('"title":"Home"');
+  });
+
   it('reopens the running prep for the same company from the Interview screen', () => {
     taskStore.running = [{ taskId: 'task-i', taskType: 'interview-plan', args: { company: 'Acme', role: 'PM' } }];
     const interview = findByType(renderAt('interview'), Interview) as { props: { onAction: (a: string, app: { company: string; role: string }) => void } } | null;

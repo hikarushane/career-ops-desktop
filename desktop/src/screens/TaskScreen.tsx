@@ -6,9 +6,11 @@ type Props = {
   taskId: string | null; title: string; onRetry: () => void;
   children?: ReactNode; doneAction?: { label: string; onClick: () => void };
   onCancelled?: () => void;
+  /** Top-left Back: leaves the screen without touching the task (it keeps running behind the header chip). */
+  onBack?: () => void;
 };
 
-export default function TaskScreen({ taskId, title, onRetry, children, doneAction, onCancelled }: Props) {
+export default function TaskScreen({ taskId, title, onRetry, children, doneAction, onCancelled, onBack }: Props) {
   const task = useTask(taskId);
 
   const handleCancel = useCallback(async () => {
@@ -19,6 +21,7 @@ export default function TaskScreen({ taskId, title, onRetry, children, doneActio
 
   return (
     <div className="eval-screen">
+      {onBack && <button type="button" className="btn-ghost screen-back" onClick={onBack}>&larr; Back</button>}
       <h1>{title}</h1>
       {children}
       {task && <AgentActivity task={task} onCancel={() => void handleCancel()} onRetry={onRetry} />}

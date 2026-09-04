@@ -18,6 +18,8 @@ type Props = {
   initialTaskId?: string | null;
   /** Called with the finished evaluation's report path (reports/NNN-….md) when there is exactly one. */
   onDone: (reportPath?: string) => void;
+  /** Top-left Back: leaves the screen; a running task keeps going. */
+  onBack?: () => void;
 };
 
 type FetchState = { kind: 'idle' } | { kind: 'fetching' } | { kind: 'blocked'; url: string; reason: string };
@@ -44,7 +46,7 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Props) {
+export default function Evaluate({ root, initialUrl, initialTaskId, onDone, onBack }: Props) {
   // State order: input, jdText, fetchState, taskId, startError, starting, languages, jobLanguage, detectedLanguage
   const [input, setInput] = useState(initialUrl ?? '');
   const [jdText, setJdText] = useState('');
@@ -204,6 +206,7 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
   if (taskId === null) {
     return (
       <div className="eval-screen">
+        {onBack && <button type="button" className="btn-ghost screen-back" onClick={onBack}>&larr; Back</button>}
         <h1>Evaluate a job</h1>
         <div className="action-input-row">
           <textarea
@@ -295,6 +298,7 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
       taskId={taskId}
       title={isBatchTask ? 'Processing pending jobs' : 'Evaluating'}
       onRetry={isBatchTask ? retryBatch : retryEvaluate}
+      onBack={onBack}
       // A single evaluation hands its report path back so the Jobs board can
       // open that card; a batch turn produces several, so it hands back none.
       doneAction={{ label: 'Back to pipeline', onClick: () => onDone(isBatchTask ? undefined : reportArtifact(taskId)) }}
