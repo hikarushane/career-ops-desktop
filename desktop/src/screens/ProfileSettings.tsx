@@ -16,6 +16,7 @@ import ProfileGeneration from './ProfileGeneration';
 import JobPreferences from './JobPreferences';
 import { EMPTY_PREFERENCES, loadPreferences, savePreferences, type JobPreferences as Preferences } from '../lib/jobPreferences';
 import { UI_LANGUAGES, getUiLanguage, t, type UiLanguage } from '../lib/i18n';
+import { GlobeIcon } from '../components/icons';
 
 
 type Props = {
@@ -26,7 +27,7 @@ type Props = {
   onUiLanguageChange?: (language: UiLanguage) => void;
 };
 
-type Tab = 'background' | 'preferences' | 'sources' | 'workspace' | 'ai' | 'about';
+type Tab = 'background' | 'preferences' | 'sources' | 'workspace' | 'ai' | 'language' | 'about';
 
 export default function ProfileSettings({ root, onWorkspaceChanged, uiLanguage = getUiLanguage(), onUiLanguageChange }: Props) {
   const [tab, setTab] = useState<Tab>('background');
@@ -128,12 +129,15 @@ export default function ProfileSettings({ root, onWorkspaceChanged, uiLanguage =
     }
   }, [settingsLoaded, tab, catalogState, fastOk, fastMode]);
 
-  const tabs: { key: Tab; label: string }[] = [
+  // The language tab is a globe with no word, so it reads the same whatever
+  // language the interface is currently in.
+  const tabs: { key: Tab; label: string; Icon?: React.ComponentType<{ size?: number }> }[] = [
     { key: 'background', label: t('My Background') },
     { key: 'preferences', label: t('Job Search') },
     { key: 'sources', label: t('Search Sources') },
     { key: 'workspace', label: t('Workspace') },
     { key: 'ai', label: t('AI') },
+    { key: 'language', label: t('Language'), Icon: GlobeIcon },
     { key: 'about', label: t('About') },
   ];
 
@@ -142,9 +146,16 @@ export default function ProfileSettings({ root, onWorkspaceChanged, uiLanguage =
       <h1>{t('Profile & Settings')}</h1>
 
       <nav className="profile-tabs">
-        {tabs.map((t) => (
-          <button key={t.key} aria-current={tab === t.key} onClick={() => setTab(t.key)}>
-            {t.label}
+        {tabs.map((entry) => (
+          <button
+            key={entry.key}
+            aria-current={tab === entry.key}
+            aria-label={entry.Icon ? entry.label : undefined}
+            title={entry.Icon ? entry.label : undefined}
+            className={entry.Icon ? 'profile-tab-icon' : undefined}
+            onClick={() => setTab(entry.key)}
+          >
+            {entry.Icon ? <entry.Icon size={20} /> : entry.label}
           </button>
         ))}
       </nav>
@@ -177,11 +188,11 @@ export default function ProfileSettings({ root, onWorkspaceChanged, uiLanguage =
           />
         )}
 
-        {tab === 'preferences' && !updatingProfile && (
+        {tab === 'language' && (
           <div>
             <section className="ui-language-field">
               <h2>{t('App language')}</h2>
-              <p className="setup-hint">{t('The language of menus, buttons and messages in this app. Analyses and documents follow the settings below.')}</p>
+              <p className="setup-hint">{t('The language of menus, buttons and messages in this app. Analyses and documents follow the Job Search settings.')}</p>
               <div className="ai-segment" role="radiogroup" aria-label={t('App language')}>
                 {UI_LANGUAGES.map((option) => (
                   <button
@@ -196,6 +207,11 @@ export default function ProfileSettings({ root, onWorkspaceChanged, uiLanguage =
                 ))}
               </div>
             </section>
+          </div>
+        )}
+
+        {tab === 'preferences' && !updatingProfile && (
+          <div>
             <h2>{t('Job Search Preferences')}</h2>
             <p>{t('Target roles, locations, relocation, and salary expectations.')}</p>
             <p className="setup-hint">

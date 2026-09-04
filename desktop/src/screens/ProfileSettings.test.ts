@@ -262,6 +262,24 @@ describe('ProfileSettings background tab', () => {
   });
 });
 
+describe('ProfileSettings language tab', () => {
+  const base = ['language', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, false];
+
+  it('is a wordless globe tab between AI and About that switches the interface language', () => {
+    const onUiLanguageChange = vi.fn();
+    hooks.reset([...base, preferencesLib.EMPTY_PREFERENCES, false]);
+    hooks.beginRender();
+    const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn(), uiLanguage: 'en', onUiLanguageChange }) as ElementNode;
+    const nav = findByType(tree, 'nav') as (ElementNode & { props: { children: (ElementNode & { props: { 'aria-label'?: string; children?: unknown } })[] } }) | undefined;
+    const labels = nav!.props.children.map((b) => (typeof b.props.children === 'string' ? b.props.children : `[${b.props['aria-label']}]`));
+    expect(labels).toEqual(['My Background', 'Job Search', 'Search Sources', 'Workspace', 'AI', '[Language]', 'About']);
+    const radios = findByRole(tree, 'radiogroup') as (ElementNode & { props: { children: (ElementNode & { props: { 'aria-checked'?: boolean; onClick?: () => void } })[] } }) | undefined;
+    expect(radios!.props.children.map((r) => r.props['aria-checked'])).toEqual([true, false]);
+    radios!.props.children[1].props.onClick?.();
+    expect(onUiLanguageChange).toHaveBeenCalledWith('zh-TW');
+  });
+});
+
 describe('ProfileSettings job search tab', () => {
   const prefs = { ...preferencesLib.EMPTY_PREFERENCES, regions: 'Netherlands' };
   const base = ['preferences', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, false];
