@@ -490,6 +490,40 @@ summary:focus-visible {
 
 .interview-workflow-screen { padding: 20px 32px; }
 .interview-workflow-screen h1 { margin: 8px 0 4px; font: 700 18px var(--font-sans); }
+
+/* --- Interview session: intake form, then a conversation (DESIGN.md §5.8) --- */
+.interview-session { display: flex; flex-direction: column; min-height: 0; }
+.interview-intake { margin: 12px 0 0; }
+.interview-intake select {
+  font: inherit; padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-canvas);
+}
+.chat-thread { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.chat-turn { display: flex; flex-direction: column; gap: 8px; }
+/* §5.8: sent right in primary green, received left in muted grey; bubbles
+   capped around 65% of the panel so long replies do not span it. */
+.chat-bubble {
+  max-width: 65%; padding: 10px 14px; border-radius: 16px;
+  font: 400 13px/1.5 var(--font-sans); white-space: pre-wrap; word-break: break-word;
+}
+.chat-bubble--sent { align-self: flex-end; background: var(--color-primary); color: var(--color-text-on-primary-dark); border-bottom-right-radius: 4px; }
+.chat-bubble--received { align-self: flex-start; background: var(--color-surface-muted); color: var(--color-text-primary); border-bottom-left-radius: 4px; white-space: normal; }
+.chat-bubble--received > :first-child { margin-top: 0; }
+.chat-bubble--received > :last-child { margin-bottom: 0; }
+.chat-bubble--received pre { overflow-x: auto; font: 400 12px/1.4 var(--font-mono); }
+.chat-bubble--muted { color: var(--color-text-secondary); font-style: italic; }
+.chat-activity { max-width: 65%; align-self: flex-start; }
+.chat-activity .agent-activity { margin-top: 0; padding: 10px 14px; background: var(--color-surface-subtle); border-radius: 16px; border-bottom-left-radius: 4px; }
+/* Composer pinned to the bottom of the scrolling pane. */
+.chat-composer {
+  position: sticky; bottom: 0; display: flex; gap: 8px; align-items: flex-end;
+  margin-top: 16px; padding: 8px 0; background: var(--color-canvas);
+}
+.chat-composer textarea {
+  flex: 1; font: 400 13px/1.4 var(--font-sans); padding: 8px 12px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-control); resize: vertical;
+}
+.chat-composer textarea:focus { outline: 2px solid var(--color-focus); outline-offset: 1px; }
 .workflow-language-picker { display: grid; gap: 4px; max-width: 360px; margin: 16px 0; font: 500 12px var(--font-sans); }
 .workflow-language-picker select { padding: 5px 10px; border: var(--border-divider); border-radius: var(--radius-control); background: var(--color-canvas); color: var(--color-text-primary); }
 .workflow-language-picker small { color: var(--color-text-secondary); font: 400 12px/1.4 var(--font-sans); }

@@ -248,8 +248,12 @@ export default function App() {
       setActiveTaskId(id);
       setScreen('scanner');
     } else if (task.taskType.startsWith('interview')) {
+      // The session screen finds its conversation by task id; company/role
+      // from the task's args cover a task whose session is not stored.
       setActiveTaskId(id);
       setIwMode(task.taskType as typeof iwMode);
+      setIwCompany(task.args.company ?? '');
+      setIwRole(task.args.role ?? '');
       setScreen('interview-workflow');
     }
   }, [tasks, navigate]);

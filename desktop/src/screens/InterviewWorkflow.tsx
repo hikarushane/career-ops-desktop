@@ -1,89 +1,183 @@
-import { useCallback, useEffect, useState } from 'react';
-import TaskScreen from './TaskScreen';
-import { getTask, startTask, useRunningTasks } from '../lib/taskStore';
-import { languageSettings, type LanguageSettings, type TaskType } from '../api';
-
-type Mode = 'interview-plan' | 'interview-practice' | 'interview-debrief';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import AgentActivity from '../components/AgentActivity';
+import { cancel, getTask, startTask, useTasks } from '../lib/taskStore';
+import { languageSettings, type LanguageContext, type LanguageSettings, type TaskType } from '../api';
+import {
+  INTAKE_FIELDS, buildContext, findSession, findSessionByTask, intakeComplete, intakeMessage,
+  loadSessions, replyFromTask, saveSessions, sessionKey, upsertSession,
+  type IntakeField, type InterviewMode, type Session,
+} from '../lib/interviewSession';
 
 type Props = {
   root: string;
-  mode: Mode;
+  mode: InterviewMode;
   company: string;
   role: string;
   initialTaskId?: string | null;
   onBack: () => void;
 };
 
-const TITLES: Record<string, string> = {
+const TITLES: Record<InterviewMode, string> = {
   'interview-plan': 'Interview Prep Plan',
   'interview-practice': 'Practice Interview',
   'interview-debrief': 'Post-Interview Debrief',
 };
 
+/**
+ * One interview mode as a conversation with the AI (lib/interviewSession.ts).
+ * The first turn is an intake form (what the mode's Inputs section needs);
+ * every later message is a new agent turn carrying the exchange so far.
+ */
 export default function InterviewWorkflow({ root, mode, company, role, initialTaskId, onBack }: Props) {
-  const [taskId, setTaskId] = useState<string | null>(initialTaskId ?? null);
+  // A reopen from the header chip only carries a task id; find its session
+  // by that, else by mode/company/role, else start fresh. A task with no
+  // stored session (storage cleared) still gets a one-turn session so its
+  // activity shows.
+  const initial = useMemo<Session>(() => {
+    const sessions = loadSessions(root);
+    const byTask = initialTaskId ? findSessionByTask(sessions, initialTaskId) : null;
+    if (byTask) return byTask;
+    const task = initialTaskId ? getTask(initialTaskId) : null;
+    const c = company || task?.args.company || '';
+    const r = role || task?.args.role || '';
+    const key = sessionKey(mode, c, r);
+    const stored = findSession(sessions, key);
+    if (stored && !initialTaskId) return stored;
+    return {
+      key, mode, company: c, role: r,
+      turns: initialTaskId ? [{ user: task?.label ?? 'Reopened task', taskId: initialTaskId, reply: null }] : (stored?.turns ?? []),
+    };
+  }, [root, mode, company, role, initialTaskId]);
+
+  const [session, setSession] = useState<Session>(initial);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState('');
   const [languages, setLanguages] = useState<LanguageSettings | null>(null);
-  const [jobLanguage, setJobLanguage] = useState('');
+  const [jobLanguage, setJobLanguage] = useState(initial.jobLanguage ?? '');
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
-  const modeAlreadyRunning = useRunningTasks().some((t) => t.taskType === mode);
+  const tasks = useTasks();
 
   useEffect(() => {
     languageSettings(root).then(setLanguages).catch(() => setLanguages(null));
   }, [root]);
 
-  // Reopening from the header chip only carries a task id, not the original
-  // company/role props (App doesn't know them), so the subtitle falls back
-  // to the task's own label whenever one is available.
-  const initialTask = initialTaskId ? getTask(initialTaskId) : null;
+  const commit = useCallback((next: Session) => {
+    setSession(next);
+    saveSessions(root, upsertSession(loadSessions(root), next));
+  }, [root]);
 
-  const start = useCallback(async () => {
+  // Capture each finished turn's reply into the session, since a task
+  // restored after a restart has no events to read it from later.
+  useEffect(() => {
+    if (!session.turns.some((t) => t.reply === null)) return;
+    let changed = false;
+    const turns = session.turns.map((t) => {
+      if (t.reply !== null) return t;
+      const task = tasks.find((x) => x.taskId === t.taskId);
+      if (!task || task.state === 'running') return t;
+      const reply = replyFromTask(task);
+      if (reply === null) return t;
+      changed = true;
+      return { ...t, reply };
+    });
+    if (changed) commit({ ...session, turns });
+  }, [tasks, session, commit]);
+
+  const lastTurn = session.turns[session.turns.length - 1];
+  const lastTask = lastTurn ? tasks.find((t) => t.taskId === lastTurn.taskId) ?? null : null;
+  const busy = lastTask?.state === 'running';
+
+  const languageContext = (): LanguageContext | undefined => (languages
+    ? {
+        analysisLanguage: languages.analysisLanguage,
+        ...(jobLanguage ? { jobLanguage, jobLanguageSource: 'manual-override', jobLanguageConfidence: 1 } : {}),
+      }
+    : undefined);
+
+  const send = useCallback(async (text: string) => {
     setStartError(null);
     setStarting(true);
     try {
-      const languageContext = languages
-        ? {
-            analysisLanguage: languages.analysisLanguage,
-            ...(jobLanguage ? { jobLanguage, jobLanguageSource: 'manual-override', jobLanguageConfidence: 1 } : {}),
-          }
-        : undefined;
-      setTaskId(await startTask(mode as TaskType, { company, role }, root, `${TITLES[mode] ?? mode} · ${company}`, languageContext));
+      const context = buildContext(session.turns, text);
+      const id = await startTask(
+        mode as TaskType,
+        { company: session.company, role: session.role, context },
+        root,
+        `${TITLES[mode]} · ${session.company}`,
+        languageContext(),
+      );
+      commit({ ...session, jobLanguage: jobLanguage || undefined, turns: [...session.turns, { user: text, taskId: id, reply: null }] });
+      setMessage('');
     } catch (err) {
       setStartError(err instanceof Error ? err.message : String(err));
     } finally {
       setStarting(false);
     }
-  }, [root, mode, company, role, languages, jobLanguage]);
+  }, [root, mode, session, languages, jobLanguage, commit]);
 
-  // Retry after reopening a failed task from the header chip must reuse its
-  // stored args/label/languageContext — see Evaluate's retryEvaluate for why
-  // re-running start() on a freshly-mounted instance would be a no-op.
+  const start = useCallback(() => send(intakeMessage(mode, values)), [send, mode, values]);
+
+  // Re-run the last turn with the task's own args (a reopened task has them;
+  // a restored one falls back to rebuilding the context).
   const retry = useCallback(async () => {
+    if (!lastTurn) return;
     setStartError(null);
     try {
-      const current = taskId ? getTask(taskId) : null;
-      setTaskId(
-        await startTask(
-          mode as TaskType,
-          current?.args ?? { company, role },
-          root,
-          current?.label ?? `${TITLES[mode] ?? mode} · ${company}`,
-          current?.languageContext,
-        ),
+      const current = getTask(lastTurn.taskId);
+      const id = await startTask(
+        mode as TaskType,
+        current?.args && Object.keys(current.args).length > 0
+          ? current.args
+          : { company: session.company, role: session.role, context: buildContext(session.turns.slice(0, -1), lastTurn.user) },
+        root,
+        current?.label ?? `${TITLES[mode]} · ${session.company}`,
+        current?.languageContext ?? languageContext(),
       );
+      commit({ ...session, turns: [...session.turns.slice(0, -1), { ...lastTurn, taskId: id, reply: null }] });
     } catch (err) {
       setStartError(err instanceof Error ? err.message : String(err));
     }
-  }, [root, mode, company, role, taskId]);
+  }, [root, mode, session, lastTurn, languages, jobLanguage, commit]);
+
+  const reset = useCallback(() => {
+    if (!window.confirm('Start a new conversation? The current one stays in your interview-prep files but leaves this screen.')) return;
+    commit({ key: session.key, mode: session.mode, company: session.company, role: session.role, turns: [] });
+    setValues({});
+    setMessage('');
+  }, [session, commit]);
+
+  const field = (f: IntakeField) => {
+    const value = values[f.key] ?? '';
+    const set = (v: string) => setValues({ ...values, [f.key]: v });
+    const id = `intake-${f.key}`;
+    return (
+      <label key={f.key} htmlFor={id}>
+        <span>{f.label}{f.required ? '' : ' (optional)'}</span>
+        {f.type === 'textarea' ? (
+          <textarea id={id} rows={3} value={value} placeholder={f.placeholder} onChange={(e) => set(e.target.value)} />
+        ) : f.type === 'select' ? (
+          <select id={id} value={value} onChange={(e) => set(e.target.value)}>
+            <option value="">{f.required ? 'Choose…' : 'Not sure'}</option>
+            {(f.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        ) : (
+          <input id={id} type={f.type} value={value} placeholder={f.placeholder} onChange={(e) => set(e.target.value)} />
+        )}
+      </label>
+    );
+  };
 
   return (
-    <TaskScreen taskId={taskId} title={TITLES[mode] ?? mode} onRetry={retry} doneAction={{ label: 'Done', onClick: onBack }}>
+    <div className="eval-screen interview-session">
       <button className="btn-ghost" onClick={onBack}>&larr; Back</button>
-      <p>{initialTask ? initialTask.label : <>{company} &mdash; {role}</>}</p>
+      <h1>{TITLES[mode]}</h1>
+      <p className="setup-hint">{session.company} &mdash; {session.role}</p>
       {languages && (
         <label className="workflow-language-picker">
           <span>Interview language</span>
-          <select value={jobLanguage} onChange={(event) => setJobLanguage(event.target.value)} disabled={taskId !== null}>
+          <select value={jobLanguage} onChange={(event) => setJobLanguage(event.target.value)} disabled={session.turns.length > 0}>
             <option value="">Detect from this job's description</option>
             {languages.options.map((option) => (
               <option key={option.code} value={option.code}>{option.name}</option>
@@ -92,15 +186,55 @@ export default function InterviewWorkflow({ root, mode, company, role, initialTa
           <small>Practice, planning, and debrief material follow the job language; analysis stays {languages.analysisLanguage}.</small>
         </label>
       )}
-      {!taskId && (
+
+      {session.turns.length === 0 ? (
+        <form className="preferences-form interview-intake" onSubmit={(e) => { e.preventDefault(); void start(); }}>
+          {INTAKE_FIELDS[mode].map(field)}
+          <div className="setup-actions">
+            <button className="btn-primary" type="submit" disabled={starting || !intakeComplete(mode, values)}>Start</button>
+          </div>
+        </form>
+      ) : (
         <>
-          <button className="btn-primary" onClick={start} disabled={starting || modeAlreadyRunning}>Start</button>
-          {modeAlreadyRunning && (
-            <p className="setup-hint">An interview prep task is already running — open it from the header.</p>
-          )}
+          <ol className="chat-thread" aria-label="Conversation">
+            {session.turns.map((t) => {
+              const task = tasks.find((x) => x.taskId === t.taskId) ?? null;
+              return (
+                <li key={t.taskId} className="chat-turn">
+                  <div className="chat-bubble chat-bubble--sent">{t.user}</div>
+                  {t.reply !== null ? (
+                    <div className="chat-bubble chat-bubble--received"><ReactMarkdown>{t.reply}</ReactMarkdown></div>
+                  ) : task && (task.state === 'running' || task.state === 'failed') ? (
+                    <div className="chat-activity">
+                      <AgentActivity task={task} onCancel={() => void cancel(task.taskId)} onRetry={() => void retry()} />
+                    </div>
+                  ) : (
+                    <div className="chat-bubble chat-bubble--received chat-bubble--muted">
+                      Reply not captured. The files it wrote are under interview-prep/.
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+          <form className="chat-composer" onSubmit={(e) => { e.preventDefault(); void send(message.trim()); }}>
+            <textarea
+              rows={3}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder={busy ? 'Waiting for the AI…' : 'Reply, ask a follow-up, or paste new details'}
+              aria-label="Message"
+              disabled={busy}
+            />
+            <button className="btn-primary" type="submit" disabled={busy || starting || !message.trim()}>Send</button>
+          </form>
+          <div className="setup-actions">
+            <button className="btn-ghost" onClick={onBack}>Done</button>
+            <button className="btn-ghost" onClick={reset} disabled={busy}>New conversation</button>
+          </div>
         </>
       )}
       {startError && <p className="intake-error" role="alert">{startError}</p>}
-    </TaskScreen>
+    </div>
   );
 }

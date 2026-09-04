@@ -271,10 +271,13 @@ export type TaskOutputEvent = {
 export type TaskEvent = {
   task_id: string;
   kind: 'status' | 'tool' | 'text' | 'result';
+  /** Feed-sized summary, truncated to 200 chars. */
   summary: string;
   tool: string | null;
   target: string | null;
   is_error: boolean | null;
+  /** Untruncated text of a `text` or `result` event; absent on other kinds. */
+  text?: string | null;
 };
 
 export type TaskOutcome = { ok: boolean; detail: string; artifacts: string[] };
