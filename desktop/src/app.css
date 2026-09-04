@@ -176,11 +176,26 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
   white-space: nowrap;
 }
 
-/* Flat view: table on the left, report on the right at the drawer's width
-   (so the report reads the same in both views). 4e429aca dropped this rule
-   by accident, which left the report stacked below the table. */
-.split { display: grid; grid-template-columns: minmax(0, 1fr) var(--drawer-width); flex: 1; min-height: 0; }
+/* Flat view: table on the left, report on the right at the shared report
+   width (so the report reads the same in both views), with a draggable
+   boundary between them. Until a row is picked the table has the full
+   width. 4e429aca dropped this rule by accident, which left the report
+   stacked below the table. */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 6px var(--report-width, var(--drawer-width)); flex: 1; min-height: 0; }
+.split--single { grid-template-columns: minmax(0, 1fr); }
 .split > * { overflow: auto; min-width: 0; }
+
+/* Drag handle on the report panel's left edge (Flat split and drawer). A
+   thin strip that shows the primary color while hovered or dragged; the
+   drag itself lives in components/ResizeHandle.tsx. */
+.resize-handle {
+  width: 6px; cursor: col-resize; overflow: hidden;
+  background: transparent; transition: background 120ms;
+  touch-action: none;
+}
+.resize-handle:hover, .is-resizing .resize-handle { background: var(--color-primary); }
+.is-resizing { cursor: col-resize; user-select: none; }
+.drawer .resize-handle { position: absolute; left: 0; top: 0; bottom: 0; }
 
 /* ---------- Kanban board — Grouped view (§6.3) ---------- */
 
@@ -293,7 +308,7 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
 }
 .drawer {
   position: fixed; top: var(--header-height); right: 0; bottom: 0;
-  width: var(--drawer-width); max-width: 100vw;
+  width: var(--report-width, var(--drawer-width)); max-width: 100vw;
   background: var(--color-canvas);
   box-shadow: var(--shadow-action);
   z-index: 11;
