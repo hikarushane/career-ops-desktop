@@ -122,23 +122,26 @@ export default function App() {
     loadActiveRoot()
       .then(async (p) => {
         setRoot(p);
-        // A saved interface language wins; a first run follows the
-        // workspace's analysis language so a zh-TW workspace opens in Chinese.
+        // A saved interface language wins. Without one, only a workspace that
+        // has already been onboarded follows its analysis language (an
+        // existing zh-TW user upgrading opens in Chinese); a fresh install
+        // stays English until the onboarding language step picks one.
         const saved = await loadUiLanguage();
         if (saved) {
           setUiLanguage(saved);
           setUiLanguageState(saved);
-        } else if (p) {
+        }
+        if (!p) return;
+        const workspace = await refresh(p);
+        if (!saved && workspace?.missing.length === 0) {
           try {
             const language = defaultUiLanguage((await languageSettings(p)).analysisLanguage);
             setUiLanguage(language);
             setUiLanguageState(language);
           } catch {
-            // No profile yet (fresh workspace): stay in English until onboarding picks one.
+            // No readable profile: stay in English.
           }
         }
-        if (!p) return;
-        const workspace = await refresh(p);
         if (workspace?.ready) await reload(p);
       })
       .catch((e) => setError(String(e)))
