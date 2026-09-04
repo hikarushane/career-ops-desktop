@@ -45,6 +45,19 @@ describe('prompt context', () => {
     expect(ctx).toMatch(/Do not repeat the whole plan/);
   });
 
+  it('names the report and JD capture on every turn so the AI never asks for the posting', () => {
+    const files = { reportPath: 'reports/019-acme-2026-09-04.md', reportNumber: '019' };
+    const first = buildContext([], '- Date: x', files);
+    expect(first.startsWith('\n\nFiles for this job')).toBe(true);
+    expect(first).toContain('- Evaluation report: reports/019-acme-2026-09-04.md');
+    expect(first).toContain('node jd-capture.mjs 019');
+    expect(first).toMatch(/never ask for the job description/);
+    const later = buildContext([{ user: 'a', taskId: 't', reply: 'b' }], 'c', files);
+    expect(later).toContain('- Evaluation report: reports/019-acme-2026-09-04.md');
+    expect(buildContext([], 'x', undefined)).not.toContain('Files for this job');
+    expect(buildContext([], 'x', { reportPath: '', reportNumber: '' })).not.toContain('Files for this job');
+  });
+
   it('caps a quoted reply so the prompt stays bounded and marks a lost reply', () => {
     const long = 'y'.repeat(7000);
     const ctx = buildContext([{ user: 'a', taskId: 't1', reply: long }, { user: 'b', taskId: 't2', reply: null }], 'c');

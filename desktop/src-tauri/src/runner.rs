@@ -288,17 +288,19 @@ fn get_task_def(task_type: &str) -> Option<TaskDef> {
         // the intake details on the first turn and the conversation so far
         // on later ones (built by the desktop's lib/interviewSession.ts).
         // It is optional — see with_optional_context.
+        // The mode file is named outright: a smaller model given only "run
+        // X mode" may skip the workspace instructions and improvise.
         "interview-plan" => Some(TaskDef {
-            prompt_template: "Run interview/plan mode for the {role} interview at {company}.{context}",
+            prompt_template: "Run interview/plan mode (instructions: modes/interview/plan.md) for the {role} interview at {company}.{context}",
             required_args: &["company", "role"],
         }),
         "interview-practice" => Some(TaskDef {
-            prompt_template: "Run interview/practice mode for the {role} role at {company}.{context}",
+            prompt_template: "Run interview/practice mode (instructions: modes/interview/practice.md) for the {role} role at {company}.{context}",
             required_args: &["company", "role"],
         }),
         "interview-debrief" => Some(TaskDef {
             prompt_template:
-                "Run interview/debrief mode for the recent interview at {company} for {role}.{context}",
+                "Run interview/debrief mode (instructions: modes/interview/debrief.md) for the recent interview at {company} for {role}.{context}",
             required_args: &["company", "role"],
         }),
         "profile-generate" => Some(TaskDef {
@@ -1992,7 +1994,7 @@ mod tests {
         args.insert("company".to_owned(), "Acme".to_owned());
         args.insert("role".to_owned(), "PM".to_owned());
         let bare = build_prompt(def.prompt_template, &with_optional_context("interview-plan", &args));
-        assert_eq!(bare, "Run interview/plan mode for the PM interview at Acme.");
+        assert_eq!(bare, "Run interview/plan mode (instructions: modes/interview/plan.md) for the PM interview at Acme.");
         args.insert("context".to_owned(), "\n\nInterview details:\n- Date: 2026-09-10".to_owned());
         let with = build_prompt(def.prompt_template, &with_optional_context("interview-plan", &args));
         assert!(with.ends_with("Acme.\n\nInterview details:\n- Date: 2026-09-10"));

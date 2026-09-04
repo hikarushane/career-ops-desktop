@@ -80,7 +80,10 @@ describe('InterviewWorkflow', () => {
   });
 
   it('starts the first turn with the intake answers as the prompt context and stores the session', async () => {
-    const fresh: Session = { key: sessionKey('interview-plan', 'Acme', 'PM'), mode: 'interview-plan', company: 'Acme', role: 'PM', turns: [] };
+    const fresh: Session = {
+      key: sessionKey('interview-plan', 'Acme', 'PM'), mode: 'interview-plan', company: 'Acme', role: 'PM', turns: [],
+      files: { reportPath: 'reports/019-acme.md', reportNumber: '019' },
+    };
     hooks.reset([fresh, { date: '2026-09-10', time: '14:00', round: 'Final round' }]);
     const tree = render();
     const form = findAll(tree, (n) => n.type === 'form')[0];
@@ -89,6 +92,7 @@ describe('InterviewWorkflow', () => {
     expect([type, root, label]).toEqual(['interview-plan', '/w', 'Interview Prep Plan · Acme']);
     expect(args.company).toBe('Acme');
     expect(args.context).toMatch(/Details provided by the candidate:\n- Interview date: 2026-09-10\n- Start time: 14:00\n- Round type: Final round/);
+    expect(args.context).toContain('- Evaluation report: reports/019-acme.md');
     const session = hooks.current()[0] as Session;
     expect(session.turns).toEqual([{ user: '- Interview date: 2026-09-10\n- Start time: 14:00\n- Round type: Final round', taskId: 'task-new', reply: null }]);
     expect(storage['careerops.interviewSessions./w']).toContain('task-new');
