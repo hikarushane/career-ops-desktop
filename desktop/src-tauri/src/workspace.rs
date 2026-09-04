@@ -486,6 +486,115 @@ pub fn save_job_capture(root: String, slug: String, text: String) -> Result<Stri
     save_job_capture_at(Path::new(&root), &slug, &text)
 }
 
+/// Folders whose Markdown and text files the app lists and shows (interview
+/// prep, reports, JD captures). Everything else in the workspace stays
+/// reachable only through the flow that owns it.
+const READABLE_DIRS: &[&str] = &["interview-prep", "reports", "jds"];
+const MAX_READABLE_BYTES: u64 = 2 * 1024 * 1024;
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFile {
+    /// Workspace-relative, "/"-separated: "interview-prep/acme-pm.md".
+    pub path: String,
+    pub name: String,
+    /// Seconds since the Unix epoch; 0 when unknown.
+    pub modified: u64,
+}
+
+/// A workspace-relative path that stays inside one of READABLE_DIRS: no
+/// absolute paths, no `..`, no other top-level folder.
+fn readable_relative(relative: &str) -> Result<PathBuf, String> {
+    let path = Path::new(relative);
+    let mut components = path.components();
+    let first = match components.next() {
+        Some(Component::Normal(part)) => part.to_string_lossy().into_owned(),
+        _ => return Err(format!("{relative} is not inside a readable folder")),
+    };
+    if !READABLE_DIRS.contains(&first.as_str()) {
+        return Err(format!("{relative} is not inside a readable folder"));
+    }
+    if components.any(|c| !matches!(c, Component::Normal(_))) {
+        return Err(format!("{relative} must stay inside its folder"));
+    }
+    Ok(path.to_path_buf())
+}
+
+fn collect_text_files(root: &Path, dir: &Path, out: &mut Vec<WorkspaceFile>) -> Result<(), String> {
+    let entries = fs::read_dir(dir).map_err(|e| format!("failed to read {}: {e}", dir.display()))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        let Ok(file_type) = entry.file_type() else { continue };
+        if file_type.is_symlink() {
+            continue;
+        }
+        let path = entry.path();
+        if file_type.is_dir() {
+            collect_text_files(root, &path, out)?;
+        } else if file_type.is_file()
+            && matches!(path.extension().and_then(OsStr::to_str), Some("md" | "txt"))
+        {
+            let rel = path.strip_prefix(root).map_err(|e| e.to_string())?;
+            let modified = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            out.push(WorkspaceFile {
+                path: rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/"),
+                name,
+                modified,
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Lists the .md/.txt files under one readable folder (recursively), newest
+/// first. A missing folder is an empty list, not an error.
+pub fn list_workspace_files_at(root: &Path, dir: &str) -> Result<Vec<WorkspaceFile>, String> {
+    let relative = readable_relative(dir)?;
+    let base = root.join(&relative);
+    let mut out = Vec::new();
+    if base.is_dir() {
+        collect_text_files(root, &base, &mut out)?;
+    }
+    out.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.path.cmp(&b.path)));
+    Ok(out)
+}
+
+pub fn read_workspace_file_at(root: &Path, relative: &str) -> Result<String, String> {
+    let rel = readable_relative(relative)?;
+    let path = root.join(&rel);
+    let metadata = fs::symlink_metadata(&path).map_err(|_| format!("{relative} does not exist"))?;
+    if metadata.file_type().is_symlink() {
+        return Err(format!("{relative} is a symlink; refusing to read it"));
+    }
+    if !metadata.is_file() {
+        return Err(format!("{relative} is not a file"));
+    }
+    if metadata.len() > MAX_READABLE_BYTES {
+        return Err(format!("{relative} is larger than 2 MB"));
+    }
+    let bytes = fs::read(&path).map_err(|e| format!("failed to read {relative}: {e}"))?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+#[tauri::command]
+pub fn list_workspace_files(root: String, dir: String) -> Result<Vec<WorkspaceFile>, String> {
+    list_workspace_files_at(Path::new(&root), &dir)
+}
+
+#[tauri::command]
+pub fn read_workspace_file(root: String, relative: String) -> Result<String, String> {
+    read_workspace_file_at(Path::new(&root), &relative)
+}
+
 const CAREEROPS_SYSTEM_INVARIANTS: &[&str] = &[
     "doctor.mjs",
     "modes/_shared.md",
@@ -2388,6 +2497,35 @@ mod tests {
             fs::read_to_string(&external_resume).unwrap(),
             "external evidence"
         );
+    }
+
+    #[test]
+    fn lists_prep_files_newest_first_and_reads_only_inside_readable_folders() {
+        let root = tempfile::tempdir().unwrap();
+        let prep = root.path().join("interview-prep");
+        fs::create_dir_all(prep.join("sessions")).unwrap();
+        fs::write(prep.join("acme-pm.md"), "# Plan").unwrap();
+        fs::write(prep.join("sessions/2026-09-04.md"), "notes").unwrap();
+        fs::write(prep.join("story-bank.md"), "stories").unwrap();
+        fs::write(prep.join(".hidden.md"), "junk").unwrap();
+        fs::write(prep.join("deck.pdf"), b"pdf").unwrap();
+        fs::write(root.path().join("cv.md"), "# CV").unwrap();
+
+        let listed = list_workspace_files_at(root.path(), "interview-prep").unwrap();
+        let paths: Vec<_> = listed.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths.len(), 3);
+        assert!(paths.contains(&"interview-prep/acme-pm.md"));
+        assert!(paths.contains(&"interview-prep/sessions/2026-09-04.md"));
+        assert!(paths.contains(&"interview-prep/story-bank.md"));
+        assert_eq!(listed.iter().find(|f| f.path.ends_with("acme-pm.md")).unwrap().name, "acme-pm.md");
+        assert!(list_workspace_files_at(root.path(), "reports").unwrap().is_empty());
+
+        assert_eq!(read_workspace_file_at(root.path(), "interview-prep/acme-pm.md").unwrap(), "# Plan");
+        assert!(read_workspace_file_at(root.path(), "cv.md").is_err());
+        assert!(read_workspace_file_at(root.path(), "interview-prep/../cv.md").is_err());
+        assert!(read_workspace_file_at(root.path(), "/etc/hosts").is_err());
+        assert!(read_workspace_file_at(root.path(), "interview-prep/missing.md").is_err());
+        assert!(list_workspace_files_at(root.path(), "config").is_err());
     }
 
     #[test]

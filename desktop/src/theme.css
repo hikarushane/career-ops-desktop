@@ -494,6 +494,21 @@ summary:focus-visible {
 .interview-card-header strong { display: block; font: 700 18px var(--font-sans); }
 .interview-card-header span { color: var(--color-text-secondary); font: 500 12px var(--font-sans); }
 .interview-card-actions { display: flex; gap: 8px; }
+/* Files the interview modes wrote, listed under the card that owns them
+   (and once at the bottom for shared material), opening in the report
+   drawer so they read like a report instead of living only in Finder. */
+.prep-files-block { margin-top: 12px; }
+.prep-files-shared { margin-top: 24px; padding-top: 16px; border-top: var(--border-divider); }
+.prep-files-title { margin: 0 0 4px; font: 600 11px var(--font-sans); text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-secondary); }
+.prep-files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.prep-files li { display: flex; align-items: baseline; gap: 12px; font: 400 13px var(--font-sans); }
+.prep-file-date { color: var(--color-text-secondary); font-size: 12px; }
+.file-preview { padding: 20px 24px; }
+.file-preview-path { margin: 0 0 12px; font: 400 12px var(--font-mono); color: var(--color-text-secondary); word-break: break-all; }
+.file-preview-content { font: 400 13px/1.55 var(--font-sans); }
+.file-preview-content pre { overflow-x: auto; padding: 8px 12px; background: var(--color-surface-subtle); border-radius: 8px; font: 400 12px/1.4 var(--font-mono); }
+.file-preview-content table { border-collapse: collapse; }
+.file-preview-content th, .file-preview-content td { border: 1px solid var(--color-border); padding: 4px 8px; text-align: left; }
 
 .interview-workflow-screen { padding: 20px 32px; }
 .interview-workflow-screen h1 { margin: 8px 0 4px; font: 700 18px var(--font-sans); }
@@ -519,6 +534,10 @@ summary:focus-visible {
 .chat-bubble--received > :last-child { margin-bottom: 0; }
 .chat-bubble--received pre { overflow-x: auto; font: 400 12px/1.4 var(--font-mono); }
 .chat-bubble--muted { color: var(--color-text-secondary); font-style: italic; }
+/* Files a turn wrote, listed under its reply as links into the drawer. */
+.chat-artifacts { list-style: none; margin: 0; padding: 0 0 0 14px; display: flex; flex-wrap: wrap; gap: 4px 12px; font: 400 12px var(--font-sans); }
+.jd-preview { margin-top: 12px; }
+.jd-preview .file-preview { padding: 12px 0 0; }
 .chat-activity { max-width: 65%; align-self: flex-start; }
 .chat-activity .agent-activity { margin-top: 0; padding: 10px 14px; background: var(--color-surface-subtle); border-radius: 16px; border-bottom-left-radius: 4px; }
 /* Composer pinned to the bottom of the scrolling pane. */

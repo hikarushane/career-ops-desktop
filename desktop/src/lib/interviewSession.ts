@@ -17,6 +17,8 @@ export type Turn = {
   taskId: string;
   /** The AI's reply once captured; null while the turn runs or if it was lost. */
   reply: string | null;
+  /** Files the turn wrote under interview-prep/ (from the task outcome), openable in the app. */
+  artifacts?: string[];
 };
 
 /** Where this job's evaluation report and JD capture live, so the AI reads them instead of asking. */

@@ -6,6 +6,7 @@ import { openJobUrl } from '../lib/opener';
 import { isError, readReport, type Application, type ReportResult } from '../api';
 import type { TaskRecord } from '../lib/taskStore';
 import StatusSelect from './StatusSelect';
+import JdPreview from './JdPreview';
 
 type Props = {
   root: string;
@@ -170,6 +171,8 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor, onS
             </button>
           )}
         </div>
+
+        {app.reportNumber && <JdPreview root={root} reportNumber={app.reportNumber} />}
 
         {coverFormOpen && !app.coverLetterPath && !coverTask && (
           <form

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import AgentActivity from '../components/AgentActivity';
+import Drawer from '../components/Drawer';
+import FilePreview from '../components/FilePreview';
+import { loadReportWidth, saveReportWidth } from '../lib/splitResize';
 import { cancel, getTask, startTask, useTasks } from '../lib/taskStore';
 import { languageSettings, type LanguageContext, type LanguageSettings, type TaskType } from '../api';
 import {
@@ -60,6 +63,9 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
   const [jobLanguage, setJobLanguage] = useState(initial.jobLanguage ?? '');
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  // A prep file the candidate opened from a reply, shown in the report drawer.
+  const [preview, setPreview] = useState<string | null>(null);
+  const [reportWidth, setReportWidth] = useState(() => loadReportWidth(window.innerWidth || 1366));
   const tasks = useTasks();
 
   useEffect(() => {
@@ -83,7 +89,8 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
       const reply = replyFromTask(task);
       if (reply === null) return t;
       changed = true;
-      return { ...t, reply };
+      const artifacts = (task.outcome?.artifacts ?? []).filter((a) => a.startsWith('interview-prep/'));
+      return { ...t, reply, ...(artifacts.length > 0 ? { artifacts } : {}) };
     });
     if (changed) commit({ ...session, turns });
   }, [tasks, session, commit]);
@@ -210,7 +217,16 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
                 <li key={t.taskId} className="chat-turn">
                   <div className="chat-bubble chat-bubble--sent">{t.user}</div>
                   {t.reply !== null ? (
-                    <div className="chat-bubble chat-bubble--received"><ReactMarkdown>{t.reply}</ReactMarkdown></div>
+                    <>
+                      <div className="chat-bubble chat-bubble--received"><ReactMarkdown>{t.reply}</ReactMarkdown></div>
+                      {t.artifacts && t.artifacts.length > 0 && (
+                        <ul className="chat-artifacts" aria-label="Files written">
+                          {t.artifacts.map((a) => (
+                            <li key={a}><button type="button" className="btn-link" onClick={() => setPreview(a)}>{a}</button></li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   ) : task && (task.state === 'running' || task.state === 'failed') ? (
                     <div className="chat-activity">
                       <AgentActivity task={task} onCancel={() => void cancel(task.taskId)} onRetry={() => void retry()} />
@@ -248,6 +264,15 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
         </>
       )}
       {startError && <p className="intake-error" role="alert">{startError}</p>}
+      <Drawer
+        open={preview !== null}
+        onClose={() => setPreview(null)}
+        width={reportWidth}
+        onResize={setReportWidth}
+        onResizeEnd={() => saveReportWidth(reportWidth)}
+      >
+        {preview && <FilePreview root={root} relative={preview} />}
+      </Drawer>
     </div>
   );
 }
