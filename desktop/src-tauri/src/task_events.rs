@@ -5,10 +5,15 @@ use serde_json::Value;
 pub struct TaskEvent {
     pub task_id: String,
     pub kind: String,
+    /// Short form for the activity feed (truncated to 200 chars).
     pub summary: String,
     pub tool: Option<String>,
     pub target: Option<String>,
     pub is_error: Option<bool>,
+    /// The untruncated text of a `text` or `result` event, for screens that
+    /// show the AI's reply itself (interview sessions) rather than a feed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 fn truncate(text: &str, max: usize) -> String {
@@ -27,7 +32,15 @@ fn event(task_id: &str, kind: &str, summary: String) -> TaskEvent {
         tool: None,
         target: None,
         is_error: None,
+        text: None,
     }
+}
+
+/// A `text`/`result` event: truncated summary for the feed, full text kept.
+fn text_event(task_id: &str, kind: &str, text: &str) -> TaskEvent {
+    let mut e = event(task_id, kind, truncate(text, 200));
+    e.text = Some(text.to_owned());
+    e
 }
 
 fn tool_target(input: &Value) -> Option<String> {
@@ -89,10 +102,10 @@ fn parse_agy(task_id: &str, event_name: &str, value: &Value) -> Option<TaskEvent
         "result" => {
             let result = value.get("result")?;
             let status = result.get("status").and_then(Value::as_str).unwrap_or("");
-            let mut e = event(
+            let mut e = text_event(
                 task_id,
                 "result",
-                truncate(result.get("response").and_then(Value::as_str).unwrap_or(""), 200),
+                result.get("response").and_then(Value::as_str).unwrap_or(""),
             );
             e.is_error = Some(status != "SUCCESS");
             Some(e)
@@ -125,10 +138,10 @@ pub fn parse_line(task_id: &str, line: &str) -> Option<TaskEvent> {
     let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
 
     if value.get("total_cost_usd").is_some() || kind == "result" {
-        let mut e = event(
+        let mut e = text_event(
             task_id,
             "result",
-            truncate(value.get("result").and_then(Value::as_str).unwrap_or(""), 200),
+            value.get("result").and_then(Value::as_str).unwrap_or(""),
         );
         e.is_error = value.get("is_error").and_then(Value::as_bool);
         return Some(e);
@@ -157,7 +170,7 @@ pub fn parse_line(task_id: &str, line: &str) -> Option<TaskEvent> {
                         if text.trim().is_empty() {
                             continue;
                         }
-                        return Some(event(task_id, "text", truncate(text, 200)));
+                        return Some(text_event(task_id, "text", text));
                     }
                     _ => continue,
                 }
@@ -184,10 +197,10 @@ pub fn parse_line(task_id: &str, line: &str) -> Option<TaskEvent> {
                     e.target = Some(truncate(path, 80));
                     Some(e)
                 }
-                Some("agent_message") => Some(event(
+                Some("agent_message") => Some(text_event(
                     task_id,
                     "text",
-                    truncate(item.get("text").and_then(Value::as_str).unwrap_or(""), 200),
+                    item.get("text").and_then(Value::as_str).unwrap_or(""),
                 )),
                 _ => None,
             }
@@ -256,6 +269,23 @@ mod tests {
         let e = parse_line("t", result).unwrap();
         assert_eq!(e.kind, "result");
         assert_eq!(e.is_error, Some(false));
+    }
+
+    #[test]
+    fn keeps_the_full_reply_text_beside_the_truncated_summary() {
+        let long = "x".repeat(600);
+        let claude = format!(r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"{long}"}}]}}}}"#);
+        let e = parse_line("t", &claude).unwrap();
+        assert_eq!(e.summary.chars().count(), 201);
+        assert_eq!(e.text.as_deref(), Some(long.as_str()));
+        let result = format!(r#"{{"type":"result","is_error":false,"result":"{long}","total_cost_usd":0.01}}"#);
+        assert_eq!(parse_line("t", &result).unwrap().text.as_deref(), Some(long.as_str()));
+        let codex = format!(r#"{{"type":"item.completed","item":{{"type":"agent_message","text":"{long}"}}}}"#);
+        assert_eq!(parse_line("t", &codex).unwrap().text.as_deref(), Some(long.as_str()));
+        let agy = format!(r#"{{"event":"result","result":{{"status":"SUCCESS","response":"{long}"}}}}"#);
+        assert_eq!(parse_line("t", &agy).unwrap().text.as_deref(), Some(long.as_str()));
+        let tool = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"x","name":"Read","input":{}}]}}"#;
+        assert!(parse_line("t", tool).unwrap().text.is_none());
     }
 
     #[test]

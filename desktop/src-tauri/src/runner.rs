@@ -247,17 +247,21 @@ fn get_task_def(task_type: &str) -> Option<TaskDef> {
             prompt_template: "Run interview-prep mode for {role} at {company}.",
             required_args: &["company", "role"],
         }),
+        // The three interview modes run as chat turns: `{context}` carries
+        // the intake details on the first turn and the conversation so far
+        // on later ones (built by the desktop's lib/interviewSession.ts).
+        // It is optional — see with_optional_context.
         "interview-plan" => Some(TaskDef {
-            prompt_template: "Run interview/plan mode for the {role} interview at {company}.",
+            prompt_template: "Run interview/plan mode for the {role} interview at {company}.{context}",
             required_args: &["company", "role"],
         }),
         "interview-practice" => Some(TaskDef {
-            prompt_template: "Run interview/practice mode for the {role} role at {company}.",
+            prompt_template: "Run interview/practice mode for the {role} role at {company}.{context}",
             required_args: &["company", "role"],
         }),
         "interview-debrief" => Some(TaskDef {
             prompt_template:
-                "Run interview/debrief mode for the recent interview at {company} for {role}.",
+                "Run interview/debrief mode for the recent interview at {company} for {role}.{context}",
             required_args: &["company", "role"],
         }),
         "profile-generate" => Some(TaskDef {
@@ -430,6 +434,13 @@ pub fn judge_outcome(workspace: &Path, task_type: &str, before: &ArtifactSnapsho
                 TaskOutcome { ok: true, detail: covers[0].clone(), artifacts }
             }
         }
+        // A conversational interview turn may legitimately answer without
+        // touching a file (a question back to the candidate is a reply too),
+        // so the exit status decides success and a written file is a bonus.
+        t if t.starts_with("interview-") => {
+            let detail = artifacts.first().cloned().unwrap_or_else(|| "Replied.".into());
+            TaskOutcome { ok: true, detail, artifacts }
+        }
         _ => {
             let ok = !artifacts.is_empty();
             TaskOutcome {
@@ -521,6 +532,17 @@ fn provider_args(provider_id: &str, options: &ModelOptions) -> Option<Vec<String
         _ => {}
     }
     Some(args)
+}
+
+/// Interview turns carry an optional `{context}`; a turn started without one
+/// (a retry of a task restored from a previous session has no args) must not
+/// render the literal placeholder into the prompt.
+fn with_optional_context(task_type: &str, args: &HashMap<String, String>) -> HashMap<String, String> {
+    let mut out = args.clone();
+    if task_type.starts_with("interview-") {
+        out.entry("context".to_owned()).or_default();
+    }
+    out
 }
 
 fn build_prompt(template: &str, args: &HashMap<String, String>) -> String {
@@ -1118,7 +1140,7 @@ pub fn run_task(
     } else {
         format!(
             "{}\n\n{}",
-            build_prompt(task_def.prompt_template, &input.args),
+            build_prompt(task_def.prompt_template, &with_optional_context(&input.task_type, &input.args)),
             language_instruction
         )
     };
@@ -1318,8 +1340,8 @@ mod tests {
         add_agy_workspace_dir, apply_generation_at, build_prompt, copy_document_sources, create_generation_staging,
         generation_is_complete, get_task_def, inspect_generation, judge_outcome,
         language_context_instruction, packaged_runtime_paths_for_executable, provider_args,
-        render_generation_prompt, snapshot_artifacts, watched_dirs, LanguageContext, ModelOptions,
-        PackagedJsRuntime, RunnerState,
+        render_generation_prompt, snapshot_artifacts, watched_dirs, with_optional_context, LanguageContext,
+        ModelOptions, PackagedJsRuntime, RunnerState,
     };
 
     #[test]
@@ -1867,6 +1889,33 @@ mod tests {
     fn cover_and_pdf_watch_the_output_directory() {
         assert_eq!(watched_dirs("pdf"), &["output"]);
         assert_eq!(watched_dirs("cover"), &["output"]);
+    }
+
+    #[test]
+    fn interview_turn_that_only_replies_is_still_a_success() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("interview-prep")).unwrap();
+        let before = snapshot_artifacts(dir.path(), "interview-plan");
+        let reply_only = judge_outcome(dir.path(), "interview-plan", &before);
+        assert!(reply_only.ok);
+        assert_eq!(reply_only.detail, "Replied.");
+        assert!(reply_only.artifacts.is_empty());
+    }
+
+    #[test]
+    fn interview_prompts_take_an_optional_context_block() {
+        let def = get_task_def("interview-plan").unwrap();
+        let mut args = HashMap::new();
+        args.insert("company".to_owned(), "Acme".to_owned());
+        args.insert("role".to_owned(), "PM".to_owned());
+        let bare = build_prompt(def.prompt_template, &with_optional_context("interview-plan", &args));
+        assert_eq!(bare, "Run interview/plan mode for the PM interview at Acme.");
+        args.insert("context".to_owned(), "\n\nInterview details:\n- Date: 2026-09-10".to_owned());
+        let with = build_prompt(def.prompt_template, &with_optional_context("interview-plan", &args));
+        assert!(with.ends_with("Acme.\n\nInterview details:\n- Date: 2026-09-10"));
+        // Other task types are left alone.
+        let other = with_optional_context("evaluate", &HashMap::new());
+        assert!(!other.contains_key("context"));
     }
 
     #[test]
