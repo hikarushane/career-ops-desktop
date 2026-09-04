@@ -40,6 +40,8 @@ const api = vi.hoisted(() => ({ languageSettings: vi.fn(async () => null) }));
 vi.mock('../api', () => api);
 vi.mock('react-markdown', () => ({ default: (props: unknown) => props }));
 vi.mock('../components/AgentActivity', () => ({ default: (props: unknown) => props }));
+vi.mock('../components/Drawer', () => ({ default: (props: unknown) => props }));
+vi.mock('../components/FilePreview', () => ({ default: (props: unknown) => props }));
 
 const storage: Record<string, string> = {};
 beforeEach(() => {
@@ -67,8 +69,21 @@ function render(props: Partial<Parameters<typeof InterviewWorkflow>[0]> = {}) {
   return InterviewWorkflow({ root: '/w', mode: 'interview-plan', company: 'Acme', role: 'PM', onBack: vi.fn(), ...props }) as Node;
 }
 
-// State order: session, values, message, languages, jobLanguage, starting, startError
+// State order: session, values, message, languages, jobLanguage, starting, startError, preview, reportWidth
 describe('InterviewWorkflow', () => {
+  it('lists the files a turn wrote under its reply and opens one in the drawer', () => {
+    const session: Session = {
+      key: sessionKey('interview-plan', 'Acme', 'PM'), mode: 'interview-plan', company: 'Acme', role: 'PM',
+      turns: [{ user: 'x', taskId: 'task-1', reply: 'Plan written.', artifacts: ['interview-prep/acme-pm.md'] }],
+    };
+    hooks.reset([session]);
+    const tree = render();
+    const link = findAll(tree, (n) => n.props?.className === 'btn-link' && JSON.stringify(n.props?.children) === '"interview-prep/acme-pm.md"')[0];
+    expect(link).toBeDefined();
+    (link.props?.onClick as () => void)();
+    expect(hooks.current()[7]).toBe('interview-prep/acme-pm.md');
+  });
+
   it('opens on the intake form with Start disabled until the required fields are filled', () => {
     hooks.reset();
     let tree = render();

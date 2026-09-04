@@ -398,6 +398,17 @@ export function saveJobCapture(root: string, slug: string, text: string): Promis
   return invoke<string>('save_job_capture', { root, slug, text });
 }
 
+/** A Markdown/text file under interview-prep/, reports/ or jds/ (workspace.rs READABLE_DIRS). */
+export type WorkspaceFile = { path: string; name: string; modified: number };
+
+export function listWorkspaceFiles(root: string, dir: 'interview-prep' | 'reports' | 'jds'): Promise<WorkspaceFile[]> {
+  return invoke<WorkspaceFile[]>('list_workspace_files', { root, dir });
+}
+
+export function readWorkspaceFile(root: string, relative: string): Promise<string> {
+  return invoke<string>('read_workspace_file', { root, relative });
+}
+
 export function contracts() {
   return invokeSidecar<ContractsResult | SidecarError>('contracts');
 }

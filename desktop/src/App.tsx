@@ -375,7 +375,7 @@ export default function App() {
           />
         );
       case 'interview':
-        return <Interview data={data!} onAction={startInterviewWorkflow} />;
+        return <Interview root={root!} data={data!} onAction={startInterviewWorkflow} />;
       case 'interview-workflow': {
         // The job's report and JD capture, so every turn can point the AI at
         // them instead of letting a weaker model ask for the posting again.
