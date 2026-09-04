@@ -113,23 +113,26 @@ async function verifyExecutable(path, label, windows) {
 }
 
 async function verifyFiles({ target, runtime, launcher, launcherProbeFactory, dataService, license, metadata, seed, macApp, verifyAppSignature = true }) {
-  // Check licensing first so corrupt or mismatched licensing produces precise guidance.
-  assert(existsSync(license), `Node.js license is missing: ${license}`);
-  const licenseHash = sha256(license);
-  assert(licenseHash === manifest.licenseSha256,
-    `Node.js license checksum mismatch: expected ${manifest.licenseSha256}, received ${licenseHash}`);
-
   const generated = parseJson(metadata, 'Node.js runtime metadata');
   const selectedTarget = target ?? generated.target;
   const artifact = manifest.artifacts[selectedTarget];
   assert(artifact, `no pinned runtime manifest entry for ${selectedTarget}`);
+
+  // Check licensing before the rest so corrupt or mismatched licensing
+  // produces precise guidance. The Windows archives ship LICENSE with CRLF
+  // line endings, so an artifact may pin its own hash.
+  const expectedLicenseHash = artifact.licenseSha256 ?? manifest.licenseSha256;
+  assert(existsSync(license), `Node.js license is missing: ${license}`);
+  const licenseHash = sha256(license);
+  assert(licenseHash === expectedLicenseHash,
+    `Node.js license checksum mismatch: expected ${expectedLicenseHash}, received ${licenseHash}`);
   assert(generated.schemaVersion === manifest.schemaVersion, 'runtime metadata schema mismatch');
   assert(generated.version === manifest.version, 'runtime metadata version mismatch');
   assert(generated.target === selectedTarget, `runtime target mismatch: expected ${selectedTarget}, received ${generated.target}`);
   assert(generated.architecture === artifact.architecture, 'runtime metadata architecture mismatch');
   assert(generated.archive === artifact.archive, 'runtime archive does not correspond to the target manifest');
   assert(generated.archiveSha256 === artifact.sha256, 'runtime archive checksum does not correspond to the target manifest');
-  assert(generated.licenseSha256 === manifest.licenseSha256, 'runtime metadata license checksum mismatch');
+  assert(generated.licenseSha256 === expectedLicenseHash, 'runtime metadata license checksum mismatch');
   assert(generated.jitless === true, 'runtime metadata does not require --jitless');
 
   const windows = selectedTarget.includes('windows');

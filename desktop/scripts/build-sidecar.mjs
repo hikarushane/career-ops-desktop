@@ -159,9 +159,12 @@ if (process.platform !== 'win32') chmodSync(stagedRuntime, 0o755);
 rmSync(runtimeTarget, { force: true });
 renameSync(stagedRuntime, runtimeTarget);
 
+// The Windows archives ship LICENSE with CRLF line endings, so their hash
+// differs from the tarballs'; an artifact may pin its own value.
+const expectedLicenseHash = artifact.licenseSha256 ?? runtimeManifest.licenseSha256;
 const licenseHash = sha256(stagedLicense);
-if (licenseHash !== runtimeManifest.licenseSha256) {
-  throw new Error(`Node.js license checksum mismatch: expected ${runtimeManifest.licenseSha256}, received ${licenseHash}`);
+if (licenseHash !== expectedLicenseHash) {
+  throw new Error(`Node.js license checksum mismatch: expected ${expectedLicenseHash}, received ${licenseHash}`);
 }
 rmSync(licenseTarget, { force: true });
 renameSync(stagedLicense, licenseTarget);
