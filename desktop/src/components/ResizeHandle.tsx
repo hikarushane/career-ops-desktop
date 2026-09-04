@@ -1,4 +1,5 @@
 import { useRef, type PointerEvent, type RefObject } from 'react';
+import { t } from '../lib/i18n';
 import { reportWidthFromPointer } from '../lib/splitResize';
 
 type Props = {
@@ -49,7 +50,7 @@ export default function ResizeHandle({ containerRef, onResize, onResizeEnd }: Pr
       className="resize-handle"
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize report panel"
+      aria-label={t('Resize report panel')}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

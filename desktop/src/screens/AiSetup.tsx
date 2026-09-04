@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ProviderEntry } from '../api';
 import { detectProviders, getReadyProviders, setPreferredId, installProviderById } from '../lib/providers';
 import { CheckIcon } from '../components/icons';
+import { t } from '../lib/i18n';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 type Props = { onComplete: () => void };
@@ -40,27 +41,28 @@ export default function AiSetup({ onComplete }: Props) {
     setInstall({ id: provider.id, phase: 'installing' });
     const result = await installProviderById(provider.id);
     if (result.ok) {
-      setInstall({ id: provider.id, phase: 'done', message: 'Installed successfully.' });
+      setInstall({ id: provider.id, phase: 'done', message: t('Installed successfully.') });
       await refresh();
     } else {
-      setInstall({ id: provider.id, phase: 'error', message: result.error ?? 'Install failed.' });
+      setInstall({ id: provider.id, phase: 'error', message: result.error ?? t('Install failed.') });
     }
   }, [refresh]);
 
   const ready = getReadyProviders();
 
   if (loading) {
-    return <div className="setup-screen"><p className="animated-dots">Detecting AI providers</p></div>;
+    return <div className="setup-screen"><p className="animated-dots">{t('Detecting AI providers')}</p></div>;
   }
 
   return (
     <div className="setup-screen">
-      <h1>Set up AI</h1>
+      <h1>{t('Set up AI')}</h1>
       <p className="setup-subtitle">
-        CareerOps uses AI to analyse jobs, generate CVs, and prepare interviews.
+        {t('CareerOps uses AI to analyse jobs, generate CVs, and prepare interviews.')}
+        {' '}
         {ready.length > 0
-          ? ' Select a provider below.'
-          : ' Install a provider to get started.'}
+          ? t('Select a provider below.')
+          : t('Install a provider to get started.')}
       </p>
 
       <div className="provider-list">
@@ -70,11 +72,11 @@ export default function AiSetup({ onComplete }: Props) {
               <span className="provider-name">{p.displayName}</span>
               <span className="provider-state">
                 {p.state === 'ready' && <><CheckIcon size={14} /> {p.version}</>}
-                {p.state === 'installed' && 'Installed — needs auth'}
-                {p.state === 'error' && `Error: ${p.error}`}
+                {p.state === 'installed' && t('Installed — needs auth')}
+                {p.state === 'error' && t('Error: {message}', { message: p.error ?? '' })}
                 {p.state === 'not_installed' && (
                   install?.id === p.id && install.phase === 'installing'
-                    ? <span className="animated-dots">Installing</span>
+                    ? <span className="animated-dots">{t('Installing')}</span>
                     : null
                 )}
               </span>
@@ -87,9 +89,9 @@ export default function AiSetup({ onComplete }: Props) {
                   <button
                     className="btn-install"
                     onClick={() => handleInstall(p)}
-                    title={p.installCmd ?? 'Open website'}
+                    title={p.installCmd ?? t('Open website')}
                   >
-                    {p.installCmd ? 'Install' : 'Get it'}
+                    {p.installCmd ? t('Install') : t('Get it')}
                   </button>
                 )
               )}
@@ -105,7 +107,7 @@ export default function AiSetup({ onComplete }: Props) {
         <p className="intake-error" role="alert">
           {install.message}
           {providers.find((p) => p.id === install.id)?.website && (
-            <> — <button className="btn-link" onClick={() => openUrl(providers.find((p) => p.id === install.id)!.website!)}>visit website</button></>
+            <> — <button className="btn-link" onClick={() => openUrl(providers.find((p) => p.id === install.id)!.website!)}>{t('visit website')}</button></>
           )}
         </p>
       )}
@@ -122,18 +124,18 @@ export default function AiSetup({ onComplete }: Props) {
 
       {ready.length === 0 && !install && (
         <p className="setup-hint">
-          Most providers install with a single command.
-          If you already have <strong>Claude Code</strong> or <strong>Codex</strong> installed,
-          click <strong>Refresh</strong> below.
+          {t('Most providers install with a single command.')}
+          {' '}
+          {t('If you already have Claude Code or Codex installed, click Refresh below.')}
         </p>
       )}
 
       <div className="setup-actions">
         <button className="btn-secondary" onClick={refresh} disabled={loading}>
-          Refresh
+          {t('Refresh')}
         </button>
         <button className="btn-primary" disabled={!selected} onClick={confirm}>
-          Continue
+          {t('Continue')}
         </button>
       </div>
     </div>

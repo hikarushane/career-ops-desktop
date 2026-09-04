@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  doctor, isError, listApplications, prepareOnboardingWorkspace,
+  doctor, isError, languageSettings, listApplications, prepareOnboardingWorkspace,
   type Application, type DoctorResult, type ListResult,
 } from './api';
 import { loadActiveRoot, pickWorkspace, saveRoot } from './config';
 import { loadContracts } from './lib/contracts';
+import { defaultUiLanguage, getUiLanguage, loadUiLanguage, saveUiLanguage, setUiLanguage, t, type UiLanguage } from './lib/i18n';
 import type { FilterKey } from './lib/filters';
 import { batchArgs, batchTaskLabel } from './lib/batch';
 import { nextAfterTask } from './lib/batchDriver';
@@ -79,6 +80,10 @@ export default function App() {
   // Jobs clears it. Declared last so the positional useState mocks in
   // App.test.ts keep their existing indices.
   const [pipelineFilter, setPipelineFilter] = useState<FilterKey | undefined>();
+  // Interface language. Held here only so a change re-renders the tree;
+  // t() reads the module-level value. Declared last for the positional
+  // useState mocks in App.test.ts.
+  const [uiLanguage, setUiLanguageState] = useState<UiLanguage>(getUiLanguage());
   const tasks = useTasks();
   const runningTasks = useRunningTasks();
   const batchRunning = runningTasks.some((t) => t.taskType === 'batch');
@@ -105,12 +110,33 @@ export default function App() {
     return r;
   }, [root]);
 
+  const changeUiLanguage = useCallback((language: UiLanguage) => {
+    setUiLanguage(language);
+    setUiLanguageState(language);
+    void saveUiLanguage(language);
+  }, []);
+
   useEffect(() => {
     loadContracts().catch(() => {});
     void initTaskStore();
     loadActiveRoot()
       .then(async (p) => {
         setRoot(p);
+        // A saved interface language wins; a first run follows the
+        // workspace's analysis language so a zh-TW workspace opens in Chinese.
+        const saved = await loadUiLanguage();
+        if (saved) {
+          setUiLanguage(saved);
+          setUiLanguageState(saved);
+        } else if (p) {
+          try {
+            const language = defaultUiLanguage((await languageSettings(p)).analysisLanguage);
+            setUiLanguage(language);
+            setUiLanguageState(language);
+          } catch {
+            // No profile yet (fresh workspace): stay in English until onboarding picks one.
+          }
+        }
         if (!p) return;
         const workspace = await refresh(p);
         if (workspace?.ready) await reload(p);
@@ -304,14 +330,14 @@ export default function App() {
   if (error) {
     return (
       <main className="state-screen">
-        <h1 className="state-title">Cannot reach the sidecar</h1>
+        <h1 className="state-title">{t('Cannot reach the sidecar')}</h1>
         <pre className="state-error">{error}</pre>
       </main>
     );
   }
 
   if (!rootLoaded) {
-    return <main className="state-screen"><p className="state-loading">Loading…</p></main>;
+    return <main className="state-screen"><p className="state-loading">{t('Loading…')}</p></main>;
   }
 
   if (!root) {
@@ -319,26 +345,28 @@ export default function App() {
   }
 
   if (!probe) {
-    return <main className="state-screen"><p className="state-loading">Loading…</p></main>;
+    return <main className="state-screen"><p className="state-loading">{t('Loading…')}</p></main>;
   }
 
   if (!onboarded) {
-    return <Onboarding root={root} onComplete={completeOnboarding} />;
+    return <Onboarding root={root} onComplete={completeOnboarding} onUiLanguageChange={changeUiLanguage} />;
   }
 
   if (!probe.ready) {
     return <EmptyState root={root} missing={probe.missing} onPick={onPick} />;
   }
 
-  if (!data) return <main className="state-screen"><p className="state-loading">Loading…</p></main>;
+  if (!data) return <main className="state-screen"><p className="state-loading">{t('Loading…')}</p></main>;
 
+  // uiLanguage is read here so the nav and every screen below re-render with
+  // the new strings when it changes.
   const NAV: { key: Screen; label: string; Icon: React.ComponentType<{ size?: number }> }[] = [
-    { key: 'home', label: 'Home', Icon: HomeIcon },
-    { key: 'pipeline', label: 'Jobs', Icon: PipelineIcon },
-    { key: 'interview', label: 'Interview', Icon: InterviewIcon },
-    { key: 'progress', label: 'Progress', Icon: ProgressIcon },
-    { key: 'profile', label: 'Settings', Icon: SettingsIcon },
-    { key: 'help', label: 'Help', Icon: HelpIcon },
+    { key: 'home', label: t('Home'), Icon: HomeIcon },
+    { key: 'pipeline', label: t('Jobs'), Icon: PipelineIcon },
+    { key: 'interview', label: t('Interview'), Icon: InterviewIcon },
+    { key: 'progress', label: t('Progress'), Icon: ProgressIcon },
+    { key: 'profile', label: t('Settings'), Icon: SettingsIcon },
+    { key: 'help', label: t('Help'), Icon: HelpIcon },
   ];
 
   function renderScreen() {
@@ -394,7 +422,7 @@ export default function App() {
         );
       }
       case 'profile':
-        return <ProfileSettings root={root!} onWorkspaceChanged={onWorkspaceReady} />;
+        return <ProfileSettings root={root!} onWorkspaceChanged={onWorkspaceReady} uiLanguage={uiLanguage} onUiLanguageChange={changeUiLanguage} />;
       case 'help':
         return <Help root={root!} />;
     }
@@ -424,7 +452,7 @@ export default function App() {
       {workspaceError && (
         <div className="banner workspace-chooser-alert" role="alert">
           <p>{workspaceError}</p>
-          <button type="button" onClick={() => setWorkspaceError(null)}>Dismiss</button>
+          <button type="button" onClick={() => setWorkspaceError(null)}>{t('Dismiss')}</button>
         </div>
       )}
       {renderScreen()}

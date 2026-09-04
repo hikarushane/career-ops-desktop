@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { helpDocument, languageSettings, type HelpDocument } from '../api';
 import { openExternalUrl } from '../lib/opener';
 import { stripHtmlPreamble } from '../lib/helpMarkdown';
+import { t } from '../lib/i18n';
 import { GitHubIcon } from '../components/icons';
 
 type Section = 'scores' | 'scanner' | 'ai-does' | 'ai-doesnt' | 'privacy' | 'troubleshoot' | 'advanced';
@@ -62,22 +63,22 @@ export default function Help({ root }: Props) {
 
   return (
     <div className="help-screen">
-      <h1>Help</h1>
+      <h1>{t('Help')}</h1>
       <div className="help-sections">
         {SECTIONS.map((s) => (
           <div key={s.key} className="help-section">
             <button className="help-section-header" onClick={() => setOpen(open === s.key ? null : s.key)}>
-              <span>{s.title}</span>
+              <span>{t(s.title)}</span>
               <span>{open === s.key ? '−' : '+'}</span>
             </button>
-            {open === s.key && <p className="help-section-body">{s.body}</p>}
+            {open === s.key && <p className="help-section-body">{t(s.body)}</p>}
           </div>
         ))}
       </div>
       <section className="help-readme">
         <div className="help-readme-toolbar">
-          <h2>Full guide</h2>
-          <div className="ai-segment" role="radiogroup" aria-label="Guide language">
+          <h2>{t('Full guide')}</h2>
+          <div className="ai-segment" role="radiogroup" aria-label={t('Guide language')}>
             {GUIDE_LANGUAGES.map((option) => (
               <button
                 key={option.code}
@@ -92,11 +93,11 @@ export default function Help({ root }: Props) {
           </div>
         </div>
         {documentError && <p className="language-error" role="alert">{documentError}</p>}
-        {!document && !documentError && <p className="setup-hint">Loading guide…</p>}
+        {!document && !documentError && <p className="setup-hint">{t('Loading guide…')}</p>}
         {document && (
           <details>
             <summary>
-              {document.fallback ? 'English guide (no guide in this language yet)' : `Guide (${document.language})`}
+              {document.fallback ? t('English guide (no guide in this language yet)') : t('Guide ({language})', { language: document.language })}
             </summary>
             <article className="help-readme-content"><ReactMarkdown>{stripHtmlPreamble(document.markdown)}</ReactMarkdown></article>
           </details>
@@ -108,9 +109,9 @@ export default function Help({ root }: Props) {
           <span>github.com/hikarushane/career-ops-desktop</span>
         </a>
         <p>
-          CareerOps Desktop is a fork of{' '}
+          {t('CareerOps Desktop is a fork of')}{' '}
           <a href={UPSTREAM_REPO_URL} onClick={(e) => { e.preventDefault(); openLink(UPSTREAM_REPO_URL); }}>career-ops</a>
-          {' '}by santifer, which supplies the evaluation modes, scanners and scripts this app drives.
+          {' '}{t('by santifer, which supplies the evaluation modes, scanners and scripts this app drives.')}
         </p>
         {linkError && <p className="intake-error" role="alert">{linkError}</p>}
       </footer>

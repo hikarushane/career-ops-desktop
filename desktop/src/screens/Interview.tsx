@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listWorkspaceFiles, type Application, type ListResult, type WorkspaceFile } from '../api';
 import { fileDate, groupInterviewFiles } from '../lib/interviewFiles';
+import { t } from '../lib/i18n';
 import { loadReportWidth, saveReportWidth } from '../lib/splitResize';
 import { useTasks } from '../lib/taskStore';
 import Drawer from '../components/Drawer';
@@ -44,10 +45,10 @@ export default function Interview({ root, data, onAction }: Props) {
 
   return (
     <div className="interview-screen">
-      <h1>Interviews</h1>
+      <h1>{t('Interviews')}</h1>
 
       {active.length === 0 ? (
-        <p className="empty-hint">No active interviews. Applications in Interview status will appear here.</p>
+        <p className="empty-hint">{t('No active interviews. Applications in Interview status will appear here.')}</p>
       ) : (
         <div className="interview-list">
           {active.map((a) => (
@@ -58,18 +59,18 @@ export default function Interview({ root, data, onAction }: Props) {
               </div>
               <div className="interview-card-actions">
                 <button className="btn-secondary" onClick={() => onAction('interview-plan', a)}>
-                  Prep plan
+                  {t('Prep plan')}
                 </button>
                 <button className="btn-secondary" onClick={() => onAction('interview-practice', a)}>
-                  Practice
+                  {t('Practice')}
                 </button>
                 <button className="btn-secondary" onClick={() => onAction('interview-debrief', a)}>
-                  Debrief
+                  {t('Debrief')}
                 </button>
               </div>
               {(groups.byCompany[a.company]?.length ?? 0) > 0 && (
                 <div className="prep-files-block">
-                  <p className="prep-files-title">Prep files</p>
+                  <p className="prep-files-title">{t('Prep files')}</p>
                   {fileList(groups.byCompany[a.company])}
                 </div>
               )}
@@ -81,8 +82,8 @@ export default function Interview({ root, data, onAction }: Props) {
       {filesError && <p className="intake-error" role="alert">{filesError}</p>}
       {groups.shared.length > 0 && (
         <section className="prep-files-block prep-files-shared">
-          <p className="prep-files-title">Shared prep files</p>
-          <p className="setup-hint">Story bank, question bank and other material the interview modes keep across companies.</p>
+          <p className="prep-files-title">{t('Shared prep files')}</p>
+          <p className="setup-hint">{t('Story bank, question bank and other material the interview modes keep across companies.')}</p>
           {fileList(groups.shared)}
         </section>
       )}

@@ -1,4 +1,5 @@
 import { statusLabel } from '../lib/filters';
+import { t } from '../lib/i18n';
 
 /**
  * Read-only status pill. DESIGN.md §5.9: 13px SemiBold, 25px fixed height,
@@ -15,7 +16,7 @@ export default function StatusChip({ normStatus, status }: { normStatus: string;
         color: `var(--status-${normStatus}-on, var(--color-text-primary))`,
       }}
     >
-      {statusLabel(normStatus) || status}
+      {t(statusLabel(normStatus) || status)}
     </span>
   );
 }

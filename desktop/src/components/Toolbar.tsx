@@ -1,4 +1,5 @@
 import { TABS, type FilterKey, type SortKey, type ViewMode } from '../lib/filters';
+import { t } from '../lib/i18n';
 
 type Props = {
   filter: FilterKey;
@@ -15,20 +16,20 @@ type Props = {
 export default function Toolbar(p: Props) {
   return (
     <div className="toolbar">
-      {TABS.map((t) => (
+      {TABS.map((tab) => (
         <button
-          key={t.key}
+          key={tab.key}
           className="tab"
-          aria-pressed={p.filter === t.key}
-          onClick={() => p.onFilter(t.key)}
+          aria-pressed={p.filter === tab.key}
+          onClick={() => p.onFilter(tab.key)}
         >
-          {t.label} <span style={{ opacity: 0.6 }}>{p.counts[t.key]}</span>
+          {t(tab.label)} <span style={{ opacity: 0.6 }}>{p.counts[tab.key]}</span>
         </button>
       ))}
 
       <input
         type="search"
-        placeholder="Search company, role, notes"
+        placeholder={t('Search company, role, notes')}
         value={p.query}
         onChange={(e) => p.onQuery(e.target.value)}
         style={{ marginLeft: 'auto', minWidth: 220 }}
@@ -39,15 +40,15 @@ export default function Toolbar(p: Props) {
       {p.filter !== 'inbox' && (
         <>
           <select value={p.sort} onChange={(e) => p.onSort(e.target.value as SortKey)}>
-            <option value="score">Sort: score</option>
-            <option value="date">Sort: date</option>
-            <option value="company">Sort: company</option>
-            <option value="status">Sort: status</option>
+            <option value="score">{t('Sort: score')}</option>
+            <option value="date">{t('Sort: date')}</option>
+            <option value="company">{t('Sort: company')}</option>
+            <option value="status">{t('Sort: status')}</option>
           </select>
 
           <select value={p.view} onChange={(e) => p.onView(e.target.value as ViewMode)}>
-            <option value="grouped">Grouped</option>
-            <option value="flat">Flat</option>
+            <option value="grouped">{t('Grouped')}</option>
+            <option value="flat">{t('Flat')}</option>
           </select>
         </>
       )}

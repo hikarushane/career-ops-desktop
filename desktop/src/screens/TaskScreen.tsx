@@ -1,5 +1,6 @@
 import { useCallback, type ReactNode } from 'react';
 import AgentActivity from '../components/AgentActivity';
+import { t } from '../lib/i18n';
 import { cancel, useTask } from '../lib/taskStore';
 
 type Props = {
@@ -21,7 +22,7 @@ export default function TaskScreen({ taskId, title, onRetry, children, doneActio
 
   return (
     <div className="eval-screen">
-      {onBack && <button type="button" className="btn-ghost screen-back" onClick={onBack}>&larr; Back</button>}
+      {onBack && <button type="button" className="btn-ghost screen-back" onClick={onBack}>&larr; {t('Back')}</button>}
       <h1>{title}</h1>
       {children}
       {task && <AgentActivity task={task} onCancel={() => void handleCancel()} onRetry={onRetry} />}

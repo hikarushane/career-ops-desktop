@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { t } from '../lib/i18n';
 import { CloseIcon } from './icons';
 import ResizeHandle from './ResizeHandle';
 
@@ -26,7 +27,7 @@ export default function Drawer({ open, onClose, width, onResize, onResizeEnd, ch
       <div className="drawer-backdrop" onClick={onClose} />
       <aside className="drawer" role="dialog" aria-modal="true" style={{ '--report-width': `${width}px` } as CSSProperties}>
         <ResizeHandle onResize={onResize} onResizeEnd={onResizeEnd} />
-        <button type="button" className="drawer-close" onClick={onClose} aria-label="Close">
+        <button type="button" className="drawer-close" onClick={onClose} aria-label={t('Close')}>
           <CloseIcon />
         </button>
         <div className="drawer-content">{children}</div>

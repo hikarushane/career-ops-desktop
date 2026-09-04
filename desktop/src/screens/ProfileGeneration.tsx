@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { applyGeneration, discardGeneration, languageSettings, type GenerationResult, type GenerationTarget } from '../api';
 import { cancelTask, generateProfile, type GenerationFeedback } from '../lib/runner';
 import { preferencesToPrompt, type JobPreferences } from '../lib/jobPreferences';
+import { t } from '../lib/i18n';
 import { CheckIcon } from '../components/icons';
 
 type Props = {
@@ -147,15 +148,15 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
 
   // Top-left Back on every phase: same as Skip/Cancel — cancels the run and
   // discards the staged draft, nothing reaches the workspace.
-  const back = <button type="button" className="btn-ghost screen-back" onClick={skip} disabled={applying}>&larr; Back</button>;
+  const back = <button type="button" className="btn-ghost screen-back" onClick={skip} disabled={applying}>&larr; {t('Back')}</button>;
 
   if (phase === 'running') {
     return (
       <div className="setup-screen">
         {back}
-        <h1><span className="animated-dots">{copy.running}</span></h1>
-        <p className="setup-subtitle">{copy.runningHint}</p>
-        <p className="setup-hint" role="status" aria-live="polite">{`${written.length} of ${TARGETS.length} files written`}</p>
+        <h1><span className="animated-dots">{t(copy.running)}</span></h1>
+        <p className="setup-subtitle">{t(copy.runningHint)}</p>
+        <p className="setup-hint" role="status" aria-live="polite">{t('{n} of {m} files written', { n: written.length, m: TARGETS.length })}</p>
         <div className="profile-gen-steps">
           {TARGETS.map((file) => {
             const done = written.includes(file);
@@ -169,7 +170,7 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
           })}
         </div>
         <div className="setup-actions">
-          <button className="btn-ghost" onClick={skip}>{copy.skip}</button>
+          <button className="btn-ghost" onClick={skip}>{t(copy.skip)}</button>
         </div>
       </div>
     );
@@ -179,12 +180,12 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
     return (
       <div className="setup-screen">
         {back}
-        <h1>Generation failed</h1>
-        <p className="setup-subtitle">Nothing was written to your workspace. You can try again or skip this step.</p>
+        <h1>{t('Generation failed')}</h1>
+        <p className="setup-subtitle">{t('Nothing was written to your workspace. You can try again or skip this step.')}</p>
         {error && <pre className="intake-error" role="alert">{error}</pre>}
         <div className="setup-actions">
-          <button className="btn-primary" onClick={regenerate}>Try again</button>
-          <button className="btn-ghost" onClick={skip}>{copy.skip}</button>
+          <button className="btn-primary" onClick={regenerate}>{t('Try again')}</button>
+          <button className="btn-ghost" onClick={skip}>{t(copy.skip)}</button>
         </div>
       </div>
     );
@@ -195,14 +196,14 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
   return (
     <div className="setup-screen generation-preview">
       {back}
-      <h1>{copy.review}</h1>
+      <h1>{t(copy.review)}</h1>
       <p className="setup-subtitle">
         {result.complete
-          ? copy.complete
-          : 'Some files are missing or did not pass validation. You can still apply the ones that look right, or regenerate.'}
+          ? t(copy.complete)
+          : t('Some files are missing or did not pass validation. You can still apply the ones that look right, or regenerate.')}
       </p>
 
-      <div className="generation-tabs" role="tablist" aria-label="Generated files">
+      <div className="generation-tabs" role="tablist" aria-label={t('Generated files')}>
         {result.files.map((file) => (
           <button
             key={file.path}
@@ -212,34 +213,34 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
             onClick={() => setSelected(file.path)}
           >
             {file.path}
-            {!file.valid && <span className="generation-tab-flag" aria-label="Needs attention">!</span>}
+            {!file.valid && <span className="generation-tab-flag" aria-label={t('Needs attention')}>!</span>}
           </button>
         ))}
       </div>
 
       {current.issue && <p className="intake-error" role="alert">{current.path}: {current.issue}</p>}
-      <pre className="generation-file" role="tabpanel">{current.content ?? '(not written)'}</pre>
+      <pre className="generation-file" role="tabpanel">{current.content ?? t('(not written)')}</pre>
 
       {error && <p className="intake-error" role="alert">{error}</p>}
 
       <div className="setup-actions">
         <button className="btn-primary" onClick={apply} disabled={applying || !result.files.some((file) => file.content !== null)}>
-          {applying ? <span className="animated-dots">Applying</span> : 'Apply'}
+          {applying ? <span className="animated-dots">{t('Applying')}</span> : t('Apply')}
         </button>
-        <button className="btn-secondary" onClick={() => setFeedbackOpen(true)} disabled={applying}>Regenerate with feedback…</button>
-        <button className="btn-secondary" onClick={regenerate} disabled={applying}>Regenerate from scratch</button>
-        <button className="btn-ghost" onClick={skip} disabled={applying}>{copy.skip}</button>
+        <button className="btn-secondary" onClick={() => setFeedbackOpen(true)} disabled={applying}>{t('Regenerate with feedback…')}</button>
+        <button className="btn-secondary" onClick={regenerate} disabled={applying}>{t('Regenerate from scratch')}</button>
+        <button className="btn-ghost" onClick={skip} disabled={applying}>{t(copy.skip)}</button>
       </div>
 
       {feedbackOpen && (
-        <div className="feedback-dialog" role="dialog" aria-label="What should change?">
+        <div className="feedback-dialog" role="dialog" aria-label={t('What should change?')}>
           <label>
-            <span>Tell the AI what to change</span>
-            <textarea rows={4} value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)} placeholder="Shorter summary, add the 2023 project, use British spelling" />
+            <span>{t('Tell the AI what to change')}</span>
+            <textarea rows={4} value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)} placeholder={t('Shorter summary, add the 2023 project, use British spelling')} />
           </label>
           <div className="setup-actions">
-            <button className="btn-primary" onClick={regenerateWithFeedback} disabled={!feedbackText.trim()}>Regenerate</button>
-            <button className="btn-ghost" onClick={() => setFeedbackOpen(false)}>Cancel</button>
+            <button className="btn-primary" onClick={regenerateWithFeedback} disabled={!feedbackText.trim()}>{t('Regenerate')}</button>
+            <button className="btn-ghost" onClick={() => setFeedbackOpen(false)}>{t('Cancel')}</button>
           </div>
         </div>
       )}

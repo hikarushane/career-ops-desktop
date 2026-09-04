@@ -1,3 +1,4 @@
+import { t } from '../lib/i18n';
 import type { UpdateState } from '../lib/updater';
 
 type Props = {
@@ -12,10 +13,10 @@ export default function UpdateBadge({ state, onClick }: Props) {
     <button
       className="update-badge"
       onClick={onClick}
-      aria-label={`Update available: ${state.availableVersion}`}
+      aria-label={t('Update available: {version}', { version: state.availableVersion ?? '' })}
     >
       <span className="update-badge-dot" />
-      <span>Update</span>
+      <span>{t('Update')}</span>
     </button>
   );
 }

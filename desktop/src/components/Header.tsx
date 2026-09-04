@@ -1,6 +1,7 @@
 import { FolderIcon, ReloadIcon } from './icons';
 import TaskChip from './TaskChip';
 import UpdateBadge from './UpdateBadge';
+import { t } from '../lib/i18n';
 import type { UpdateState } from '../lib/updater';
 import type { TaskRecord } from '../lib/taskStore';
 
@@ -35,10 +36,10 @@ export default function Header({
       <div className="app-header-right">
         <div className="app-header-utilities">
           <TaskChip tasks={tasks} onOpen={onOpenTask} onDismiss={onDismissTask} />
-          <button type="button" className="icon-button" onClick={onReload} title="Reload" aria-label="Reload">
+          <button type="button" className="icon-button" onClick={onReload} title={t('Reload')} aria-label={t('Reload')}>
             <ReloadIcon />
           </button>
-          <button type="button" className="icon-button" onClick={onChangeFolder} title="Change folder" aria-label="Change folder">
+          <button type="button" className="icon-button" onClick={onChangeFolder} title={t('Change folder')} aria-label={t('Change folder')}>
             <FolderIcon />
           </button>
           {updateState && onUpdateClick && (
