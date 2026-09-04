@@ -13,7 +13,8 @@ import { openWorkspaceFolder } from '../lib/workspace';
 import AnalysisLanguageField from '../components/AnalysisLanguageField';
 import WorkspaceSettings from './WorkspaceSettings';
 import ProfileGeneration from './ProfileGeneration';
-import { EMPTY_PREFERENCES } from '../lib/jobPreferences';
+import JobPreferences from './JobPreferences';
+import { EMPTY_PREFERENCES, loadPreferences, savePreferences, type JobPreferences as Preferences } from '../lib/jobPreferences';
 
 
 type Props = {
@@ -37,6 +38,11 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [rawFilesError, setRawFilesError] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
+  // Job Search tab: the remembered answers, and whether the AI is rewriting
+  // the targeting files from them. Declared last so the positional useState
+  // mocks in ProfileSettings.test.ts keep their existing indices.
+  const [preferences, setPreferences] = useState<Preferences>(EMPTY_PREFERENCES);
+  const [updatingProfile, setUpdatingProfile] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -45,8 +51,14 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
       getModel().then(setModelState),
       getEffort().then(setEffortState),
       getFastMode().then(setFastState),
+      loadPreferences(root).then(setPreferences),
     ]).catch(() => {}).finally(() => setSettingsLoaded(true));
-  }, []);
+  }, [root]);
+
+  const updateProfile = useCallback(() => {
+    void savePreferences(root, preferences);
+    setUpdatingProfile(true);
+  }, [root, preferences]);
 
   useEffect(() => {
     if (tab !== 'ai' || !preferredId) return;
@@ -161,15 +173,32 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
           />
         )}
 
-        {tab === 'preferences' && (
+        {tab === 'preferences' && !updatingProfile && (
           <div>
             <h2>Job Search Preferences</h2>
-            <p>Target roles, locations, remote preference, and salary expectations.</p>
+            <p>Target roles, locations, relocation, and salary expectations.</p>
             <p className="setup-hint">
-              These settings are stored in <code>config/profile.yml</code> and <code>modes/_profile.md</code>.
+              Updating asks the AI to rewrite <code>config/profile.yml</code>, <code>modes/_profile.md</code> and{' '}
+              <code>portals.yml</code> from these answers. You review the result before anything is applied; <code>cv.md</code> is not touched.
             </p>
+            <JobPreferences
+              compact
+              value={preferences}
+              onChange={setPreferences}
+              onContinue={updateProfile}
+              continueLabel="Update profile with these preferences"
+            />
             <AnalysisLanguageField root={root} />
           </div>
+        )}
+        {tab === 'preferences' && updatingProfile && (
+          <ProfileGeneration
+            root={root}
+            mode="update"
+            preferences={preferences}
+            onComplete={() => setUpdatingProfile(false)}
+            onSkip={() => setUpdatingProfile(false)}
+          />
         )}
 
         {tab === 'sources' && (

@@ -134,12 +134,18 @@ function describeProviderFailure(exitCode: number | null, stderr: string[], stdo
   return parts.join('\n');
 }
 
+/**
+ * Runs a staged profile generation and resolves with the review payload.
+ * `profile-generate` writes all four profile files from documents/;
+ * `profile-update` rewrites only the targeting files from new preferences.
+ */
 export function generateProfile(
   root: string,
   preferences: string,
   analysisLanguage: string,
   callbacks?: GenerateProfileCallbacks,
   feedback?: GenerationFeedback,
+  taskType: 'profile-generate' | 'profile-update' = 'profile-generate',
 ): Promise<GenerationResult> {
   return new Promise<GenerationResult>((resolve, reject) => {
     const stdout: string[] = [];
@@ -156,7 +162,7 @@ export function generateProfile(
     void listen<GenerationProgressEvent>('generation-progress', (e) => handleProgress(e.payload))
       .then((unlisten) => { unlistenProgress = unlisten; });
 
-    void runTask('profile-generate', { preferences, analysisLanguage, ...feedbackArgs(feedback) }, root, {
+    void runTask(taskType, { preferences, analysisLanguage, ...feedbackArgs(feedback) }, root, {
       onStarted: (id) => {
         taskId = id;
         callbacks?.onStarted?.(id);

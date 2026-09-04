@@ -4,7 +4,7 @@ import BackgroundImport, { type BackgroundImportResult } from './BackgroundImpor
 import JobPreferences from './JobPreferences';
 import ProfileGeneration from './ProfileGeneration';
 import AnalysisLanguageField from '../components/AnalysisLanguageField';
-import { EMPTY_PREFERENCES, type JobPreferences as Preferences } from '../lib/jobPreferences';
+import { EMPTY_PREFERENCES, savePreferences, type JobPreferences as Preferences } from '../lib/jobPreferences';
 import type { StagedIntakeFile } from '../api';
 
 type Props = { root: string; onComplete: () => void };
@@ -57,7 +57,11 @@ export default function Onboarding({ root, onComplete }: Props) {
       <JobPreferences
         value={preferences}
         onChange={setPreferences}
-        onContinue={() => setStep(staged.length > 0 ? 'generating' : 'ready')}
+        onContinue={() => {
+          // Remembered so Settings > Job Search reopens on these answers.
+          void savePreferences(root, preferences);
+          setStep(staged.length > 0 ? 'generating' : 'ready');
+        }}
       />
     );
   } else if (step === 'generating') {
