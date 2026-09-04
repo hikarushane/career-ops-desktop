@@ -55,6 +55,18 @@ func TestFetchPostingGenericHTMLExtractsMain(t *testing.T) {
 	}
 }
 
+func TestFetchPostingReportsBotWallsAsBlocked(t *testing.T) {
+	for _, status := range []int{401, 403} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(status) }))
+		_, err := fetchPosting(srv.URL, srv.Client())
+		srv.Close()
+		var fe *fetchError
+		if !errors.As(err, &fe) || fe.code != "blocked" || !strings.Contains(fe.message, "blocks automatic reading") {
+			t.Fatalf("status %d: want blocked with explanation, got %v", status, err)
+		}
+	}
+}
+
 func TestFetchPostingBlockedOnShortOrLoginWall(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`<html><body><main>Sign in to continue</main></body></html>`)) }))
 	defer srv.Close()
