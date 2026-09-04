@@ -376,7 +376,10 @@ export default function App() {
         );
       case 'interview':
         return <Interview data={data!} onAction={startInterviewWorkflow} />;
-      case 'interview-workflow':
+      case 'interview-workflow': {
+        // The job's report and JD capture, so every turn can point the AI at
+        // them instead of letting a weaker model ask for the posting again.
+        const iwApp = data!.applications.find((a) => a.company === iwCompany && a.role === iwRole);
         return (
           <InterviewWorkflow
             key={activeTaskId ?? 'new'}
@@ -384,10 +387,12 @@ export default function App() {
             mode={iwMode}
             company={iwCompany}
             role={iwRole}
+            report={iwApp ? { reportPath: iwApp.reportPath, reportNumber: iwApp.reportNumber } : undefined}
             initialTaskId={activeTaskId}
             onBack={() => setScreen('interview')}
           />
         );
+      }
       case 'profile':
         return <ProfileSettings root={root!} onWorkspaceChanged={onWorkspaceReady} />;
       case 'help':

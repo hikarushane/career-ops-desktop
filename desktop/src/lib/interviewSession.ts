@@ -19,6 +19,9 @@ export type Turn = {
   reply: string | null;
 };
 
+/** Where this job's evaluation report and JD capture live, so the AI reads them instead of asking. */
+export type JobFiles = { reportPath?: string; reportNumber?: string };
+
 export type Session = {
   key: string;
   mode: InterviewMode;
@@ -26,6 +29,7 @@ export type Session = {
   role: string;
   turns: Turn[];
   jobLanguage?: string;
+  files?: JobFiles;
 };
 
 export type IntakeField = {
@@ -93,21 +97,31 @@ function quoted(text: string): string {
   return text.length > MAX_QUOTED_REPLY ? `${text.slice(0, MAX_QUOTED_REPLY)}…` : text;
 }
 
-const CHAT_RULES = 'The candidate is talking to you through a chat window and will answer there; do not stop to ask for details already given. Reply in the language the candidate writes in; keep the files you write in the job language as the mode specifies.';
+const CHAT_RULES = 'The candidate is talking to you through a chat window and will answer there; do not stop to ask for details already given, and never ask for the job description — it is in the files listed above and in the workspace. Reply in the language the candidate writes in; keep the files you write in the job language as the mode specifies.';
+
+/** Points every turn at the job's report and JD capture (blank when the row has neither). */
+export function filesBlock(files?: JobFiles): string {
+  if (!files?.reportPath && !files?.reportNumber) return '';
+  const lines = ['Files for this job — read them before anything else; the job description is there:'];
+  if (files.reportPath) lines.push(`- Evaluation report: ${files.reportPath}`);
+  if (files.reportNumber) lines.push(`- JD capture: run \`node jd-capture.mjs ${files.reportNumber}\` to resolve it under jds/, or use the report's JD section`);
+  return `\n\n${lines.join('\n')}`;
+}
 
 /**
  * The `{context}` block for a turn. First turn: the intake details. Later
  * turns: the exchange so far plus the new message, with instructions to
- * continue rather than restart.
+ * continue rather than restart. The job's files are named every time.
  */
-export function buildContext(turns: Turn[], message: string): string {
+export function buildContext(turns: Turn[], message: string, files?: JobFiles): string {
+  const pointers = filesBlock(files);
   if (turns.length === 0) {
-    return `\n\nDetails provided by the candidate:\n${message}\n\n${CHAT_RULES} Do the mode's work, then reply with a concise summary of what you wrote and at most three questions whose answers would improve it.`;
+    return `${pointers}\n\nDetails provided by the candidate:\n${message}\n\n${CHAT_RULES} Do the mode's work, then reply with a concise summary of what you wrote and at most three questions whose answers would improve it.`;
   }
   const transcript = turns
     .map((t) => `Candidate:\n${t.user}\n\nYou:\n${quoted(t.reply ?? '(reply not captured)')}`)
     .join('\n\n');
-  return `\n\nThis is a continuing conversation. Transcript so far:\n\n${transcript}\n\nThe candidate now says:\n${message}\n\n${CHAT_RULES} Continue the mode's workflow from where the conversation left off: update the prep files if this changes them, and answer the candidate directly. Do not repeat the whole plan.`;
+  return `${pointers}\n\nThis is a continuing conversation. Transcript so far:\n\n${transcript}\n\nThe candidate now says:\n${message}\n\n${CHAT_RULES} Continue the mode's workflow from where the conversation left off: update the prep files if this changes them, and answer the candidate directly. Do not repeat the whole plan.`;
 }
 
 /** The AI's reply for a finished turn: the final result text, else the last text block. */

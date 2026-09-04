@@ -6,7 +6,7 @@ import { languageSettings, type LanguageContext, type LanguageSettings, type Tas
 import {
   INTAKE_FIELDS, buildContext, findSession, findSessionByTask, intakeComplete, intakeMessage,
   loadSessions, replyFromTask, saveSessions, sessionKey, upsertSession,
-  type IntakeField, type InterviewMode, type Session,
+  type IntakeField, type InterviewMode, type JobFiles, type Session,
 } from '../lib/interviewSession';
 
 type Props = {
@@ -14,6 +14,8 @@ type Props = {
   mode: InterviewMode;
   company: string;
   role: string;
+  /** The job's report and JD capture, named in every turn's prompt. */
+  report?: JobFiles;
   initialTaskId?: string | null;
   onBack: () => void;
 };
@@ -29,26 +31,27 @@ const TITLES: Record<InterviewMode, string> = {
  * The first turn is an intake form (what the mode's Inputs section needs);
  * every later message is a new agent turn carrying the exchange so far.
  */
-export default function InterviewWorkflow({ root, mode, company, role, initialTaskId, onBack }: Props) {
+export default function InterviewWorkflow({ root, mode, company, role, report, initialTaskId, onBack }: Props) {
   // A reopen from the header chip only carries a task id; find its session
   // by that, else by mode/company/role, else start fresh. A task with no
   // stored session (storage cleared) still gets a one-turn session so its
-  // activity shows.
+  // activity shows. The job's files are refreshed from props when known.
   const initial = useMemo<Session>(() => {
     const sessions = loadSessions(root);
+    const files = report?.reportPath || report?.reportNumber ? report : undefined;
     const byTask = initialTaskId ? findSessionByTask(sessions, initialTaskId) : null;
-    if (byTask) return byTask;
+    if (byTask) return { ...byTask, files: files ?? byTask.files };
     const task = initialTaskId ? getTask(initialTaskId) : null;
     const c = company || task?.args.company || '';
     const r = role || task?.args.role || '';
     const key = sessionKey(mode, c, r);
     const stored = findSession(sessions, key);
-    if (stored && !initialTaskId) return stored;
+    if (stored && !initialTaskId) return { ...stored, files: files ?? stored.files };
     return {
-      key, mode, company: c, role: r,
+      key, mode, company: c, role: r, files,
       turns: initialTaskId ? [{ user: task?.label ?? 'Reopened task', taskId: initialTaskId, reply: null }] : (stored?.turns ?? []),
     };
-  }, [root, mode, company, role, initialTaskId]);
+  }, [root, mode, company, role, report, initialTaskId]);
 
   const [session, setSession] = useState<Session>(initial);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -100,7 +103,7 @@ export default function InterviewWorkflow({ root, mode, company, role, initialTa
     setStartError(null);
     setStarting(true);
     try {
-      const context = buildContext(session.turns, text);
+      const context = buildContext(session.turns, text, session.files);
       const id = await startTask(
         mode as TaskType,
         { company: session.company, role: session.role, context },
@@ -130,7 +133,7 @@ export default function InterviewWorkflow({ root, mode, company, role, initialTa
         mode as TaskType,
         current?.args && Object.keys(current.args).length > 0
           ? current.args
-          : { company: session.company, role: session.role, context: buildContext(session.turns.slice(0, -1), lastTurn.user) },
+          : { company: session.company, role: session.role, context: buildContext(session.turns.slice(0, -1), lastTurn.user, session.files) },
         root,
         current?.label ?? `${TITLES[mode]} · ${session.company}`,
         current?.languageContext ?? languageContext(),
