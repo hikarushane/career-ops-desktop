@@ -4,7 +4,7 @@ import { BATCH_LIMIT, batchArgs, batchTaskLabel, processPendingLabel } from './b
 describe('batch sizing', () => {
   it('evaluates five entries per agent turn', () => {
     expect(BATCH_LIMIT).toBe(5);
-    expect(batchArgs()).toEqual({ limit: '3' });
+    expect(batchArgs()).toEqual({ limit: '5' });
   });
 
   it('labels the button as evaluating everything, since the desktop chains turns', () => {

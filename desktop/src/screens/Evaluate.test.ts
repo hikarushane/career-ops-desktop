@@ -211,7 +211,7 @@ describe('Evaluate', () => {
     expect(tree.props?.onCancelled).toBe(onDone);
 
     await tree.props?.onRetry?.();
-    expect(store.startTask).toHaveBeenCalledWith('batch', { limit: '3' }, '/w', 'Batch (3 pending)');
+    expect(store.startTask).toHaveBeenCalledWith('batch', { limit: '5' }, '/w', 'Batch (3 pending)');
   });
 
   it('retries a reopened (failed) evaluate task with its stored args, not a re-derived start', async () => {

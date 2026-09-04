@@ -9,9 +9,8 @@ import { t } from './i18n';
 
 export const BATCH_LIMIT = 5;
 
-// TESTING OVERRIDE: cap at 3 per press; revert to BATCH_LIMIT before release
 export function batchArgs(): Record<string, string> {
-  return { limit: '3' };
+  return { limit: String(BATCH_LIMIT) };
 }
 
 /**
