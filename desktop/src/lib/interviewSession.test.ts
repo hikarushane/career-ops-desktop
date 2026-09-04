@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  buildContext, findSession, findSessionByTask, intakeComplete, intakeMessage, loadSessions,
+  buildContext, findSession, findSessionByTask, intakeComplete, intakeMessage, loadSessions, maskTime,
   replyFromTask, saveSessions, sessionKey, upsertSession, type Session, type Turn,
 } from './interviewSession';
 import type { TaskRecord } from './taskStore';
@@ -20,6 +20,20 @@ describe('intake', () => {
     expect(intakeComplete('interview-plan', { date: '2026-09-10', time: '14:00' })).toBe(true);
     expect(intakeMessage('interview-plan', { date: '2026-09-10', time: '14:00', interviewers: '', notes: 'phone' }))
       .toBe('- Interview date: 2026-09-10\n- Start time: 14:00\n- Anything else: phone');
+  });
+
+  it('masks the start time as HH:MM while typing and only accepts a real time', () => {
+    expect(maskTime('1')).toBe('1');
+    expect(maskTime('14')).toBe('14');
+    expect(maskTime('143')).toBe('14:3');
+    expect(maskTime('1430')).toBe('14:30');
+    expect(maskTime('14:30')).toBe('14:30');
+    expect(maskTime('9:05')).toBe('9:05');
+    expect(maskTime('14:')).toBe('14:');
+    expect(maskTime('abc')).toBe('');
+    expect(intakeComplete('interview-plan', { date: '2026-09-10', time: '14' })).toBe(false);
+    expect(intakeComplete('interview-plan', { date: '2026-09-10', time: '25:00' })).toBe(false);
+    expect(intakeComplete('interview-plan', { date: '2026-09-10', time: '9:05' })).toBe(true);
   });
 
   it('requires a debrief text and a round type for practice', () => {
