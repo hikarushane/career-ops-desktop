@@ -170,6 +170,33 @@ describe('Evaluate', () => {
       '/w', 'NewCo', undefined);
   });
 
+  it('hands the finished report path to onDone so the Jobs board can open that card', () => {
+    store.getTask.mockReturnValue({
+      taskId: 'task-e', taskType: 'evaluate', label: 'Acme', startedAt: 0, state: 'done', events: [], rawLog: [],
+      outcome: { ok: true, detail: 'reports/019-acme-2026-09-04.md', artifacts: ['jds/019-acme.md', 'reports/019-acme-2026-09-04.md'] },
+      exitCode: 0, args: {},
+    });
+    hooks.reset(['', '', { kind: 'idle' }, 'task-e', null, false, null, '', null]);
+    hooks.beginRender();
+    const onDone = vi.fn();
+    const tree = Evaluate({ root: '/w', initialTaskId: 'task-e', onDone }) as ElementNode;
+    (tree.props as { doneAction?: { onClick: () => void } }).doneAction?.onClick();
+    expect(onDone).toHaveBeenCalledWith('reports/019-acme-2026-09-04.md');
+  });
+
+  it('hands no report path back after a batch turn, which writes several', () => {
+    store.getTask.mockReturnValue({
+      taskId: 'task-b', taskType: 'batch', label: 'Batch', startedAt: 0, state: 'done', events: [], rawLog: [],
+      outcome: { ok: true, detail: 'Processed 3 of 3', artifacts: ['reports/020-a.md', 'reports/021-b.md'] }, exitCode: 0, args: {},
+    });
+    hooks.reset(['', '', { kind: 'idle' }, 'task-b', null, false, null, '', null]);
+    hooks.beginRender();
+    const onDone = vi.fn();
+    const tree = Evaluate({ root: '/w', initialTaskId: 'task-b', onDone }) as ElementNode;
+    (tree.props as { doneAction?: { onClick: () => void } }).doneAction?.onClick();
+    expect(onDone).toHaveBeenCalledWith(undefined);
+  });
+
   it('shows a batch title and retries a failed batch by starting a new batch task', async () => {
     store.getTask.mockReturnValue({
       taskId: 'task-b', taskType: 'batch', label: 'Batch (3 pending)', startedAt: 0,
@@ -184,7 +211,7 @@ describe('Evaluate', () => {
     expect(tree.props?.onCancelled).toBe(onDone);
 
     await tree.props?.onRetry?.();
-    expect(store.startTask).toHaveBeenCalledWith('batch', { limit: '5' }, '/w', 'Batch (3 pending)');
+    expect(store.startTask).toHaveBeenCalledWith('batch', { limit: '3' }, '/w', 'Batch (3 pending)');
   });
 
   it('retries a reopened (failed) evaluate task with its stored args, not a re-derived start', async () => {

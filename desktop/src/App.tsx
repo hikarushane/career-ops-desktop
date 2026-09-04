@@ -90,10 +90,11 @@ export default function App() {
   }, []);
 
   const reload = useCallback(async (path = root) => {
-    if (!path) return;
+    if (!path) return null;
     const r = await listApplications(path);
-    if (isError(r)) { setError(r.message); return; }
+    if (isError(r)) { setError(r.message); return null; }
     setData(r);
+    return r;
   }, [root]);
 
   useEffect(() => {
@@ -218,8 +219,14 @@ export default function App() {
     }
   }, [data, startBatch]);
 
-  const evalDone = useCallback(() => {
-    reload();
+  // After an evaluation, land on the Jobs board with the new report's card
+  // open. The tracker row is matched by report path, since the task only
+  // knows the file it wrote and the row's number is whatever the tracker says.
+  const evalDone = useCallback(async (reportPath?: string) => {
+    const r = await reload();
+    const row = reportPath ? r?.applications.find((a) => a.reportPath === reportPath) : undefined;
+    setPipelineSelected(row?.reportNumber);
+    setPipelineFilter(undefined);
     setScreen('pipeline');
   }, [reload]);
 
