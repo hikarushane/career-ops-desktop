@@ -296,8 +296,11 @@ func get(target string, client *http.Client) (*html.Node, error) {
 		return nil, &fetchError{"network", err.Error()}
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == 429 || resp.StatusCode == 403 || resp.StatusCode == 999 {
-		return nil, &fetchError{"blocked", fmt.Sprintf("HTTP %d", resp.StatusCode)}
+	// Bot walls (Indeed answers 401/403 to every non-browser client, LinkedIn
+	// 999): the page exists but is not served to us, so say that rather than
+	// a bare status code the user cannot act on.
+	if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 429 || resp.StatusCode == 999 {
+		return nil, &fetchError{"blocked", fmt.Sprintf("the site blocks automatic reading, HTTP %d", resp.StatusCode)}
 	}
 	if resp.StatusCode >= 400 {
 		return nil, &fetchError{"network", fmt.Sprintf("HTTP %d", resp.StatusCode)}
