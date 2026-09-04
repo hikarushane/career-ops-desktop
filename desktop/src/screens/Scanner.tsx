@@ -2,9 +2,9 @@ import { useCallback, useState } from 'react';
 import TaskScreen from './TaskScreen';
 import { getTask, startTask, useRunningTasks } from '../lib/taskStore';
 
-type Props = { root: string; initialTaskId?: string | null; onDone: () => void };
+type Props = { root: string; initialTaskId?: string | null; onDone: () => void; onBack?: () => void };
 
-export default function Scanner({ root, initialTaskId, onDone }: Props) {
+export default function Scanner({ root, initialTaskId, onDone, onBack }: Props) {
   const [taskId, setTaskId] = useState<string | null>(initialTaskId ?? null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export default function Scanner({ root, initialTaskId, onDone }: Props) {
   }, [root, taskId]);
 
   return (
-    <TaskScreen taskId={taskId} title="Find matching jobs" onRetry={retry} doneAction={{ label: 'Review inbox', onClick: onDone }}>
+    <TaskScreen taskId={taskId} title="Find matching jobs" onRetry={retry} onBack={onBack} doneAction={{ label: 'Review inbox', onClick: onDone }}>
       {!taskId && (
         <>
           <p>Scan configured job sources for new opportunities that match your profile.</p>

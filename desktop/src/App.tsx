@@ -34,6 +34,14 @@ type Screen =
   | 'scanner' | 'interview' | 'interview-workflow'
   | 'profile' | 'help';
 
+// Sub-screens reached through a button, and the nav entry they belong to:
+// the header title and the highlighted nav item follow the parent.
+const PARENT: Partial<Record<Screen, Screen>> = {
+  evaluate: 'home',
+  scanner: 'home',
+  'interview-workflow': 'interview',
+};
+
 // Guards a batch start against a double click. Deliberately module-level
 // rather than component state: App must not gain a useState slot for this,
 // and a plain synchronous flag closes the double-click race window
@@ -196,8 +204,27 @@ export default function App() {
     })();
   }, [finishedChainTaskIds, root, startBatch]);
 
+  // Plain Home, for the Back buttons: never redirected to a running task.
+  const goHome = useCallback(() => setScreen('home'), []);
+
   const navigate = useCallback((target: string, params?: Record<string, string>) => {
-    if (target === 'evaluate') {
+    if (target === 'home') {
+      // While a scan or a batch runs, Home *is* that task's progress; the
+      // screen's Back button (goHome) reaches the plain Home without
+      // cancelling anything.
+      const scan = runningTasks.find((t) => t.taskType === 'scan');
+      const batch = runningTasks.find((t) => t.taskType === 'batch');
+      if (scan) {
+        setActiveTaskId(scan.taskId);
+        setScreen('scanner');
+      } else if (batch) {
+        setEvalUrl(undefined);
+        setActiveTaskId(batch.taskId);
+        setScreen('evaluate');
+      } else {
+        setScreen('home');
+      }
+    } else if (target === 'evaluate') {
       setEvalUrl(params?.url);
       setActiveTaskId(params?.taskId ?? null);
       setScreen('evaluate');
@@ -334,7 +361,7 @@ export default function App() {
       case 'progress':
         return <Progress data={data!.progress} />;
       case 'evaluate':
-        return <Evaluate key={activeTaskId ?? 'new'} root={root!} initialUrl={evalUrl} initialTaskId={activeTaskId} onDone={evalDone} />;
+        return <Evaluate key={activeTaskId ?? 'new'} root={root!} initialUrl={evalUrl} initialTaskId={activeTaskId} onDone={evalDone} onBack={goHome} />;
       case 'scanner':
         return (
           <Scanner
@@ -344,6 +371,7 @@ export default function App() {
             // A scan writes data/pipeline.md (the inbox), never the tracker,
             // so its results live on the Jobs board's INBOX tab.
             onDone={() => { reload(); setPipelineFilter('inbox'); setScreen('pipeline'); }}
+            onBack={goHome}
           />
         );
       case 'interview':
@@ -370,7 +398,7 @@ export default function App() {
   return (
     <div className="shell">
       <Header
-        title={NAV.find((n) => n.key === screen || (n.key === 'pipeline' && screen === 'evaluate'))?.label ?? screen}
+        title={NAV.find((n) => n.key === (PARENT[screen] ?? screen))?.label ?? screen}
         root={root}
         onReload={reload}
         onChangeFolder={onPick}
@@ -382,7 +410,7 @@ export default function App() {
       />
       <nav className="nav">
         {NAV.map(({ key, label, Icon }) => (
-          <button key={key} aria-current={screen === key || (key === 'pipeline' && screen === 'evaluate')} onClick={() => navigate(key)}>
+          <button key={key} aria-current={screen === key || PARENT[screen] === key} onClick={() => navigate(key)}>
             <Icon />
             <span>{label}</span>
           </button>

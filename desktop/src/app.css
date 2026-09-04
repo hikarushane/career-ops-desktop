@@ -176,6 +176,11 @@ table.apps tr:hover:not([aria-selected='true']) { background: rgb(0 0 0 / 3%); }
   white-space: nowrap;
 }
 
+/* Top-left Back link on every sub-screen reached through a button (task
+   screens, profile generation). Sits above the h1, flush with the content
+   inset, in the ghost text role. */
+.screen-back { display: inline-flex; align-items: center; gap: 4px; margin: -4px 0 8px -8px; }
+
 /* Flat view: table on the left, report on the right at the shared report
    width (so the report reads the same in both views), with a draggable
    boundary between them. Until a row is picked the table has the full
