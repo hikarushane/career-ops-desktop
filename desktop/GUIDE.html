@@ -660,7 +660,7 @@
       <p class="muted">Home 下方會顯示最近活動，方便你回到 Jobs 查看職缺與申請進度。</p>
 
       <div class="callout">
-        <p><strong>任務不會因為切換畫面而中斷。</strong>分析、掃描、批次或面試任務進行中時，畫面右上角會出現任務 chip（例如「Evaluating Acme · 2m」）。你可以自由切到其他頁面，點 chip 就能回到該任務；完成或失敗時 chip 會變色，按 × 可以關掉。</p>
+        <p><strong>任務不會因為切換畫面而中斷。</strong>分析、掃描、批次或面試任務進行中時，畫面右上角會出現任務 chip（例如「Evaluating Acme · 2m」）。你可以自由切到其他頁面，點 chip 就能回到該任務；完成或失敗時 chip 會變色，按 × 可以關掉。從原本的入口再進去也會回到同一個任務：掃描中再按 <strong>Find matching jobs</strong> 會顯示進行中的掃描，批次處理中「Evaluate all pending」會變成 <strong>View progress</strong>，面試準備中再按同一家公司的 Prep plan 會回到該對話。</p>
       </div>
     </section>
 
@@ -685,7 +685,7 @@
       <p>預設由 CareerOps 根據職缺內容判斷。若你已知道該使用哪種語言，可直接在 <strong>Document language</strong> 手動指定。</p>
 
       <h3>查看進度</h3>
-      <p>執行期間活動記錄會列出 AI 實際在做的事，例如「Reading cv.md」「Writing reports/042-….md」「Updating tracker」，並顯示已經過的時間。你可以選擇 Cancel 停止；若失敗，畫面會說明原因（例如 AI 結束了但沒有產生報告），可選 Retry 再試一次。切到別的頁面不會中斷分析，點右上角的任務 chip 即可回來。完成後到 Jobs 查看結果與完整分析。</p>
+      <p>執行期間活動記錄會列出 AI 實際在做的事，例如「Reading cv.md」「Writing reports/042-….md」「Updating tracker」，並顯示已經過的時間。你可以選擇 Cancel 停止；若失敗，畫面會說明原因（例如 AI 結束了但沒有產生報告），可選 Retry 再試一次。切到別的頁面不會中斷分析，點右上角的任務 chip 即可回來。完成後按 <strong>Back to pipeline</strong>，Jobs 會直接打開剛產生的那張報告卡。</p>
     </section>
 
     <section id="scanner">
@@ -715,14 +715,16 @@
         <div class="card">
           <span class="card-label">按進度分組</span>
           <h3>按狀態整理</h3>
-          <p>用看板方式瀏覽職缺。選擇一個職缺後，可直接查看它的分析結果。把卡片拖到另一個狀態欄（或右側收合的小標籤）放開，就能直接改狀態。</p>
+          <p>用看板方式瀏覽職缺。選擇一個職缺後，報告會從右側滑出。把卡片拖到另一個狀態欄（或右側收合的小標籤）放開，就能直接改狀態。</p>
         </div>
         <div class="card">
           <span class="card-label">表格檢視</span>
           <h3>快速比較</h3>
-          <p>用表格快速比較、排序與搜尋；選擇後可在旁邊閱讀分析結果。</p>
+          <p>用表格快速比較、排序與搜尋。沒有選取時表格占滿整個寬度；點一列後報告會在右側展開。</p>
         </div>
       </div>
+
+      <p>兩種檢視的報告面板左緣都可以拖拉：按住邊界左右移動就能調整報告與看板或表格的比例，寬度會記住，下次打開仍然一樣。</p>
 
       <h3>產生 CV 與求職信</h3>
       <p>打開一個職缺的報告卡，右側有兩顆按鈕。<strong>Generate CV</strong> 會直接依這份報告產出客製化的 CV PDF，不會再問你問題。<strong>Generate cover letter</strong> 會先展開四個問題：為什麼想要這家公司或職位、你會幫他們解決什麼問題、你上任第一步怎麼做、信件語氣；填完按 <strong>Write cover letter</strong> 才會開始寫。兩者的進度都顯示在右上角的任務 chip。</p>
@@ -735,27 +737,39 @@
 
     <section id="interview">
       <h2>10. Interview：準備、練習、複盤</h2>
-      <p class="section-intro">當職缺進入面試階段後，會出現在 Interview 頁。你可以依面試進度使用三種工具。</p>
+      <p class="section-intro">當職缺進入面試階段後，會出現在 Interview 頁。三種工具都是和 AI 的對話：先填一份簡短表單，AI 做完第一輪工作後你可以繼續追問、補充細節或要求修改。</p>
 
       <div class="cards">
         <div class="card">
           <span class="card-label primary">Prep plan</span>
           <h3>準備計畫</h3>
-          <p>讀取職缺情境，建立面試準備計畫與時間安排。</p>
+          <p>先填面試日期與開始時間（必填），以及輪次、面試官、其他備註。AI 會依剩餘時間建立分時段的準備計畫。</p>
         </div>
         <div class="card">
           <span class="card-label teal">Practice</span>
           <h3>模擬練習</h3>
-          <p>產生可能的面試題目與練習材料，幫助你事先演練。</p>
+          <p>先選這一輪的類型（必填），可再填面試官設定與想練的題目。AI 出題、你作答，AI 給回饋後再出下一題。</p>
         </div>
         <div class="card">
           <span class="card-label amber">Debrief</span>
           <h3>面試後複盤</h3>
-          <p>整理面試筆記、找出待加強的地方，為下一輪做準備。</p>
+          <p>先寫下這場面試的經過（必填）：問了什麼、你怎麼答、哪裡強哪裡弱。AI 整理筆記、找出待加強的地方，為下一輪做準備。</p>
         </div>
       </div>
 
-      <p>Interview 畫面可設定 <strong>Interview language</strong>。若你要用特定語言面試，請在開始前確認設定。</p>
+      <div class="flow">
+        <span class="flow-node active">填表單，按 Start</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">AI 回覆並寫入 interview-prep/</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">在下方輸入框繼續對話</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">Done 離開，對話會保留</span>
+      </div>
+
+      <p>每一句你送出的訊息都是一次 AI 任務，進行中會顯示活動記錄，可以 Cancel 或失敗時 Retry。對話會依公司與工具保留：離開再回來、甚至重開 App 都還在；想從頭開始按 <strong>New conversation</strong>。AI 寫出的計畫、練習紀錄與複盤都在求職資料夾的 <code>interview-prep/</code>。</p>
+
+      <p>Interview 畫面可設定 <strong>Interview language</strong>。若你要用特定語言面試，請在第一輪開始前確認設定；對話開始後就固定了。</p>
     </section>
 
     <section id="progress">
@@ -788,7 +802,7 @@
           </tr>
           <tr>
             <td>Job Search</td>
-            <td>目標職位、地點、是否接受遠端工作、薪資等偏好，以及閱讀語言。</td>
+            <td>目標地區、職稱關鍵字、產業、薪資、是否願意搬遷、偏好城市等，和第一次啟動時填的是同一份表單。改完按 <strong>Update profile with these preferences</strong>，AI 會依新偏好重寫 <code>config/profile.yml</code>、<code>modes/_profile.md</code> 與 <code>portals.yml</code>（不動 <code>cv.md</code>）；你先預覽每個檔案，按 Apply 才寫入。這裡也能改閱讀語言。</td>
           </tr>
           <tr>
             <td>Search Sources</td>
@@ -821,7 +835,7 @@
 
     <section id="help">
       <h2>12. Help 與疑難排解</h2>
-      <p class="section-intro">Help 頁提供分數、職缺搜尋、AI 使用方式、隱私與常見問題的快速說明。</p>
+      <p class="section-intro">Help 頁提供分數、職缺搜尋、AI 使用方式、隱私與常見問題的快速說明。下方的 <strong>Full guide</strong> 可切換中文或 English 閱讀完整指南；頁尾有本 App 的 GitHub 連結，以及它所改作自的 career-ops 原始專案。</p>
 
       <h3>常見問題</h3>
 
