@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { helpDocument, languageSettings, type HelpDocument } from '../api';
 import { openExternalUrl } from '../lib/opener';
+import { stripHtmlPreamble } from '../lib/helpMarkdown';
 import { GitHubIcon } from '../components/icons';
 
 type Section = 'scores' | 'scanner' | 'ai-does' | 'ai-doesnt' | 'privacy' | 'troubleshoot' | 'advanced';
@@ -97,7 +98,7 @@ export default function Help({ root }: Props) {
             <summary>
               {document.fallback ? 'English guide (no guide in this language yet)' : `Guide (${document.language})`}
             </summary>
-            <article className="help-readme-content"><ReactMarkdown>{document.markdown}</ReactMarkdown></article>
+            <article className="help-readme-content"><ReactMarkdown>{stripHtmlPreamble(document.markdown)}</ReactMarkdown></article>
           </details>
         )}
       </section>
