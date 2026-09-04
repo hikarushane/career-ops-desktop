@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { finalizeArtifacts } from '../../../scripts/release/artifacts.mjs';
@@ -97,6 +97,51 @@ describe('release artifact finalization', () => {
       upstreamSha: 'a'.repeat(40),
       buildPlatforms: ['darwin-aarch64', 'windows-x86_64'],
     });
+  });
+});
+
+describe('macOS-only release finalization', () => {
+  function macAssets(root: string) {
+    const assets = join(root, 'assets');
+    mkdirSync(assets);
+    write(root, 'RELEASE_NOTES.md', '# Release Notes\n\n## v1.2.3\n\nReady.\n');
+    write(assets, 'CareerOps_1.2.3_macOS.dmg', 'dmg');
+    write(assets, 'CareerOps_1.2.3_macOS.app.tar.gz', 'archive');
+    write(assets, 'CareerOps_1.2.3_macOS.app.tar.gz.sig', 'mac-signature');
+    write(assets, 'macos-target.json', '{"platform":"darwin-aarch64"}\n');
+    return assets;
+  }
+  const args = { version: '1.2.3', repository: 'acme/career-ops', gitSha: 'b'.repeat(40), upstreamSha: 'a'.repeat(40) };
+
+  it('publishes the macOS set alone when no Windows artifacts were built', () => {
+    const root = temp('career-ops-mac-only-');
+    const assets = macAssets(root);
+    const files = finalizeArtifacts({ root, assetsDir: assets, ...args });
+    expect(files).toEqual([
+      'CareerOps_1.2.3_macOS.dmg', 'CareerOps_1.2.3_macOS.app.tar.gz', 'CareerOps-macOS-1.2.3.zip',
+      'latest.json', 'release-provenance.json',
+    ]);
+    const sums = readFileSync(join(assets, 'SHA256SUMS.txt'), 'utf8');
+    expect(sums).not.toContain('Windows');
+    const latest = JSON.parse(readFileSync(join(assets, 'latest.json'), 'utf8'));
+    expect(Object.keys(latest.platforms)).toEqual(['darwin-aarch64']);
+    expect(JSON.parse(readFileSync(join(assets, 'release-provenance.json'), 'utf8')).buildPlatforms).toEqual(['darwin-aarch64']);
+    expect(existsSync(join(assets, 'CareerOps-Windows-1.2.3.zip'))).toBe(false);
+  });
+
+  it('refuses a partial Windows set instead of silently dropping it', () => {
+    const root = temp('career-ops-partial-win-');
+    const assets = macAssets(root);
+    write(assets, 'CareerOps_1.2.3_Windows.exe', 'exe');
+    expect(() => finalizeArtifacts({ root, assetsDir: assets, ...args })).toThrow(/incomplete Windows release artifacts/);
+  });
+
+  it('still requires the macOS set', () => {
+    const root = temp('career-ops-no-mac-');
+    const assets = join(root, 'assets');
+    mkdirSync(assets);
+    write(root, 'RELEASE_NOTES.md', '# Release Notes\n\n## v1.2.3\n\nReady.\n');
+    expect(() => finalizeArtifacts({ root, assetsDir: assets, ...args })).toThrow(/required release artifact missing: CareerOps_1.2.3_macOS.dmg/);
   });
 });
 

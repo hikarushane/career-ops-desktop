@@ -40,7 +40,7 @@ brew install --cask <owner>/<tap>/career-ops
 
 從 [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases) 下載 `CareerOps_<version>_Windows.exe` 或 `CareerOps-Windows-<version>.zip`，並執行 NSIS installer。
 
-> 0.5.0 的 Windows 版由 release workflow 打包，但尚未在 Windows 機器上手動驗收；macOS 版已完整測過。遇到問題請開 issue。
+> **0.5.0 只提供 macOS 版。** Windows 安裝檔會在 0.5.1 提供：Windows 的 sidecar 與 runtime 驗證已在 CI 打包成功，但求職資料夾初始化的測試在 Windows 尚未通過（目錄 rename 時仍有開啟的 handle），修好並在 Windows 機器上驗收後才會發布。
 
 > 在正式簽章的公開 release 尚未提供前，macOS 或 Windows 可能會顯示系統對未簽章 App 的標準安全提示。
 

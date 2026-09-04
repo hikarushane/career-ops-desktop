@@ -12,6 +12,7 @@ Released 2026-09-04.
 - Kanban cards drag onto status columns; the report panel has a status select, a draggable edge and a JD preview; the table view spans the full width until a row is picked; a finished evaluation opens its card.
 - Home shows a running scan or batch, every sub-screen has a top-left Back, and the running task chip breathes.
 - Desktop offers Claude Code, Codex and Antigravity (agy) as AI providers; the unverified opencode, copilot, qwen and grok entries are gone.
+- macOS only. The Windows installer follows in 0.5.1, once the workspace-initialization tests pass on Windows.
 
 ## v0.4.0
 
