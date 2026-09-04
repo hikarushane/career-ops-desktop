@@ -67,6 +67,14 @@ export function collectArtifacts({ platform, bundleDir, outputDir, version, targ
   return copied;
 }
 
+/**
+ * Assembles the public release set from the collected platform artifacts.
+ * macOS is required. Windows is optional: when the Windows build is not
+ * part of the release (0.5.0 ships macOS only), its files are simply absent
+ * and latest.json / provenance / SHA256SUMS list the macOS platform alone. A
+ * partial Windows set (some files but not all) is an error, never a silent
+ * macOS-only release.
+ */
 export function finalizeArtifacts({ root, assetsDir, version, repository, gitSha, upstreamSha }) {
   const macDmg = `CareerOps_${version}_macOS.dmg`;
   const winExe = `CareerOps_${version}_Windows.exe`;
@@ -74,34 +82,45 @@ export function finalizeArtifacts({ root, assetsDir, version, repository, gitSha
   const winArchive = `CareerOps_${version}_Windows.nsis.zip`;
   const macSignature = `${macArchive}.sig`;
   const winSignature = `${winArchive}.sig`;
-  for (const filename of [macDmg, winExe, macArchive, winArchive, macSignature, winSignature]) {
+  for (const filename of [macDmg, macArchive, macSignature, 'macos-target.json']) {
     if (!existsSync(join(assetsDir, filename))) throw new Error(`required release artifact missing: ${filename}`);
   }
+  const windowsFiles = [winExe, winArchive, winSignature, 'windows-target.json'];
+  const windowsPresent = windowsFiles.filter((filename) => existsSync(join(assetsDir, filename)));
+  if (windowsPresent.length > 0 && windowsPresent.length < windowsFiles.length) {
+    const missing = windowsFiles.filter((filename) => !windowsPresent.includes(filename));
+    throw new Error(`incomplete Windows release artifacts, missing: ${missing.join(', ')}`);
+  }
+  const withWindows = windowsPresent.length === windowsFiles.length;
 
   const macZip = `CareerOps-macOS-${version}.zip`;
   const winZip = `CareerOps-Windows-${version}.zip`;
   execFileSync('zip', ['-jq', macZip, macDmg], { cwd: assetsDir });
-  execFileSync('zip', ['-jq', winZip, winExe], { cwd: assetsDir });
+  if (withWindows) execFileSync('zip', ['-jq', winZip, winExe], { cwd: assetsDir });
 
   const section = releaseNotesSection(root, version) ?? '';
   const base = `https://github.com/${repository}/releases/download/desktop-v${version}`;
   const macPlatform = JSON.parse(readFileSync(join(assetsDir, 'macos-target.json'), 'utf8')).platform;
-  const winPlatform = JSON.parse(readFileSync(join(assetsDir, 'windows-target.json'), 'utf8')).platform;
-  const latest = {
-    version,
-    notes: section,
-    pub_date: new Date().toISOString(),
-    platforms: {
-      [macPlatform]: { signature: readFileSync(join(assetsDir, macSignature), 'utf8').trim(), url: `${base}/${macArchive}` },
-      [winPlatform]: { signature: readFileSync(join(assetsDir, winSignature), 'utf8').trim(), url: `${base}/${winArchive}` },
-    },
+  const platforms = {
+    [macPlatform]: { signature: readFileSync(join(assetsDir, macSignature), 'utf8').trim(), url: `${base}/${macArchive}` },
   };
+  const buildPlatforms = [macPlatform];
+  if (withWindows) {
+    const winPlatform = JSON.parse(readFileSync(join(assetsDir, 'windows-target.json'), 'utf8')).platform;
+    platforms[winPlatform] = { signature: readFileSync(join(assetsDir, winSignature), 'utf8').trim(), url: `${base}/${winArchive}` };
+    buildPlatforms.push(winPlatform);
+  }
+  const latest = { version, notes: section, pub_date: new Date().toISOString(), platforms };
   writeFileSync(join(assetsDir, 'latest.json'), `${JSON.stringify(latest, null, 2)}\n`);
-  const provenance = { version, gitSha, upstreamSha, buildPlatforms: [macPlatform, winPlatform] };
+  const provenance = { version, gitSha, upstreamSha, buildPlatforms };
   writeFileSync(join(assetsDir, 'release-provenance.json'), `${JSON.stringify(provenance, null, 2)}\n`);
   writeFileSync(join(assetsDir, 'CURRENT_RELEASE_NOTES.md'), `${section}\n`);
 
-  const publicFiles = [macDmg, winExe, macArchive, winArchive, macZip, winZip, 'latest.json', 'release-provenance.json'];
+  const publicFiles = [
+    macDmg, macArchive, macZip,
+    ...(withWindows ? [winExe, winArchive, winZip] : []),
+    'latest.json', 'release-provenance.json',
+  ];
   writeFileSync(join(assetsDir, 'SHA256SUMS.txt'), checksumLines(assetsDir, publicFiles));
   return publicFiles;
 }

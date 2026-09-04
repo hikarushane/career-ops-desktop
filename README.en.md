@@ -40,7 +40,7 @@ brew install --cask <owner>/<tap>/career-ops
 
 Download `CareerOps_<version>_Windows.exe` or `CareerOps-Windows-<version>.zip` from [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases), then run the NSIS installer.
 
-> The 0.5.0 Windows build is produced by the release workflow but has not yet been hand-tested on a Windows machine; the macOS build has been. Please open an issue if something is off.
+> **0.5.0 ships for macOS only.** The Windows installer follows in 0.5.1: the Windows sidecar and runtime verification already build in CI, but the workspace-initialization tests do not pass on Windows yet (the atomic install renames a directory while a handle is still open). It will be published once that is fixed and hand-tested on Windows.
 
 > Until signed public releases are available, macOS or Windows may show the operating system's standard warning for unsigned applications.
 

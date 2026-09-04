@@ -110,7 +110,14 @@ jobs:
 
   build-windows:
     needs: detect-release
-    if: needs.detect-release.outputs.should_release == 'true'
+    # Windows is not part of the release gate yet: the Windows sidecar and
+    # runtime verification pass on windows-latest, but `cargo test` fails five
+    # workspace.rs tests (the atomic workspace install renames a directory
+    # while a handle is still open, os error 32). Until those pass, releases
+    # ship macOS only and finalizeArtifacts tolerates the missing Windows
+    # set. Re-enable this job and add it back to publish-release's `needs`
+    # once the Windows tests are green.
+    if: ${{ false }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -179,7 +186,7 @@ jobs:
           retention-days: 5
 
   publish-release:
-    needs: [detect-release, build-macos, build-windows]
+    needs: [detect-release, build-macos]
     if: needs.detect-release.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
