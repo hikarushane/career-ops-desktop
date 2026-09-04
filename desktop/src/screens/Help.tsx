@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { helpDocument, languageSettings, type HelpDocument } from '../api';
+import { openExternalUrl } from '../lib/opener';
+import { GitHubIcon } from '../components/icons';
 
 type Section = 'scores' | 'scanner' | 'ai-does' | 'ai-doesnt' | 'privacy' | 'troubleshoot' | 'advanced';
 
@@ -14,21 +16,48 @@ const SECTIONS: { key: Section; title: string; body: string }[] = [
   { key: 'advanced', title: 'Advanced', body: 'Power users can edit cv.md, config/profile.yml, modes/_profile.md, and portals.yml directly. The CLI modes (scan, pdf, batch, etc.) are available in any supported coding CLI.' },
 ];
 
+/** The two languages profile-language.mjs --help-readme can serve (README.md is zh-TW, README.en.md is English). */
+const GUIDE_LANGUAGES: { code: 'zh-TW' | 'en'; label: string }[] = [
+  { code: 'zh-TW', label: '中文' },
+  { code: 'en', label: 'English' },
+];
+
+export const DESKTOP_REPO_URL = 'https://github.com/hikarushane/career-ops-desktop';
+export const UPSTREAM_REPO_URL = 'https://github.com/santifer/career-ops';
+
 type Props = { root: string };
 
 export default function Help({ root }: Props) {
   const [open, setOpen] = useState<Section | null>(null);
   const [document, setDocument] = useState<HelpDocument | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  // null until the workspace's analysis language is known; that picks the
+  // default, and the toggle below overrides it for this visit only.
+  const [guideLanguage, setGuideLanguage] = useState<'zh-TW' | 'en' | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     languageSettings(root)
-      .then((settings) => helpDocument(root, settings.analysisLanguage))
-      .then((result) => active && setDocument(result))
+      .then((settings) => active && setGuideLanguage(settings.analysisLanguage === 'zh-TW' ? 'zh-TW' : 'en'))
       .catch((reason) => active && setDocumentError(String(reason)));
     return () => { active = false; };
   }, [root]);
+
+  useEffect(() => {
+    if (!guideLanguage) return;
+    let active = true;
+    setDocument(null);
+    helpDocument(root, guideLanguage)
+      .then((result) => active && setDocument(result))
+      .catch((reason) => active && setDocumentError(String(reason)));
+    return () => { active = false; };
+  }, [root, guideLanguage]);
+
+  const openLink = (url: string) => {
+    setLinkError(null);
+    void openExternalUrl(url).then((err) => err && setLinkError(err));
+  };
 
   return (
     <div className="help-screen">
@@ -45,18 +74,45 @@ export default function Help({ root }: Props) {
         ))}
       </div>
       <section className="help-readme">
-        <h2>Full guide</h2>
+        <div className="help-readme-toolbar">
+          <h2>Full guide</h2>
+          <div className="ai-segment" role="radiogroup" aria-label="Guide language">
+            {GUIDE_LANGUAGES.map((option) => (
+              <button
+                key={option.code}
+                type="button"
+                role="radio"
+                aria-checked={guideLanguage === option.code}
+                onClick={() => setGuideLanguage(option.code)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
         {documentError && <p className="language-error" role="alert">{documentError}</p>}
         {!document && !documentError && <p className="setup-hint">Loading guide…</p>}
         {document && (
           <details>
             <summary>
-              {document.fallback ? 'English guide' : `Guide (${document.language})`}
+              {document.fallback ? 'English guide (no guide in this language yet)' : `Guide (${document.language})`}
             </summary>
             <article className="help-readme-content"><ReactMarkdown>{document.markdown}</ReactMarkdown></article>
           </details>
         )}
       </section>
+      <footer className="help-footer">
+        <a href={DESKTOP_REPO_URL} onClick={(e) => { e.preventDefault(); openLink(DESKTOP_REPO_URL); }}>
+          <GitHubIcon size={18} />
+          <span>github.com/hikarushane/career-ops-desktop</span>
+        </a>
+        <p>
+          CareerOps Desktop is a fork of{' '}
+          <a href={UPSTREAM_REPO_URL} onClick={(e) => { e.preventDefault(); openLink(UPSTREAM_REPO_URL); }}>career-ops</a>
+          {' '}by santifer, which supplies the evaluation modes, scanners and scripts this app drives.
+        </p>
+        {linkError && <p className="intake-error" role="alert">{linkError}</p>}
+      </footer>
     </div>
   );
 }

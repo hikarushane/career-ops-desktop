@@ -15,3 +15,6 @@ export async function openJobUrl(url: string): Promise<string | null> {
     return reason instanceof Error ? reason.message : String(reason);
   }
 }
+
+/** Same behaviour for any other external link (Help page repo links). */
+export const openExternalUrl = openJobUrl;

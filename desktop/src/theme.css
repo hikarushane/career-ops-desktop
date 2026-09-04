@@ -560,7 +560,19 @@ summary:focus-visible {
   cursor: pointer; color: var(--color-text-primary);
 }
 .help-readme { margin-top: 24px; border-top: var(--border-divider); padding-top: 16px; }
-.help-readme h2 { font: 600 16px var(--font-sans); }
+.help-readme h2 { font: 600 16px var(--font-sans); margin: 0; }
+.help-readme-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+/* Footer — repo link and upstream credit, kept in the secondary text role so
+   the guide above stays the page's focus. */
+.help-footer {
+  margin-top: 32px; padding-top: 16px; border-top: var(--border-divider);
+  display: flex; flex-direction: column; gap: 8px;
+  font: 400 12px/1.5 var(--font-sans); color: var(--color-text-secondary);
+}
+.help-footer a { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text-primary); font-weight: 500; text-decoration: none; }
+.help-footer a:hover { color: var(--color-primary); }
+.help-footer p { margin: 0; }
+.help-footer p a { display: inline; }
 .help-readme summary { cursor: pointer; color: var(--color-primary); font: 500 13px var(--font-sans); }
 .help-readme-content { max-height: 520px; overflow: auto; margin-top: 12px; font: 400 13px/1.5 var(--font-sans); }
 .help-readme-content img { max-width: 100%; }
