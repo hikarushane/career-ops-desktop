@@ -3,6 +3,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { listIntakeCandidates, stageIntakeFiles, type StagedIntakeFile } from '../api';
 import { INTAKE_CATEGORIES, suggestIntakeCategory, type IntakeCategoryId } from '../lib/intakeCategories';
+import { t } from '../lib/i18n';
 import { ImportIcon } from '../components/icons';
 
 export type BackgroundImportResult = {
@@ -81,13 +82,13 @@ export default function BackgroundImport({ root, initialStaged, onComplete }: Pr
   }, [addFiles]);
 
   const pickFiles = useCallback(async () => {
-    const selected = await open({ multiple: true, title: 'Add background files' });
+    const selected = await open({ multiple: true, title: t('Add background files') });
     if (!selected) return;
     void addFiles(Array.isArray(selected) ? selected : [selected]);
   }, [addFiles]);
 
   const pickFolder = useCallback(async () => {
-    const selected = await open({ directory: true, multiple: true, title: 'Add a folder of background files' });
+    const selected = await open({ directory: true, multiple: true, title: t('Add a folder of background files') });
     if (!selected) return;
     void addFiles(Array.isArray(selected) ? selected : [selected]);
   }, [addFiles]);
@@ -121,7 +122,7 @@ export default function BackgroundImport({ root, initialStaged, onComplete }: Pr
       setError(
         typeof reason === 'string' ? reason
           : reason instanceof Error ? reason.message
-          : 'Could not stage the selected files.',
+          : t('Could not stage the selected files.'),
       );
     } finally {
       setStaging(false);
@@ -135,72 +136,72 @@ export default function BackgroundImport({ root, initialStaged, onComplete }: Pr
 
   return (
     <div className="setup-screen">
-      <h1>Import your background</h1>
+      <h1>{t('Import your background')}</h1>
       <p className="setup-subtitle">
-        Drag in anything that describes your career.
+        {t('Drag in anything that describes your career.')}
       </p>
 
-      <ul className="intake-category-list" aria-label="Background evidence categories">
-        {INTAKE_CATEGORIES.map((category) => <li key={category.id}>{category.label}</li>)}
+      <ul className="intake-category-list" aria-label={t('Background evidence categories')}>
+        {INTAKE_CATEGORIES.map((category) => <li key={category.id}>{t(category.label)}</li>)}
       </ul>
 
       {staged ? (
         <div className="intake-stage-result" role="status">
-          <p>{copiedCount} file{copiedCount === 1 ? '' : 's'} staged for review.</p>
-          {duplicateCount > 0 && <p className="setup-hint">{duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} already existed and were left unchanged.</p>}
+          <p>{copiedCount === 1 ? t('1 file staged for review.') : t('{n} files staged for review.', { n: copiedCount })}</p>
+          {duplicateCount > 0 && <p className="setup-hint">{duplicateCount === 1 ? t('1 duplicate already existed and was left unchanged.') : t('{n} duplicates already existed and were left unchanged.', { n: duplicateCount })}</p>}
           {includesPdf && (
             <p className="setup-hint">
-              PDF text extraction is unavailable in this build. Your PDF is still staged; add a .md, .txt, or .tex copy for profile extraction.
+              {t('PDF text extraction is unavailable in this build. Your PDF is still staged; add a .md, .txt, or .tex copy for profile extraction.')}
             </p>
           )}
-          <p className="setup-hint">Your files were copied only; profile extraction starts after AI setup.</p>
-          <button className="btn-ghost" onClick={() => { setStaged(null); setFiles([]); }}>Start over</button>
+          <p className="setup-hint">{t('Your files were copied only; profile extraction starts after AI setup.')}</p>
+          <button className="btn-ghost" onClick={() => { setStaged(null); setFiles([]); }}>{t('Start over')}</button>
         </div>
       ) : (
         <>
           <div className={`intake-dropzone${dragging ? ' is-dragging' : ''}`}>
-            <p>{dragging ? 'Drop files to add them' : 'Drag files or folders here'}</p>
+            <p>{dragging ? t('Drop files to add them') : t('Drag files or folders here')}</p>
             <div className="setup-actions">
               <button className="btn-secondary import-btn" onClick={pickFiles} disabled={staging}>
                 <ImportIcon size={18} />
-                Add files
+                {t('Add files')}
               </button>
               <button className="btn-secondary import-btn" onClick={pickFolder} disabled={staging}>
-                Add folder
+                {t('Add folder')}
               </button>
             </div>
           </div>
 
           {files.length > 0 && (
-            <ul className="intake-file-list" aria-label="Files to stage">
+            <ul className="intake-file-list" aria-label={t('Files to stage')}>
               {files.map((file) => (
                 <li key={file.sourcePath} className="intake-file-row">
                   <span className="intake-file-name">{file.name}</span>
                   <label>
-                    <span className="intake-file-label">Destination category</span>
+                    <span className="intake-file-label">{t('Destination category')}</span>
                     <select
-                      aria-label={`Category for ${file.name}`}
+                      aria-label={t('Category for {name}', { name: file.name })}
                       value={file.category ?? ''}
                       onChange={(event) => setCategory(
                         file.sourcePath,
                         event.target.value === '' ? null : event.target.value as IntakeCategoryId,
                       )}
                     >
-                      <option value="">Choose category</option>
+                      <option value="">{t('Choose category')}</option>
                       {INTAKE_CATEGORIES.map((category) => (
-                        <option key={category.id} value={category.id}>{category.label}</option>
+                        <option key={category.id} value={category.id}>{t(category.label)}</option>
                       ))}
                     </select>
                   </label>
                   <button className="btn-ghost intake-remove" onClick={() => removeFile(file.sourcePath)}>
-                    Remove
+                    {t('Remove')}
                   </button>
                 </li>
               ))}
             </ul>
           )}
 
-          {unresolved && <p className="setup-hint">Choose a category for every file before continuing.</p>}
+          {unresolved && <p className="setup-hint">{t('Choose a category for every file before continuing.')}</p>}
           {error && <p className="intake-error" role="alert">{error}</p>}
         </>
       )}
@@ -211,7 +212,7 @@ export default function BackgroundImport({ root, initialStaged, onComplete }: Pr
           onClick={staged ? () => onComplete({ staged }) : continueImport}
           disabled={!staged && (staging || (files.length > 0 && unresolved))}
         >
-          {staged ? 'Continue setup' : staging ? <span className="animated-dots">Staging</span> : files.length > 0 ? 'Continue' : 'Skip for now'}
+          {staged ? t('Continue setup') : staging ? <span className="animated-dots">{t('Staging')}</span> : files.length > 0 ? t('Continue') : t('Skip for now')}
         </button>
       </div>
     </div>

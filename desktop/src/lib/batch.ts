@@ -5,6 +5,8 @@
  * leave every finished entry on disk if a turn dies. Travels to the Rust
  * batch prompt as the `limit` arg — this constant is the only definition.
  */
+import { t } from './i18n';
+
 export const BATCH_LIMIT = 5;
 
 // TESTING OVERRIDE: cap at 3 per press; revert to BATCH_LIMIT before release
@@ -17,10 +19,10 @@ export function batchArgs(): Record<string, string> {
  * is already running the same button reopens that run instead of starting one.
  */
 export function processPendingLabel(_pending: number, running = false): string {
-  return running ? 'View progress' : 'Evaluate all pending';
+  return running ? t('View progress') : t('Evaluate all pending');
 }
 
 /** Task-chip label: this turn's slice against the whole inbox. */
 export function batchTaskLabel(pending: number): string {
-  return `Evaluating (next ${Math.min(BATCH_LIMIT, pending)} of ${pending} pending)`;
+  return t('Evaluating (next {n} of {m} pending)', { n: Math.min(BATCH_LIMIT, pending), m: pending });
 }

@@ -15,16 +15,20 @@ import WorkspaceSettings from './WorkspaceSettings';
 import ProfileGeneration from './ProfileGeneration';
 import JobPreferences from './JobPreferences';
 import { EMPTY_PREFERENCES, loadPreferences, savePreferences, type JobPreferences as Preferences } from '../lib/jobPreferences';
+import { UI_LANGUAGES, getUiLanguage, t, type UiLanguage } from '../lib/i18n';
 
 
 type Props = {
   root: string;
   onWorkspaceChanged: (path: string) => Promise<void>;
+  /** Interface language, owned by App so a change re-renders every screen. */
+  uiLanguage?: UiLanguage;
+  onUiLanguageChange?: (language: UiLanguage) => void;
 };
 
 type Tab = 'background' | 'preferences' | 'sources' | 'workspace' | 'ai' | 'about';
 
-export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
+export default function ProfileSettings({ root, onWorkspaceChanged, uiLanguage = getUiLanguage(), onUiLanguageChange }: Props) {
   const [tab, setTab] = useState<Tab>('background');
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [preferredId, setPreferred] = useState<string | null>(null);
@@ -125,17 +129,17 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
   }, [settingsLoaded, tab, catalogState, fastOk, fastMode]);
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'background', label: 'My Background' },
-    { key: 'preferences', label: 'Job Search' },
-    { key: 'sources', label: 'Search Sources' },
-    { key: 'workspace', label: 'Workspace' },
-    { key: 'ai', label: 'AI' },
-    { key: 'about', label: 'About' },
+    { key: 'background', label: t('My Background') },
+    { key: 'preferences', label: t('Job Search') },
+    { key: 'sources', label: t('Search Sources') },
+    { key: 'workspace', label: t('Workspace') },
+    { key: 'ai', label: t('AI') },
+    { key: 'about', label: t('About') },
   ];
 
   return (
     <div className="profile-screen">
-      <h1>Profile &amp; Settings</h1>
+      <h1>{t('Profile & Settings')}</h1>
 
       <nav className="profile-tabs">
         {tabs.map((t) => (
@@ -148,17 +152,17 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
       <div className="profile-content">
         {tab === 'background' && !regenerating && (
           <div>
-            <h2>My Background</h2>
-            <p>Your career profile is stored in <code>cv.md</code> and <code>config/profile.yml</code>.</p>
+            <h2>{t('My Background')}</h2>
+            <p>{t('Your career profile is stored in')} <code>cv.md</code> {t('and')} <code>config/profile.yml</code>.</p>
             <p className="setup-hint">
-              Edit your profile through the AI assistant, or open the raw files for advanced editing.
+              {t('Edit your profile through the AI assistant, or open the raw files for advanced editing.')}
             </p>
             <div className="setup-actions">
               <button className="btn-primary" onClick={() => setRegenerating(true)}>
-                Regenerate profile
+                {t('Regenerate profile')}
               </button>
               <button className="btn-secondary" onClick={openRawFiles}>
-                Open raw files
+                {t('Open raw files')}
               </button>
             </div>
             {rawFilesError && <p className="intake-error" role="alert">{rawFilesError}</p>}
@@ -175,18 +179,35 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
 
         {tab === 'preferences' && !updatingProfile && (
           <div>
-            <h2>Job Search Preferences</h2>
-            <p>Target roles, locations, relocation, and salary expectations.</p>
+            <section className="ui-language-field">
+              <h2>{t('App language')}</h2>
+              <p className="setup-hint">{t('The language of menus, buttons and messages in this app. Analyses and documents follow the settings below.')}</p>
+              <div className="ai-segment" role="radiogroup" aria-label={t('App language')}>
+                {UI_LANGUAGES.map((option) => (
+                  <button
+                    key={option.code}
+                    type="button"
+                    role="radio"
+                    aria-checked={uiLanguage === option.code}
+                    onClick={() => onUiLanguageChange?.(option.code)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+            <h2>{t('Job Search Preferences')}</h2>
+            <p>{t('Target roles, locations, relocation, and salary expectations.')}</p>
             <p className="setup-hint">
-              Updating asks the AI to rewrite <code>config/profile.yml</code>, <code>modes/_profile.md</code> and{' '}
-              <code>portals.yml</code> from these answers. You review the result before anything is applied; <code>cv.md</code> is not touched.
+              {t('Updating asks the AI to rewrite')} <code>config/profile.yml</code>, <code>modes/_profile.md</code> {t('and')}{' '}
+              <code>portals.yml</code> {t('from these answers. You review the result before anything is applied;')} <code>cv.md</code> {t('is not touched.')}
             </p>
             <JobPreferences
               compact
               value={preferences}
               onChange={setPreferences}
               onContinue={updateProfile}
-              continueLabel="Update profile with these preferences"
+              continueLabel={t('Update profile with these preferences')}
             />
             <AnalysisLanguageField root={root} />
           </div>
@@ -203,8 +224,8 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
 
         {tab === 'sources' && (
           <div>
-            <h2>Search Sources</h2>
-            <p>Companies and job boards to scan, stored in <code>{root.split('/').pop()}/portals.yml</code>.</p>
+            <h2>{t('Search Sources')}</h2>
+            <p>{t('Companies and job boards to scan, stored in')} <code>{root.split('/').pop()}/portals.yml</code>.</p>
           </div>
         )}
 
@@ -214,7 +235,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
 
         {tab === 'ai' && (
           <div>
-            <h2>AI Provider</h2>
+            <h2>{t('AI Provider')}</h2>
             <div className="provider-list">
               {providers.map((p) => (
                 <button
@@ -231,14 +252,14 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
               ))}
             </div>
 
-            <h2 style={{ marginTop: 32 }}>Model Settings</h2>
+            <h2 style={{ marginTop: 32 }}>{t('Model Settings')}</h2>
 
             {!modelSettingsSupported && (
-              <p className="setup-hint">Model settings are not supported for this provider.</p>
+              <p className="setup-hint">{t('Model settings are not supported for this provider.')}</p>
             )}
 
             <div className="ai-setting-row">
-              <label htmlFor="ai-model">Model</label>
+              <label htmlFor="ai-model">{t('Model')}</label>
               <select
                 id="ai-model"
                 disabled={!modelSettingsSupported || catalogState === 'loading'}
@@ -250,24 +271,24 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
                   saveModel(e.target.value);
                 }}
               >
-                <option value="">Provider default</option>
+                <option value="">{t('Provider default')}</option>
                 {catalog.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.label}{m.available === null ? ' (unverified)' : ''}
+                    {m.label}{m.available === null ? ` ${t('(unverified)')}` : ''}
                   </option>
                 ))}
-                <option value="__custom">Custom…</option>
+                <option value="__custom">{t('Custom…')}</option>
               </select>
             </div>
 
             {customModel && (
               <div className="ai-setting-row">
-                <label htmlFor="ai-model-custom">Custom model id</label>
+                <label htmlFor="ai-model-custom">{t('Custom model id')}</label>
                 <input
                   id="ai-model-custom"
                   type="text"
                   className="ai-input"
-                  placeholder="Model id"
+                  placeholder={t('Model id')}
                   disabled={!modelSettingsSupported}
                   value={model}
                   onChange={(e) => {
@@ -279,21 +300,21 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
             )}
 
             {catalogState === 'loading' && (
-              <p className="setup-hint">Checking which models your account can use…</p>
+              <p className="setup-hint">{t('Checking which models your account can use…')}</p>
             )}
             {catalogState === 'error' && (
-              <p className="setup-hint">Could not verify models; showing defaults.</p>
+              <p className="setup-hint">{t('Could not verify models; showing defaults.')}</p>
             )}
 
             <div className="ai-setting-row">
-              <label>Refresh</label>
+              <label>{t('Refresh')}</label>
               <button className="btn-ghost" disabled={!modelSettingsSupported} onClick={refreshCatalog}>
-                Refresh
+                {t('Refresh')}
               </button>
             </div>
 
             <div className="ai-setting-row">
-              <label>Effort</label>
+              <label>{t('Effort')}</label>
               <div className="ai-segment" role="radiogroup">
                 {(['low', 'medium', 'high'] as const).map((lvl) => (
                   <button
@@ -303,14 +324,14 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
                     disabled={effortDisabled}
                     onClick={() => { setEffortState(lvl); saveEffort(lvl); }}
                   >
-                    {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                    {t(lvl.charAt(0).toUpperCase() + lvl.slice(1))}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="ai-setting-row">
-              <label htmlFor="ai-fast">Fast mode</label>
+              <label htmlFor="ai-fast">{t('Fast mode')}</label>
               <button
                 id="ai-fast"
                 role="switch"
@@ -323,24 +344,24 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
               </button>
             </div>
             {!fastOk && (
-              <p className="setup-hint">Fast mode is available for Claude Opus models only.</p>
+              <p className="setup-hint">{t('Fast mode is available for Claude Opus models only.')}</p>
             )}
           </div>
         )}
 
         {tab === 'about' && (
           <div>
-            <h2>About</h2>
+            <h2>{t('About')}</h2>
             <p>CareerOps Desktop v{__APP_VERSION__}</p>
             <div className="settings-update-row">
               <div>
-                <span>Check for Updates</span>
+                <span>{t('Check for Updates')}</span>
                 {updateCheck.status === 'up_to_date' && (
-                  <div className="settings-update-status">You're up to date.</div>
+                  <div className="settings-update-status">{t("You're up to date.")}</div>
                 )}
                 {updateCheck.status === 'available' && (
                   <div className="settings-update-status">
-                    v{updateCheck.availableVersion} available
+                    {t('v{version} available', { version: updateCheck.availableVersion ?? '' })}
                   </div>
                 )}
                 {updateCheck.status === 'error' && (
@@ -349,7 +370,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
                   </div>
                 )}
                 {updateCheck.status === 'checking' && (
-                  <div className="settings-update-status">Checking…</div>
+                  <div className="settings-update-status">{t('Checking…')}</div>
                 )}
               </div>
               <button
@@ -357,7 +378,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged }: Props) {
                 disabled={updateCheck.status === 'checking'}
                 onClick={() => checkForUpdate(setUpdateCheck, __APP_VERSION__, true)}
               >
-                Check Now
+                {t('Check Now')}
               </button>
             </div>
           </div>

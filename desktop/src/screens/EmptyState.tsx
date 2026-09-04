@@ -1,3 +1,5 @@
+import { t } from '../lib/i18n';
+
 type Props = {
   root: string;
   missing: string[];
@@ -18,10 +20,10 @@ const EXPLAIN: Record<string, string> = {
 export default function EmptyState({ root, missing, onPick }: Props) {
   return (
     <main className="state-screen" style={{ maxWidth: 640, margin: '0 auto', padding: 48 }}>
-      <h1 className="state-title" style={{ marginTop: 0 }}>career-ops is not set up yet</h1>
+      <h1 className="state-title" style={{ marginTop: 0 }}>{t('career-ops is not set up yet')}</h1>
 
       <p style={{ color: 'var(--color-text-secondary)' }}>
-        Looking in <code style={{ fontFamily: 'var(--font-mono)' }}>{root}</code>.
+        {t('Looking in')} <code style={{ fontFamily: 'var(--font-mono)' }}>{root}</code>.
       </p>
 
       <ul style={{ listStyle: 'none', padding: 0 }}>
@@ -37,18 +39,17 @@ export default function EmptyState({ root, missing, onPick }: Props) {
             }}
           >
             <code style={{ color: 'var(--color-accent-amber)', fontFamily: 'var(--font-mono)' }}>{f}</code>
-            <div style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>{EXPLAIN[f] ?? ''}</div>
+            <div style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>{EXPLAIN[f] ? t(EXPLAIN[f]) : ''}</div>
           </li>
         ))}
       </ul>
 
       <p style={{ color: 'var(--color-text-secondary)' }}>
-        CareerOps Desktop completes onboarding and workspace setup in the app. If this workspace
-        was moved or is incomplete, choose its current location or another CareerOps workspace.
+        {t('CareerOps Desktop completes onboarding and workspace setup in the app. If this workspace was moved or is incomplete, choose its current location or another CareerOps workspace.')}
       </p>
 
       <button className="btn-primary" onClick={onPick}>
-        Choose another location
+        {t('Choose another location')}
       </button>
     </main>
   );

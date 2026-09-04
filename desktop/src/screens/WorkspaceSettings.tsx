@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { pickWorkspace } from '../config';
+import { t } from '../lib/i18n';
 import { openWorkspaceFolder } from '../lib/workspace';
 
 export type WorkspaceSettingsProps = {
@@ -35,16 +36,16 @@ export default function WorkspaceSettings({ path, onWorkspaceChanged }: Workspac
 
   return (
     <section className="workspace-settings">
-      <h2>Workspace</h2>
+      <h2>{t('Workspace')}</h2>
       <code className="workspace-path-preview">{path}</code>
       {error && <p className="workspace-settings-error" role="alert">{error}</p>}
       <div className="workspace-settings-actions">
-        <button className="btn-secondary" onClick={openFolder}>Open Folder</button>
-        <button className="btn-primary" disabled={changing} onClick={changeLocation}>Change Location</button>
+        <button className="btn-secondary" onClick={openFolder}>{t('Open Folder')}</button>
+        <button className="btn-primary" disabled={changing} onClick={changeLocation}>{t('Change Location')}</button>
       </div>
       <p className="setup-hint">
-        Changing location switches the active workspace.<br />
-        It does not move your current files.
+        {t('Changing location switches the active workspace.')}<br />
+        {t('It does not move your current files.')}
       </p>
     </section>
   );

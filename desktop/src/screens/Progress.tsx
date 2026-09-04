@@ -3,6 +3,7 @@ import {
   Tooltip, XAxis, YAxis,
 } from 'recharts';
 import type { Progress as ProgressData } from '../api';
+import { t } from '../lib/i18n';
 import RateCard, { CountCard } from '../components/RateCard';
 
 const AXIS = { stroke: 'var(--color-text-secondary)', fontSize: 12 };
@@ -66,8 +67,8 @@ export default function Progress({ data }: { data: ProgressData }) {
     return (
       <div className="pane">
         <div className="progress-empty">
-          <h2>No data yet</h2>
-          <p>Evaluate some job postings to see your progress charts here.</p>
+          <h2>{t('No data yet')}</h2>
+          <p>{t('Evaluate some job postings to see your progress charts here.')}</p>
         </div>
       </div>
     );
@@ -77,7 +78,7 @@ export default function Progress({ data }: { data: ProgressData }) {
     <div className="pane">
       <div className="progress-grid">
         <section className="card">
-          <h2>Funnel</h2>
+          <h2>{t('Funnel')}</h2>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={funnel} layout="vertical" margin={{ left: 24 }}>
               <CartesianGrid stroke={GRID} strokeDasharray="none" horizontal={false} />
@@ -88,7 +89,7 @@ export default function Progress({ data }: { data: ProgressData }) {
                 itemStyle={TOOLTIP_ITEM_STYLE}
                 formatter={(value, _name, item) => {
                   const pct = (item?.payload as { pct: number } | undefined)?.pct ?? 0;
-                  return [`${value} (${pct.toFixed(0)}%)`, 'Count'];
+                  return [`${value} (${pct.toFixed(0)}%)`, t('Count')];
                 }}
               />
               <Bar dataKey="count" fill={funnelColor} radius={[0, 4, 4, 0]} maxBarSize={MAX_BAR_SIZE} activeBar={ACTIVE_BAR} />
@@ -97,14 +98,14 @@ export default function Progress({ data }: { data: ProgressData }) {
         </section>
 
         <section className="card">
-          <h2>Score distribution</h2>
+          <h2>{t('Score distribution')}</h2>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={buckets}>
               <CartesianGrid stroke={GRID} strokeDasharray="none" vertical={false} />
               <XAxis dataKey="name" {...AXIS} />
               <YAxis {...AXIS} allowDecimals={false} />
               <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
-              <Bar dataKey="count" name="Count" radius={[4, 4, 0, 0]} maxBarSize={MAX_BAR_SIZE} activeBar={ACTIVE_BAR}>
+              <Bar dataKey="count" name={t('Count')} radius={[4, 4, 0, 0]} maxBarSize={MAX_BAR_SIZE} activeBar={ACTIVE_BAR}>
                 {buckets.map((b, i) => <Cell key={b.name} fill={bucketColor(i)} />)}
               </Bar>
             </BarChart>
@@ -112,27 +113,27 @@ export default function Progress({ data }: { data: ProgressData }) {
         </section>
 
         <section className="card">
-          <h2>Rates</h2>
+          <h2>{t('Rates')}</h2>
           <div className="rates">
-            <RateCard label="Response" value={data.ResponseRate} />
-            <RateCard label="Interview" value={data.InterviewRate} />
-            <RateCard label="Offer" value={data.OfferRate} />
+            <RateCard label={t('Response')} value={data.ResponseRate} />
+            <RateCard label={t('Interview')} value={data.InterviewRate} />
+            <RateCard label={t('Offer')} value={data.OfferRate} />
           </div>
           <div className="rates" style={{ marginTop: 20 }}>
-            <CountCard label="Active" value={data.ActiveApps} />
-            <CountCard label="Offers" value={data.TotalOffers} />
+            <CountCard label={t('Active')} value={data.ActiveApps} />
+            <CountCard label={t('Offers')} value={data.TotalOffers} />
           </div>
         </section>
 
         <section className="card">
-          <h2>Weekly activity</h2>
+          <h2>{t('Weekly activity')}</h2>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={weeks}>
               <CartesianGrid stroke={GRID} strokeDasharray="none" vertical={false} />
               <XAxis dataKey="name" {...AXIS} />
               <YAxis {...AXIS} allowDecimals={false} />
               <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
-              <Bar dataKey="count" name="Count" fill="var(--color-accent-teal)" radius={[4, 4, 0, 0]} maxBarSize={MAX_BAR_SIZE} activeBar={ACTIVE_BAR} />
+              <Bar dataKey="count" name={t('Count')} fill="var(--color-accent-teal)" radius={[4, 4, 0, 0]} maxBarSize={MAX_BAR_SIZE} activeBar={ACTIVE_BAR} />
             </BarChart>
           </ResponsiveContainer>
         </section>

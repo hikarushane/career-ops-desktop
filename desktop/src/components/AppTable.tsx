@@ -1,5 +1,6 @@
 import type { Application } from '../api';
 import { scoreBand, type SortKey } from '../lib/filters';
+import { t } from '../lib/i18n';
 import { CheckIcon } from './icons';
 import StatusChip from './StatusChip';
 import StatusSelect from './StatusSelect';
@@ -45,7 +46,7 @@ export default function AppTable({
               aria-sort={c.sort && sort === c.sort ? 'descending' : undefined}
               onClick={() => c.sort && onSort(c.sort)}
             >
-              {c.label}
+              {c.key === 'num' ? c.label : t(c.label)}
               {c.sort === sort ? ' ▾' : ''}
             </th>
           ))}

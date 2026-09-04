@@ -4,6 +4,7 @@ import {
   setAnalysisLanguage,
   type LanguageOption,
 } from '../api';
+import { t } from '../lib/i18n';
 
 type Props = {
   root: string;
@@ -43,13 +44,12 @@ export default function AnalysisLanguageField({ root, onSaved }: Props) {
 
   return (
     <section className="analysis-language-field">
-      <h2>Analysis Language</h2>
+      <h2>{t('Analysis Language')}</h2>
       <p>
-        CareerOps job analyses use this language. Your CV, cover letter, and
-        interview practice still follow the job description's original language.
+        {t("CareerOps job analyses use this language. Your CV, cover letter, and interview practice still follow the job description's original language.")}
       </p>
       <label>
-        <span>Analysis language</span>
+        <span>{t('Analysis language')}</span>
         <select value={language} onChange={(event) => setLanguage(event.target.value)} disabled={saving}>
           {options.map((option) => (
             <option key={option.code} value={option.code}>{option.name}</option>
@@ -58,7 +58,7 @@ export default function AnalysisLanguageField({ root, onSaved }: Props) {
       </label>
       {error && <p className="language-error" role="alert">{error}</p>}
       <button className="btn-primary" onClick={save} disabled={saving || options.length === 0}>
-        {saving ? 'Saving…' : 'Save analysis language'}
+        {saving ? t('Saving…') : t('Save analysis language')}
       </button>
     </section>
   );

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import TaskScreen from './TaskScreen';
 import { batchArgs } from '../lib/batch';
+import { t } from '../lib/i18n';
 import { getTask, startTask } from '../lib/taskStore';
 import {
   fetchPosting,
@@ -122,7 +123,7 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone, onBa
             'evaluate',
             { url: '', url_line: '', capture },
             root,
-            'Pasted job description',
+            t('Pasted job description'),
             languageContext,
           ),
         );
@@ -171,7 +172,7 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone, onBa
   const retryBatch = useCallback(async () => {
     setStartError(null);
     try {
-      setTaskId(await startTask('batch', initialTask?.args ?? batchArgs(), root, initialTask?.label ?? 'Batch processing'));
+      setTaskId(await startTask('batch', initialTask?.args ?? batchArgs(), root, initialTask?.label ?? t('Batch processing')));
     } catch (err) {
       setStartError(err instanceof Error ? err.message : String(err));
     }
@@ -192,7 +193,7 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone, onBa
           'evaluate',
           current?.args ?? {},
           root,
-          current?.label ?? 'Evaluating',
+          current?.label ?? t('Evaluating'),
           current?.languageContext,
         ),
       );
@@ -206,13 +207,13 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone, onBa
   if (taskId === null) {
     return (
       <div className="eval-screen">
-        {onBack && <button type="button" className="btn-ghost screen-back" onClick={onBack}>&larr; Back</button>}
-        <h1>Evaluate a job</h1>
+        {onBack && <button type="button" className="btn-ghost screen-back" onClick={onBack}>&larr; {t('Back')}</button>}
+        <h1>{t('Evaluate a job')}</h1>
         <div className="action-input-row">
           <textarea
             className="eval-input"
             rows={2}
-            placeholder="Paste a job URL, or paste the full job description..."
+            placeholder={t('Paste a job URL, or paste the full job description...')}
             value={input}
             onChange={(e) => {
               const next = e.target.value;
@@ -240,48 +241,48 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone, onBa
             onClick={start}
             disabled={!input.trim() || starting || (fetchState.kind === 'blocked' && !pasteReady)}
           >
-            {fetchState.kind === 'fetching' ? 'Fetching…' : 'Analyse'}
+            {fetchState.kind === 'fetching' ? t('Fetching…') : t('Analyse')}
           </button>
         </div>
         {fetchState.kind === 'fetching' && (
-          <p className="setup-hint" role="status">Fetching the posting…</p>
+          <p className="setup-hint" role="status">{t('Fetching the posting…')}</p>
         )}
         {fetchState.kind === 'blocked' && (
           <div className="eval-blocked" role="alert">
-            <p>Could not read this page automatically ({fetchState.reason}). Paste the job description below.</p>
+            <p>{t('Could not read this page automatically ({reason}). Paste the job description below.', { reason: fetchState.reason })}</p>
             <textarea
               rows={10}
               value={jdText}
               onChange={(e) => setJdText(e.target.value)}
-              placeholder="Paste the job description"
-              aria-label="Paste the job description"
+              placeholder={t('Paste the job description')}
+              aria-label={t('Paste the job description')}
             />
-            <p className="setup-hint">{jdText.trim().length} / 200 characters minimum</p>
+            <p className="setup-hint">{t('{n} / 200 characters minimum', { n: jdText.trim().length })}</p>
           </div>
         )}
         {startError && <p className="intake-error" role="alert">{startError}</p>}
         {languages && (
           <section className="document-language-picker">
             <label>
-              <span>Document language</span>
+              <span>{t('Document language')}</span>
               <select ref={documentLanguageRef} value={jobLanguage} onChange={(event) => setJobLanguage(event.target.value)}>
-                <option value="">Detect from the job description</option>
+                <option value="">{t('Detect from the job description')}</option>
                 {languages.options.map((option) => (
                   <option key={option.code} value={option.code}>{option.name}</option>
                 ))}
               </select>
             </label>
             <p className="setup-hint">
-              Analysis uses {languages.analysisLanguage}; generated CVs, cover letters, and interview practice use this job language.
+              {t('Analysis uses {language}; generated CVs, cover letters, and interview practice use this job language.', { language: languages.analysisLanguage })}
             </p>
             {detectedLanguage && (
               <p className="setup-hint">
-                Detected document language: {detectedLanguage.language} ({Math.round(detectedLanguage.confidence * 100)}% confidence).
+                {t('Detected document language: {language} ({confidence}% confidence).', { language: detectedLanguage.language, confidence: Math.round(detectedLanguage.confidence * 100) })}
                 {detectedLanguage.warning && (
                   <>
                     {' '}{detectedLanguage.warning}{' '}
                     <button className="btn-ghost language-change-button" type="button" onClick={() => documentLanguageRef.current?.focus()}>
-                      [Change]
+                      {t('[Change]')}
                     </button>
                   </>
                 )}
@@ -296,12 +297,12 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone, onBa
   return (
     <TaskScreen
       taskId={taskId}
-      title={isBatchTask ? 'Processing pending jobs' : 'Evaluating'}
+      title={isBatchTask ? t('Processing pending jobs') : t('Evaluating')}
       onRetry={isBatchTask ? retryBatch : retryEvaluate}
       onBack={onBack}
       // A single evaluation hands its report path back so the Jobs board can
       // open that card; a batch turn produces several, so it hands back none.
-      doneAction={{ label: 'Back to pipeline', onClick: () => onDone(isBatchTask ? undefined : reportArtifact(taskId)) }}
+      doneAction={{ label: t('Back to pipeline'), onClick: () => onDone(isBatchTask ? undefined : reportArtifact(taskId)) }}
       onCancelled={isBatchTask ? onDone : () => setTaskId(null)}
     />
   );

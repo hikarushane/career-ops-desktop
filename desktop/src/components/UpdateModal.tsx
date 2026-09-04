@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { t } from '../lib/i18n';
 import type { UpdateState } from '../lib/updater';
 
 type Props = {
@@ -67,7 +68,7 @@ export default function UpdateModal({ state, onUpdate, onClose }: Props) {
         aria-labelledby="update-modal-title"
       >
         <h2 id="update-modal-title" className="update-modal-title">
-          {state.status === 'error' ? 'Update Error' : 'Update Available'}
+          {state.status === 'error' ? t('Update Error') : t('Update Available')}
         </h2>
 
         {state.status === 'error' ? (
@@ -78,16 +79,16 @@ export default function UpdateModal({ state, onUpdate, onClose }: Props) {
           <>
             <div className="update-versions">
               <div className="update-version-row">
-                <span className="update-version-label">Current</span>
+                <span className="update-version-label">{t('Current')}</span>
                 <span className="update-version-value">{state.currentVersion}</span>
               </div>
               <div className="update-version-row">
-                <span className="update-version-label">New</span>
+                <span className="update-version-label">{t('New')}</span>
                 <span className="update-version-value">{state.availableVersion}</span>
               </div>
               {state.releaseDate && (
                 <div className="update-version-row">
-                  <span className="update-version-label">Published</span>
+                  <span className="update-version-label">{t('Published')}</span>
                   <span className="update-version-value">
                     {new Date(state.releaseDate).toLocaleDateString()}
                   </span>
@@ -97,7 +98,7 @@ export default function UpdateModal({ state, onUpdate, onClose }: Props) {
 
             {state.releaseNotes && (
               <div className="update-notes">
-                <h3 className="update-notes-heading">Release Notes</h3>
+                <h3 className="update-notes-heading">{t('Release Notes')}</h3>
                 <div className="update-notes-body">{state.releaseNotes}</div>
               </div>
             )}
@@ -106,7 +107,7 @@ export default function UpdateModal({ state, onUpdate, onClose }: Props) {
 
         <div className="update-modal-actions">
           {state.status === 'error' ? (
-            <button ref={initialFocusRef} className="btn-primary" onClick={onClose}>Close</button>
+            <button ref={initialFocusRef} className="btn-primary" onClick={onClose}>{t('Close')}</button>
           ) : (
             <>
               <button
@@ -115,16 +116,16 @@ export default function UpdateModal({ state, onUpdate, onClose }: Props) {
                 onClick={onClose}
                 disabled={isLoading}
               >
-                Later
+                {t('Later')}
               </button>
               <button
                 className="btn-primary"
                 onClick={onUpdate}
                 disabled={isLoading}
               >
-                {state.status === 'downloading' ? 'Downloading…' :
-                 state.status === 'installing' ? 'Installing…' :
-                 'Update Now'}
+                {state.status === 'downloading' ? t('Downloading…') :
+                 state.status === 'installing' ? t('Installing…') :
+                 t('Update Now')}
               </button>
             </>
           )}

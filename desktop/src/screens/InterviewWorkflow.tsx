@@ -4,6 +4,7 @@ import AgentActivity from '../components/AgentActivity';
 import Drawer from '../components/Drawer';
 import FilePreview from '../components/FilePreview';
 import { loadReportWidth, saveReportWidth } from '../lib/splitResize';
+import { t } from '../lib/i18n';
 import { cancel, getTask, startTask, useTasks } from '../lib/taskStore';
 import { languageSettings, type LanguageContext, type LanguageSettings, type TaskType } from '../api';
 import {
@@ -115,7 +116,7 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
         mode as TaskType,
         { company: session.company, role: session.role, context },
         root,
-        `${TITLES[mode]} · ${session.company}`,
+        `${t(TITLES[mode])} · ${session.company}`,
         languageContext(),
       );
       commit({ ...session, jobLanguage: jobLanguage || undefined, turns: [...session.turns, { user: text, taskId: id, reply: null }] });
@@ -142,7 +143,7 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
           ? current.args
           : { company: session.company, role: session.role, context: buildContext(session.turns.slice(0, -1), lastTurn.user, session.files) },
         root,
-        current?.label ?? `${TITLES[mode]} · ${session.company}`,
+        current?.label ?? `${t(TITLES[mode])} · ${session.company}`,
         current?.languageContext ?? languageContext(),
       );
       commit({ ...session, turns: [...session.turns.slice(0, -1), { ...lastTurn, taskId: id, reply: null }] });
@@ -152,7 +153,7 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
   }, [root, mode, session, lastTurn, languages, jobLanguage, commit]);
 
   const reset = useCallback(() => {
-    if (!window.confirm('Start a new conversation? The current one stays in your interview-prep files but leaves this screen.')) return;
+    if (!window.confirm(t('Start a new conversation? The current one stays in your interview-prep files but leaves this screen.'))) return;
     commit({ key: session.key, mode: session.mode, company: session.company, role: session.role, turns: [] });
     setValues({});
     setMessage('');
@@ -164,20 +165,21 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
     const id = `intake-${f.key}`;
     return (
       <label key={f.key} htmlFor={id}>
-        <span>{f.label}{f.required ? '' : ' (optional)'}</span>
+        <span>{t(f.label)}{f.required ? '' : ` ${t('(optional)')}`}</span>
         {f.type === 'textarea' ? (
-          <textarea id={id} rows={3} value={value} placeholder={f.placeholder} onChange={(e) => set(e.target.value)} />
+          <textarea id={id} rows={3} value={value} placeholder={f.placeholder ? t(f.placeholder) : undefined} onChange={(e) => set(e.target.value)} />
         ) : f.type === 'select' ? (
           <select id={id} value={value} onChange={(e) => set(e.target.value)}>
-            <option value="">{f.required ? 'Choose…' : 'Not sure'}</option>
-            {(f.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
+            <option value="">{f.required ? t('Choose…') : t('Not sure')}</option>
+            {/* Option values stay English: they go into the prompt as the mode's own vocabulary. */}
+            {(f.options ?? []).map((o) => <option key={o} value={o}>{t(o)}</option>)}
           </select>
         ) : f.type === 'time' ? (
           // A plain masked field: the native time control needs a mouse click
           // to move from hours to minutes, this one takes "1430" straight.
           <input id={id} type="text" inputMode="numeric" placeholder="14:30" maxLength={5} value={value} onChange={(e) => set(maskTime(e.target.value))} />
         ) : (
-          <input id={id} type={f.type} value={value} placeholder={f.placeholder} onChange={(e) => set(e.target.value)} />
+          <input id={id} type={f.type} value={value} placeholder={f.placeholder ? t(f.placeholder) : undefined} onChange={(e) => set(e.target.value)} />
         )}
       </label>
     );
@@ -185,19 +187,19 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
 
   return (
     <div className="eval-screen interview-session">
-      <button className="btn-ghost" onClick={onBack}>&larr; Back</button>
-      <h1>{TITLES[mode]}</h1>
+      <button className="btn-ghost screen-back" onClick={onBack}>&larr; {t('Back')}</button>
+      <h1>{t(TITLES[mode])}</h1>
       <p className="setup-hint">{session.company} &mdash; {session.role}</p>
       {languages && (
         <label className="workflow-language-picker">
-          <span>Interview language</span>
+          <span>{t('Interview language')}</span>
           <select value={jobLanguage} onChange={(event) => setJobLanguage(event.target.value)} disabled={session.turns.length > 0}>
-            <option value="">Detect from this job's description</option>
+            <option value="">{t("Detect from this job's description")}</option>
             {languages.options.map((option) => (
               <option key={option.code} value={option.code}>{option.name}</option>
             ))}
           </select>
-          <small>Practice, planning, and debrief material follow the job language; analysis stays {languages.analysisLanguage}.</small>
+          <small>{t('Practice, planning, and debrief material follow the job language; analysis stays {language}.', { language: languages.analysisLanguage })}</small>
         </label>
       )}
 
@@ -205,23 +207,23 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
         <form className="preferences-form interview-intake" onSubmit={(e) => { e.preventDefault(); void start(); }}>
           {INTAKE_FIELDS[mode].map(field)}
           <div className="setup-actions">
-            <button className="btn-primary" type="submit" disabled={starting || !intakeComplete(mode, values)}>Start</button>
+            <button className="btn-primary" type="submit" disabled={starting || !intakeComplete(mode, values)}>{t('Start')}</button>
           </div>
         </form>
       ) : (
         <>
-          <ol className="chat-thread" aria-label="Conversation">
-            {session.turns.map((t) => {
-              const task = tasks.find((x) => x.taskId === t.taskId) ?? null;
+          <ol className="chat-thread" aria-label={t('Conversation')}>
+            {session.turns.map((turn) => {
+              const task = tasks.find((x) => x.taskId === turn.taskId) ?? null;
               return (
-                <li key={t.taskId} className="chat-turn">
-                  <div className="chat-bubble chat-bubble--sent">{t.user}</div>
-                  {t.reply !== null ? (
+                <li key={turn.taskId} className="chat-turn">
+                  <div className="chat-bubble chat-bubble--sent">{turn.user}</div>
+                  {turn.reply !== null ? (
                     <>
-                      <div className="chat-bubble chat-bubble--received"><ReactMarkdown>{t.reply}</ReactMarkdown></div>
-                      {t.artifacts && t.artifacts.length > 0 && (
-                        <ul className="chat-artifacts" aria-label="Files written">
-                          {t.artifacts.map((a) => (
+                      <div className="chat-bubble chat-bubble--received"><ReactMarkdown>{turn.reply}</ReactMarkdown></div>
+                      {turn.artifacts && turn.artifacts.length > 0 && (
+                        <ul className="chat-artifacts" aria-label={t('Files written')}>
+                          {turn.artifacts.map((a) => (
                             <li key={a}><button type="button" className="btn-link" onClick={() => setPreview(a)}>{a}</button></li>
                           ))}
                         </ul>
@@ -233,7 +235,7 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
                     </div>
                   ) : (
                     <div className="chat-bubble chat-bubble--received chat-bubble--muted">
-                      Reply not captured. The files it wrote are under interview-prep/.
+                      {t('Reply not captured. The files it wrote are under interview-prep/.')}
                     </div>
                   )}
                 </li>
@@ -251,15 +253,15 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
                 e.preventDefault();
                 if (!busy && !starting && message.trim()) void send(message.trim());
               }}
-              placeholder={busy ? 'Waiting for the AI…' : 'Reply, ask a follow-up, or paste new details (Enter sends, Shift+Enter for a new line)'}
-              aria-label="Message"
+              placeholder={busy ? t('Waiting for the AI…') : t('Reply, ask a follow-up, or paste new details (Enter sends, Shift+Enter for a new line)')}
+              aria-label={t('Message')}
               disabled={busy}
             />
-            <button className="btn-primary" type="submit" disabled={busy || starting || !message.trim()}>Send</button>
+            <button className="btn-primary" type="submit" disabled={busy || starting || !message.trim()}>{t('Send')}</button>
           </form>
           <div className="setup-actions">
-            <button className="btn-ghost" onClick={onBack}>Done</button>
-            <button className="btn-ghost" onClick={reset} disabled={busy}>New conversation</button>
+            <button className="btn-ghost" onClick={onBack}>{t('Done')}</button>
+            <button className="btn-ghost" onClick={reset} disabled={busy}>{t('New conversation')}</button>
           </div>
         </>
       )}

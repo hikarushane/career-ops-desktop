@@ -1,4 +1,5 @@
 import { getCanonicalLabels } from '../lib/contracts';
+import { t } from '../lib/i18n';
 
 type Props = {
   value: string;
@@ -36,7 +37,8 @@ export default function StatusSelect({ value, normStatus, disabled, onChange }: 
         fontSize: 13,
       }}
     >
-      {options.map((s) => <option key={s} value={s}>{s}</option>)}
+      {/* The value written to the tracker stays the canonical English label; only the display is translated. */}
+      {options.map((s) => <option key={s} value={s}>{t(s)}</option>)}
     </select>
   );
 }

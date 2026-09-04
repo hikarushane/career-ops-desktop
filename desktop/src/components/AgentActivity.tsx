@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { TaskRecord } from '../lib/taskStore';
 import { summarize } from '../lib/taskSummary';
+import { t } from '../lib/i18n';
 import { CheckIcon } from './icons';
 
 type Props = { task: TaskRecord; onCancel: () => void; onRetry: () => void };
@@ -29,12 +30,12 @@ export default function AgentActivity({ task, onCancel, onRetry }: Props) {
   const lastRawLine = task.rawLog.length > 0 ? task.rawLog[task.rawLog.length - 1] : '';
   // Providers that never emit structured status/tool events fall back to raw stdout.
 
-  const stateWord = task.state === 'running' ? 'Running' : task.state === 'done' ? 'Done' : 'Failed';
+  const stateWord = task.state === 'running' ? t('Running') : task.state === 'done' ? t('Done') : t('Failed');
   const summaryText = task.state === 'running'
     ? (latest ? summarize(latest) : (task.events.length === 0 && lastRawLine ? truncate(lastRawLine, 80) : ''))
     : task.state === 'done'
       ? (task.outcome?.detail ?? '')
-      : (task.outcome?.detail ?? `exit code ${task.exitCode ?? 'unknown'}`);
+      : (task.outcome?.detail ?? t('exit code {code}', { code: task.exitCode ?? 'unknown' }));
 
   return (
     <div className={`agent-activity state-${task.state}`}>
@@ -47,26 +48,26 @@ export default function AgentActivity({ task, onCancel, onRetry }: Props) {
       {task.state === 'failed' && lastText && (
         <blockquote className="agent-last-text">{lastText.summary}</blockquote>
       )}
-      <ol className="agent-feed" aria-label="Activity">
+      <ol className="agent-feed" aria-label={t('Activity')}>
         {activity.length > 0 && activity.slice(-12).reverse().map((e, i) => (
           <li key={`${e.summary}-${i}`} className={`agent-feed-item kind-${e.kind}`}>{summarize(e)}</li>
         ))}
         {task.events.length === 0 && task.rawLog.length > 0 && (
           <>
-            <li className="agent-feed-heading">Provider output (raw)</li>
+            <li className="agent-feed-heading">{t('Provider output (raw)')}</li>
             {task.rawLog.slice(-12).reverse().map((line, i) => (
               <li key={`raw-${i}`} className="agent-feed-item kind-raw">{line}</li>
             ))}
           </>
         )}
         {task.events.length > 0 && activity.length === 0 && task.state === 'running' && (
-          <li className="agent-feed-item">Waiting for the AI provider to start</li>
+          <li className="agent-feed-item">{t('Waiting for the AI provider to start')}</li>
         )}
       </ol>
       <div className="agent-activity-actions">
-        {task.state === 'running' && <button className="btn-secondary" onClick={onCancel}>Cancel</button>}
-        {task.state === 'failed' && <button className="btn-primary" onClick={onRetry}>Retry</button>}
-        <button className="btn-ghost" onClick={() => setShowDetails(!showDetails)}>{showDetails ? 'Hide' : 'Technical'} details</button>
+        {task.state === 'running' && <button className="btn-secondary" onClick={onCancel}>{t('Cancel')}</button>}
+        {task.state === 'failed' && <button className="btn-primary" onClick={onRetry}>{t('Retry')}</button>}
+        <button className="btn-ghost" onClick={() => setShowDetails(!showDetails)}>{showDetails ? t('Hide details') : t('Technical details')}</button>
       </div>
       {showDetails && <pre className="agent-activity-log">{task.rawLog.join('\n')}{task.exitCode !== null && `\n--- exit code: ${task.exitCode} ---`}</pre>}
     </div>

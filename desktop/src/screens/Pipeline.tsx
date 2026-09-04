@@ -5,6 +5,7 @@ import {
   type FilterKey, type SortKey, type ViewMode,
 } from '../lib/filters';
 import { isTaskForReport } from '../lib/documentTasks';
+import { t } from '../lib/i18n';
 import { loadReportWidth, saveReportWidth } from '../lib/splitResize';
 import { startTask, useRunningTasks, useTasks } from '../lib/taskStore';
 import AppTable from '../components/AppTable';
@@ -134,8 +135,8 @@ export default function Pipeline({
       {writeError && (
         <div className={`banner${writeError.stale ? ' stale' : ''}`}>
           <p>{writeError.message}</p>
-          <button onClick={() => { setWriteError(null); onReload(); }}>Reload</button>
-          <button onClick={() => setWriteError(null)}>Dismiss</button>
+          <button onClick={() => { setWriteError(null); onReload(); }}>{t('Reload')}</button>
+          <button onClick={() => setWriteError(null)}>{t('Dismiss')}</button>
         </div>
       )}
       {filter === 'inbox' ? (

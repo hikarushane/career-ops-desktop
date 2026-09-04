@@ -1,6 +1,7 @@
 import type { InboxEntry } from '../api';
 import { processPendingLabel } from '../lib/batch';
 import { matchesInboxSearch } from '../lib/filters';
+import { t } from '../lib/i18n';
 import { openJobUrl } from '../lib/opener';
 
 type Props = {
@@ -30,8 +31,8 @@ export default function InboxTable({ entries, query, onProcessPending, batchStar
     <div className="inbox">
       <div className="inbox-header">
         <p className="inbox-summary">
-          {`${pending} pending${failed > 0 ? ` · ${failed} need attention` : ''}. `}
-          Scanned postings wait here until an evaluation turns them into Jobs.
+          {`${t('{n} pending', { n: pending })}${failed > 0 ? ` · ${t('{n} need attention', { n: failed })}` : ''}. `}
+          {t('Scanned postings wait here until an evaluation turns them into Jobs.')}
         </p>
         <button className="btn-primary" disabled={(pending === 0 && !batchRunning) || batchStarting} onClick={onProcessPending}>
           {processPendingLabel(pending, batchRunning)}
@@ -40,18 +41,18 @@ export default function InboxTable({ entries, query, onProcessPending, batchStar
       {rows.length === 0 ? (
         <p className="inbox-empty">
           {entries.length === 0
-            ? 'Inbox is empty. Run Find matching jobs to fill it.'
-            : 'No inbox entries match your search.'}
+            ? t('Inbox is empty. Run Find matching jobs to fill it.')
+            : t('No inbox entries match your search.')}
         </p>
       ) : (
         <table className="apps">
           <thead>
             <tr>
-              <th>Company</th>
-              <th>Role</th>
-              <th>Location</th>
-              <th>Posted</th>
-              <th><span className="sr-only">Posting</span></th>
+              <th>{t('Company')}</th>
+              <th>{t('Role')}</th>
+              <th>{t('Location')}</th>
+              <th>{t('Posted')}</th>
+              <th><span className="sr-only">{t('Posting')}</span></th>
             </tr>
           </thead>
           <tbody>
@@ -60,12 +61,12 @@ export default function InboxTable({ entries, query, onProcessPending, batchStar
                 <td>{e.company}</td>
                 <td>
                   {e.role}
-                  {e.state === 'failed' && <span className="inbox-attention">Needs attention</span>}
+                  {e.state === 'failed' && <span className="inbox-attention">{t('Needs attention')}</span>}
                 </td>
                 <td className="inbox-location" title={e.location}>{e.location}</td>
                 <td>{e.postedAt}</td>
                 <td>
-                  <button className="btn-link" onClick={() => void openJobUrl(e.url).then((err) => err && onOpenError(err))}>Open posting</button>
+                  <button className="btn-link" onClick={() => void openJobUrl(e.url).then((err) => err && onOpenError(err))}>{t('Open posting')}</button>
                 </td>
               </tr>
             ))}

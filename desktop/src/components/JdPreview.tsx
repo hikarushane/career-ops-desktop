@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listWorkspaceFiles, type WorkspaceFile } from '../api';
 import { jdCaptureFor } from '../lib/interviewFiles';
+import { t } from '../lib/i18n';
 import FilePreview from './FilePreview';
 
 type Props = { root: string; reportNumber: string };
@@ -31,10 +32,10 @@ export default function JdPreview({ root, reportNumber }: Props) {
         type="button"
         className="btn-link"
         disabled={!capture}
-        title={capture ? capture.path : 'No JD capture for this report under jds/'}
+        title={capture ? capture.path : t('No JD capture for this report under jds/')}
         onClick={() => setOpen((o) => !o)}
       >
-        {capture ? (open ? 'Hide job description' : 'View job description') : 'No JD capture'}
+        {capture ? (open ? t('Hide job description') : t('View job description')) : t('No JD capture')}
       </button>
       {open && capture && <FilePreview root={root} relative={capture.path} />}
     </div>

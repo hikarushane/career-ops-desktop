@@ -3,6 +3,7 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { openJobUrl } from '../lib/opener';
+import { t } from '../lib/i18n';
 import { isError, readReport, type Application, type ReportResult } from '../api';
 import type { TaskRecord } from '../lib/taskStore';
 import StatusSelect from './StatusSelect';
@@ -70,7 +71,7 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor, onS
   }, [root, app?.reportPath, app?.reportNumber]);
 
   if (!app) {
-    return <div className="report" style={{ color: 'var(--color-text-secondary)' }}>Select a card or row to read its report.</div>;
+    return <div className="report" style={{ color: 'var(--color-text-secondary)' }}>{t('Select a card or row to read its report.')}</div>;
   }
 
   async function reveal(path: string) {
@@ -89,7 +90,7 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor, onS
   async function generateCV() {
     setError(null);
     try {
-      await onStartTask('pdf', { report: app!.reportNumber }, `CV · ${app!.company}`);
+      await onStartTask('pdf', { report: app!.reportNumber }, `${t('CV')} · ${app!.company}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -98,7 +99,7 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor, onS
   async function submitCoverLetter() {
     setError(null);
     try {
-      await onStartTask('cover', { report: app!.reportNumber, why, problem, approach, tone }, `Cover letter · ${app!.company}`);
+      await onStartTask('cover', { report: app!.reportNumber, why, problem, approach, tone }, `${t('Cover letter')} · ${app!.company}`);
       // Close only once the task actually started; a rejection (e.g. no AI
       // provider configured, or the opener scope refusing a later reveal)
       // must leave the form open with the answers intact so nothing typed
@@ -130,44 +131,44 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor, onS
           </div>
         </div>
         <dl>
-          <dt>Archetype</dt><dd>{app.archetype || '—'}</dd>
-          <dt>TL;DR</dt><dd>{app.tldr || '—'}</dd>
-          <dt>Remote</dt><dd>{app.remote || '—'}</dd>
-          <dt>Comp</dt><dd>{app.compEstimate || '—'}</dd>
+          <dt>{t('Archetype')}</dt><dd>{app.archetype || '—'}</dd>
+          <dt>{t('TL;DR')}</dt><dd>{app.tldr || '—'}</dd>
+          <dt>{t('Remote')}</dt><dd>{app.remote || '—'}</dd>
+          <dt>{t('Comp')}</dt><dd>{app.compEstimate || '—'}</dd>
         </dl>
 
         <div className="report-actions">
           <button className="btn-primary" disabled={!app.jobUrl} onClick={() => { setError(null); void openJobUrl(app.jobUrl).then((e) => e && setError(e)); }}>
-            {app.jobUrl ? 'Open job posting' : 'No job URL'}
+            {app.jobUrl ? t('Open job posting') : t('No job URL')}
           </button>
 
           {app.pdfPath ? (
-            <button className="btn-secondary" onClick={() => reveal(`${root}/${app.pdfPath}`)}>View CV</button>
+            <button className="btn-secondary" onClick={() => reveal(`${root}/${app.pdfPath}`)}>{t('View CV')}</button>
           ) : pdfTask ? (
-            <button className="btn-secondary" disabled>Generating CV…</button>
+            <button className="btn-secondary" disabled>{t('Generating CV…')}</button>
           ) : (
             <button
               className="btn-secondary"
               disabled={!app.reportNumber}
-              title={!app.reportNumber ? 'No report number' : undefined}
+              title={!app.reportNumber ? t('No report number') : undefined}
               onClick={() => generateCV()}
             >
-              Generate CV
+              {t('Generate CV')}
             </button>
           )}
 
           {app.coverLetterPath ? (
-            <button className="btn-secondary" onClick={() => reveal(`${root}/${app.coverLetterPath}`)}>View cover letter</button>
+            <button className="btn-secondary" onClick={() => reveal(`${root}/${app.coverLetterPath}`)}>{t('View cover letter')}</button>
           ) : coverTask ? (
-            <button className="btn-secondary" disabled>Generating cover letter…</button>
+            <button className="btn-secondary" disabled>{t('Generating cover letter…')}</button>
           ) : (
             <button
               className="btn-secondary"
               disabled={!app.reportNumber}
-              title={!app.reportNumber ? 'No report number' : undefined}
+              title={!app.reportNumber ? t('No report number') : undefined}
               onClick={() => setCoverFormOpen((open) => !open)}
             >
-              Generate cover letter
+              {t('Generate cover letter')}
             </button>
           )}
         </div>
@@ -183,21 +184,22 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor, onS
             }}
           >
             <textarea
-              placeholder="Why this role or company? 1–2 angles"
+              placeholder={t('Why this role or company? 1–2 angles')}
               value={why}
               onChange={(e) => setWhy(e.target.value)}
             />
             <textarea
-              placeholder="What problem would you solve for them?"
+              placeholder={t('What problem would you solve for them?')}
               value={problem}
               onChange={(e) => setProblem(e.target.value)}
             />
             <textarea
-              placeholder="Your opening move on day one, 1–2 sentences"
+              placeholder={t('Your opening move on day one, 1–2 sentences')}
               value={approach}
               onChange={(e) => setApproach(e.target.value)}
             />
             <div className="ai-segment" role="radiogroup">
+              {/* The tone value sent to the AI stays English; only the label is translated. */}
               {TONE_OPTIONS.map((option) => (
                 <button
                   key={option}
@@ -206,13 +208,13 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor, onS
                   aria-checked={tone === option}
                   onClick={() => setTone(option)}
                 >
-                  {option}
+                  {t(option)}
                 </button>
               ))}
             </div>
             <div className="report-actions">
-              <button type="submit" className="btn-primary" disabled={!canSubmitCover}>Write cover letter</button>
-              <button type="button" className="btn-ghost" onClick={() => setCoverFormOpen(false)}>Cancel</button>
+              <button type="submit" className="btn-primary" disabled={!canSubmitCover}>{t('Write cover letter')}</button>
+              <button type="button" className="btn-ghost" onClick={() => setCoverFormOpen(false)}>{t('Cancel')}</button>
             </div>
           </form>
         )}
@@ -220,7 +222,7 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor, onS
 
       {error && <pre className="code-block" style={{ color: 'var(--color-accent-red)' }}>{error}</pre>}
       {!error && !report && app.reportPath && !missing && (
-        <div style={{ color: 'var(--color-text-secondary)' }}>Loading report…</div>
+        <div style={{ color: 'var(--color-text-secondary)' }}>{t('Loading report…')}</div>
       )}
 
       {/*
@@ -231,12 +233,12 @@ export default function ReportPane({ root, app, onStartTask, runningTaskFor, onS
         message. verify-pipeline.mjs is the tool that finds the rest.
       */}
       {!app.reportPath && (
-        <div style={{ color: 'var(--color-text-secondary)' }}>This row has no linked report.</div>
+        <div style={{ color: 'var(--color-text-secondary)' }}>{t('This row has no linked report.')}</div>
       )}
       {app.reportPath && missing && (
         <div style={{ color: 'var(--color-accent-amber)' }}>
-          The tracker links <code style={{ fontFamily: 'var(--font-mono)' }}>{app.reportPath}</code>, but that file is missing.
-          Check the report path in your active workspace and retry after restoring any missing report file.
+          {t('The tracker links')} <code style={{ fontFamily: 'var(--font-mono)' }}>{app.reportPath}</code>{t(', but that file is missing.')}
+          {' '}{t('Check the report path in your active workspace and retry after restoring any missing report file.')}
         </div>
       )}
       {report && (

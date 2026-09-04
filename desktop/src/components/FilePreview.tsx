@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { readWorkspaceFile } from '../api';
+import { t } from '../lib/i18n';
 
 type Props = { root: string; relative: string };
 
@@ -26,7 +27,7 @@ export default function FilePreview({ root, relative }: Props) {
   return (
     <div className="file-preview">
       <p className="file-preview-path">{relative}</p>
-      {state.kind === 'loading' && <p className="setup-hint">Loading…</p>}
+      {state.kind === 'loading' && <p className="setup-hint">{t('Loading…')}</p>}
       {state.kind === 'error' && <p className="intake-error" role="alert">{state.message}</p>}
       {state.kind === 'ready' && (
         <article className="file-preview-content"><ReactMarkdown>{state.markdown}</ReactMarkdown></article>

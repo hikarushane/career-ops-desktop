@@ -1,4 +1,5 @@
 import type { TaskEvent } from '../api';
+import { t } from './i18n';
 
 function basename(p: string) { return p.split(/[\\/]/).filter(Boolean).pop() ?? p; }
 function workspaceRelative(p: string) {
@@ -13,17 +14,17 @@ export function summarize(event: TaskEvent): string {
   const target = event.target ?? '';
   const short = tool.startsWith('mcp__') ? tool.split('__').pop() ?? tool : tool;
   switch (short) {
-    case 'WebFetch': case 'fetch': return target ? `Reading ${host(target)}` : 'Reading a web page';
-    case 'Read': return target ? `Reading ${basename(target)}` : 'Reading a file';
-    case 'Write': case 'Edit': case 'MultiEdit': return target ? `Writing ${workspaceRelative(target)}` : 'Writing a file';
+    case 'WebFetch': case 'fetch': return target ? t('Reading {name}', { name: host(target) }) : t('Reading a web page');
+    case 'Read': return target ? t('Reading {name}', { name: basename(target) }) : t('Reading a file');
+    case 'Write': case 'Edit': case 'MultiEdit': return target ? t('Writing {name}', { name: workspaceRelative(target) }) : t('Writing a file');
     case 'Bash': {
-      if (/merge-tracker\.mjs|set-status\.mjs/.test(target)) return 'Updating tracker';
-      if (/generate-pdf\.mjs|generate-latex\.mjs/.test(target)) return 'Generating PDF';
+      if (/merge-tracker\.mjs|set-status\.mjs/.test(target)) return t('Updating tracker');
+      if (/generate-pdf\.mjs|generate-latex\.mjs/.test(target)) return t('Generating PDF');
       const first = target.trim().split(/\s+/)[0];
-      return first ? `Running ${first}` : 'Running a command';
+      return first ? t('Running {name}', { name: first }) : t('Running a command');
     }
-    case 'Task': case 'Agent': return `Delegating: ${target.slice(0, 60)}`;
-    case 'WebSearch': return `Searching: ${target.slice(0, 60)}`;
+    case 'Task': case 'Agent': return t('Delegating: {name}', { name: target.slice(0, 60) });
+    case 'WebSearch': return t('Searching: {name}', { name: target.slice(0, 60) });
     default: return short;
   }
 }

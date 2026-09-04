@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { ListResult } from '../api';
 import { processPendingLabel } from '../lib/batch';
+import { t } from '../lib/i18n';
 import { SearchIcon } from '../components/icons';
 
 type Props = {
@@ -26,42 +27,42 @@ export default function Home({ root: _root, data, onNavigate, batchStarting, bat
       <section className="home-hero">
         <h1>CareerOps</h1>
         <div className="home-stats">
-          <span>{m.Total} tracked</span>
-          <span>{m.ByStatus?.['interview'] ?? 0} interviewing</span>
-          <span>{m.ByStatus?.['applied'] ?? 0} applied</span>
-          <span>Avg {m.AvgScore.toFixed(1)}/5</span>
+          <span>{t('{n} tracked', { n: m.Total })}</span>
+          <span>{t('{n} interviewing', { n: m.ByStatus?.['interview'] ?? 0 })}</span>
+          <span>{t('{n} applied', { n: m.ByStatus?.['applied'] ?? 0 })}</span>
+          <span>{t('Avg {score}/5', { score: m.AvgScore.toFixed(1) })}</span>
         </div>
       </section>
 
       <section className="home-actions">
         <div className="action-card">
-          <h2>Evaluate a job</h2>
-          <p>Paste a job URL or description to get a fit analysis.</p>
+          <h2>{t('Evaluate a job')}</h2>
+          <p>{t('Paste a job URL or description to get a fit analysis.')}</p>
           <div className="action-input-row">
             <input
               type="text"
-              placeholder="Job URL or paste JD text..."
+              placeholder={t('Job URL or paste JD text...')}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && evaluate()}
             />
             <button className="btn-primary" onClick={evaluate} disabled={!url.trim()}>
-              Analyse
+              {t('Analyse')}
             </button>
           </div>
         </div>
 
         <div className="action-card" onClick={() => onNavigate('scanner')}>
-          <h2>Find matching jobs</h2>
-          <p>Scan configured sources for new opportunities.</p>
+          <h2>{t('Find matching jobs')}</h2>
+          <p>{t('Scan configured sources for new opportunities.')}</p>
           <button className="btn-secondary">
-            <SearchIcon size={16} /> Search &amp; evaluate
+            <SearchIcon size={16} /> {t('Search & evaluate')}
           </button>
         </div>
 
         <div className="action-card">
-          <h2>Process pending jobs</h2>
-          <p>{`${data.pipelineSummary.pending} pending in your inbox${data.pipelineSummary.failed > 0 ? ` · ${data.pipelineSummary.failed} need attention` : ''}.`}</p>
+          <h2>{t('Process pending jobs')}</h2>
+          <p>{`${t('{n} pending in your inbox', { n: data.pipelineSummary.pending })}${data.pipelineSummary.failed > 0 ? ` · ${t('{n} need attention', { n: data.pipelineSummary.failed })}` : ''}.`}</p>
           <button
             className="btn-secondary"
             disabled={(data.pipelineSummary.pending === 0 && !batchRunning) || !!batchStarting}
@@ -73,7 +74,7 @@ export default function Home({ root: _root, data, onNavigate, batchStarting, bat
       </section>
 
       <section className="home-recent">
-        <h3>Recent activity</h3>
+        <h3>{t('Recent activity')}</h3>
         <div className="recent-list">
           {data.applications.slice(0, 5).map((a) => (
             <div key={a.number} className="recent-item" onClick={() => onNavigate('pipeline', { selected: a.reportNumber })}>

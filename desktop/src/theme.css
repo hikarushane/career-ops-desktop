@@ -337,6 +337,11 @@ summary:focus-visible {
 
 .setup-actions { display: flex; gap: 8px; margin-top: 16px; }
 
+/* App language picker (Settings > Job Search, onboarding language step). */
+.ui-language-field { margin-bottom: 24px; }
+.ui-language-field h2 { margin: 0 0 4px; font: 600 16px var(--font-sans); }
+.ui-language-field .ai-segment { display: inline-flex; margin-top: 8px; }
+
 /* --- Job preferences form --- */
 /* Inside Settings the form sits in the tab's own flow, left-aligned. */
 .preferences-embedded .preferences-form { margin: 12px 0 0; }

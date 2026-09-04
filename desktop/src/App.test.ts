@@ -4,6 +4,8 @@ import Scanner from './screens/Scanner';
 import Evaluate from './screens/Evaluate';
 import Home from './screens/Home';
 import Interview from './screens/Interview';
+import ProfileSettings from './screens/ProfileSettings';
+import { setUiLanguage } from './lib/i18n';
 import { initialState } from './lib/updater';
 
 const mocks = vi.hoisted(() => ({
@@ -48,7 +50,9 @@ vi.mock('./api', () => ({
   isError: (value: { ok: boolean }) => !value.ok,
   listApplications: mocks.listApplications,
   prepareOnboardingWorkspace: mocks.prepareOnboardingWorkspace,
+  languageSettings: vi.fn(async () => ({ analysisLanguage: 'en', options: [] })),
 }));
+vi.mock('@tauri-apps/plugin-store', () => ({ load: vi.fn(async () => ({ get: async () => null, set: async () => {} })) }));
 const taskStore = vi.hoisted(() => ({
   running: [] as { taskId: string; taskType: string; args: Record<string, string> }[],
   startTask: vi.fn(),
@@ -178,7 +182,7 @@ describe('evaluate done routing', () => {
     const state = hooks.current();
     expect(state[6]).toBe('pipeline');
     expect(state[9]).toBe('019');
-    expect(state[state.length - 1]).toBeUndefined();
+    expect(state[16]).toBeUndefined();
   });
 
   it('opens the Jobs board with nothing selected when no report path comes back', async () => {
@@ -200,7 +204,8 @@ describe('evaluate done routing', () => {
 
 // State slots: 0 root, 1 rootLoaded, 2 probe, 3 error, 4 workspaceError, 5 data,
 // 6 screen, 7 onboarded, 8 evalUrl, 9 pipelineSelected, 10 iwMode, 11 iwCompany,
-// 12 iwRole, 13 activeTaskId, 14 updateState, 15 showUpdateModal, 16 pipelineFilter
+// 12 iwRole, 13 activeTaskId, 14 updateState, 15 showUpdateModal, 16 pipelineFilter,
+// 17 uiLanguage
 function renderAt(screen: string) {
   hooks.reset([
     '/workspace', true, { ok: true, careerOpsPath: '/workspace', trackerPath: null, missing: [], ready: true },
@@ -259,6 +264,18 @@ describe('coming back to a running task', () => {
     expect(JSON.stringify(header)).toContain('"title":"Home"');
   });
 
+  it('re-renders with the chosen interface language and remembers it', () => {
+    const tree = renderAt('profile');
+    const settings = findByType(tree, ProfileSettings) as unknown as { props: { uiLanguage: string; onUiLanguageChange: (l: string) => void } } | null;
+    expect(settings!.props.uiLanguage).toBe('en');
+    settings!.props.onUiLanguageChange('zh-TW');
+    expect(hooks.current()[17]).toBe('zh-TW');
+    hooks.beginRender();
+    const again = App() as ElementNode & { props?: { children?: unknown } };
+    expect(JSON.stringify(again)).toContain('"title":"設定"');
+    setUiLanguage('en');
+  });
+
   it('reopens the running prep for the same company from the Interview screen', () => {
     taskStore.running = [{ taskId: 'task-i', taskType: 'interview-plan', args: { company: 'Acme', role: 'PM' } }];
     const interview = findByType(renderAt('interview'), Interview) as { props: { onAction: (a: string, app: { company: string; role: string }) => void } } | null;
@@ -284,6 +301,6 @@ describe('scanner done routing', () => {
     scanner!.props.onDone();
     const state = hooks.current();
     expect(state[6]).toBe('pipeline');
-    expect(state[state.length - 1]).toBe('inbox');
+    expect(state[16]).toBe('inbox');
   });
 });

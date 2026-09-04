@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Application } from '../api';
 import { groupByStatus, statusLabel } from '../lib/filters';
+import { t } from '../lib/i18n';
 import { beginDrag, dropStatusAt, moveDrag, resolveDrop, startsDragFrom, type DragSession } from '../lib/kanbanDnd';
 import KanbanCard from './KanbanCard';
 
@@ -83,10 +84,10 @@ export default function KanbanBoard({ apps, selected, onSelect, onStatusChange, 
     const c: VirtualGroup[] = [];
 
     const topApps = apps.filter((a) => a.score >= 4.0 && a.normStatus !== 'skip');
-    c.push({ status: 'top', label: 'Top ≥4', apps: topApps });
+    c.push({ status: 'top', label: t('Top ≥4'), apps: topApps });
 
     for (const col of columns) {
-      const g: VirtualGroup = { status: col.status, label: statusLabel(col.status), apps: col.apps };
+      const g: VirtualGroup = { status: col.status, label: t(statusLabel(col.status)), apps: col.apps };
       if (col.apps.length > 0) p.push(g);
       else c.push(g);
     }
@@ -133,7 +134,7 @@ export default function KanbanBoard({ apps, selected, onSelect, onStatusChange, 
           </div>
           <div className="kanban-column-body">
             {col.apps.length > 0 ? col.apps.map(card) : (
-              <div className="kanban-column-nodata">no data</div>
+              <div className="kanban-column-nodata">{t('no data')}</div>
             )}
           </div>
         </div>
