@@ -660,7 +660,7 @@
       <p class="muted">Home 下方會顯示最近活動，方便你回到 Jobs 查看職缺與申請進度。</p>
 
       <div class="callout">
-        <p><strong>任務不會因為切換畫面而中斷。</strong>分析、掃描、批次或面試任務進行中時，畫面右上角會出現任務 chip（例如「Evaluating Acme · 2m」）。你可以自由切到其他頁面，點 chip 就能回到該任務；完成或失敗時 chip 會變色，按 × 可以關掉。從原本的入口再進去也會回到同一個任務：掃描中再按 <strong>Find matching jobs</strong> 會顯示進行中的掃描，批次處理中「Evaluate all pending」會變成 <strong>View progress</strong>，面試準備中再按同一家公司的 Prep plan 會回到該對話。</p>
+        <p><strong>任務不會因為切換畫面而中斷。</strong>分析、掃描、批次或面試任務進行中時，畫面右上角會出現任務 chip（例如「Evaluating Acme · 2m」）。你可以自由切到其他頁面，點 chip 就能回到該任務；完成或失敗時 chip 會變色，按 × 可以關掉。掃描或批次處理進行中時，按側邊欄的 <strong>Home</strong> 會直接顯示那個任務的進度；進度頁左上角的 <strong>← Back</strong> 回到一般的 Home，任務不會中斷。批次處理中「Evaluate all pending」會變成 <strong>View progress</strong>；面試準備中再按同一家公司的 Prep plan 會回到該對話。每個透過按鈕進入的子頁面左上角都有上一頁。</p>
       </div>
     </section>
 
@@ -679,7 +679,7 @@
       </div>
 
       <h3>抓不到內容時</h3>
-      <p>有些網站會擋自動讀取。這時畫面會直接出現一個貼上框，請把職缺說明複製貼進去（至少 200 字），再按 Analyse。這一步還沒有使用 AI，不會消耗額度。LinkedIn 的職缺頁通常可以直接抓到，不需要登入。</p>
+      <p>有些網站會擋自動讀取（例如 Indeed 對非瀏覽器一律回 401／403）。這時畫面會直接出現一個貼上框，請把職缺說明複製貼進去（至少 200 字），再按 Analyse。這一步還沒有使用 AI，不會消耗額度。LinkedIn 的職缺頁通常可以直接抓到，不需要登入；StepStone 這類用 JavaScript 顯示內容的頁面會從頁面內嵌的職缺資料讀取。</p>
 
       <h3>需要時調整文件語言</h3>
       <p>預設由 CareerOps 根據職缺內容判斷。若你已知道該使用哪種語言，可直接在 <strong>Document language</strong> 手動指定。</p>
@@ -728,7 +728,7 @@
 
       <h3>產生 CV 與求職信</h3>
       <p>打開一個職缺的報告卡，右側有兩顆按鈕。<strong>Generate CV</strong> 會直接依這份報告產出客製化的 CV PDF，不會再問你問題。<strong>Generate cover letter</strong> 會先展開四個問題：為什麼想要這家公司或職位、你會幫他們解決什麼問題、你上任第一步怎麼做、信件語氣；填完按 <strong>Write cover letter</strong> 才會開始寫。兩者的進度都顯示在右上角的任務 chip。</p>
-      <p>檔案產生後，按鈕會變成 <strong>View CV</strong> 與 <strong>View cover letter</strong>，按下會在 Finder（macOS）或檔案總管（Windows）中定位該檔案。</p>
+      <p>檔案產生後，按鈕會變成 <strong>View CV</strong> 與 <strong>View cover letter</strong>，按下會在 Finder（macOS）或檔案總管（Windows）中定位該檔案。按鈕下方的 <strong>View job description</strong> 會在面板內展開這份職缺的原始擷取檔（<code>jds/</code>）。</p>
 
       <h3>更新申請進度</h3>
       <p>改狀態有三個地方：卡片或表格列上的狀態選單、報告面板頂端（公司名稱下方）的狀態選單，以及把看板卡片拖到目標狀態欄。三者寫入的是同一份 tracker。</p>
@@ -767,7 +767,7 @@
         <span class="flow-node">Done 離開，對話會保留</span>
       </div>
 
-      <p>每一句你送出的訊息都是一次 AI 任務，進行中會顯示活動記錄，可以 Cancel 或失敗時 Retry。對話會依公司與工具保留：離開再回來、甚至重開 App 都還在；想從頭開始按 <strong>New conversation</strong>。AI 寫出的計畫、練習紀錄與複盤都在求職資料夾的 <code>interview-prep/</code>。</p>
+      <p>每一句你送出的訊息都是一次 AI 任務（Enter 送出，Shift+Enter 換行），進行中會顯示活動記錄，可以 Cancel 或失敗時 Retry。對話會依公司與工具保留：離開再回來、甚至重開 App 都還在；想從頭開始按 <strong>New conversation</strong>。AI 寫出的計畫、練習紀錄與複盤都在求職資料夾的 <code>interview-prep/</code>：每一輪回覆下方會列出它寫的檔案，Interview 頁的每張卡片下也會列出該公司的準備檔案，頁尾則是故事庫、題庫等共用檔案，點一下就在右側面板閱讀。</p>
 
       <p>Interview 畫面可設定 <strong>Interview language</strong>。若你要用特定語言面試，請在第一輪開始前確認設定；對話開始後就固定了。</p>
     </section>
@@ -802,7 +802,7 @@
           </tr>
           <tr>
             <td>Job Search</td>
-            <td>目標地區、職稱關鍵字、產業、薪資、是否願意搬遷、偏好城市等，和第一次啟動時填的是同一份表單。改完按 <strong>Update profile with these preferences</strong>，AI 會依新偏好重寫 <code>config/profile.yml</code>、<code>modes/_profile.md</code> 與 <code>portals.yml</code>（不動 <code>cv.md</code>）；你先預覽每個檔案，按 Apply 才寫入。這裡也能改閱讀語言。</td>
+            <td>最上方是 <strong>App language</strong>：介面語言可切換 English 或繁體中文，第一次啟動時會跟著分析語言。下方是目標地區、職稱關鍵字、產業、薪資、是否願意搬遷、偏好城市等，和第一次啟動時填的是同一份表單。改完按 <strong>Update profile with these preferences</strong>，AI 會依新偏好重寫 <code>config/profile.yml</code>、<code>modes/_profile.md</code> 與 <code>portals.yml</code>（不動 <code>cv.md</code>）；你先預覽每個檔案，按 Apply 才寫入。這裡也能改閱讀語言。</td>
           </tr>
           <tr>
             <td>Search Sources</td>
@@ -835,7 +835,7 @@
 
     <section id="help">
       <h2>12. Help 與疑難排解</h2>
-      <p class="section-intro">Help 頁提供分數、職缺搜尋、AI 使用方式、隱私與常見問題的快速說明。下方的 <strong>Full guide</strong> 可切換中文或 English 閱讀完整指南；頁尾有本 App 的 GitHub 連結，以及它所改作自的 career-ops 原始專案。</p>
+      <p class="section-intro">Help 頁提供分數、職缺搜尋、AI 使用方式、隱私與常見問題的快速說明。下方的 <strong>Full guide</strong> 可切換中文或 English 閱讀完整指南；頁尾有本 App 的 GitHub 連結，以及它所改作自的 career-ops 原始專案。頂列進行中的任務標籤會有琥珀色的呼吸光暈，提醒你有東西正在跑。</p>
 
       <h3>常見問題</h3>
 
