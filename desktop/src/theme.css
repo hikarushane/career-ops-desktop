@@ -337,7 +337,7 @@ summary:focus-visible {
 
 .setup-actions { display: flex; gap: 8px; margin-top: 16px; }
 
-/* App language picker (Settings > Job Search, onboarding language step). */
+/* App language picker (Settings > globe tab, onboarding language step). */
 .ui-language-field { margin-bottom: 24px; }
 .ui-language-field h2 { margin: 0 0 4px; font: 600 16px var(--font-sans); }
 .ui-language-field .ai-segment { display: inline-flex; margin-top: 8px; }
@@ -794,7 +794,14 @@ select#ai-model:disabled { opacity: 0.5; cursor: default; }
   50% { box-shadow: 0 0 0 5px var(--color-accent-amber-glow); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .task-chip.running { animation: none; box-shadow: 0 0 0 3px var(--color-accent-amber-glow); }
+/* Reduce Motion (macOS Accessibility): no expanding halo, but the chip still
+   has to read as "something is running", so it fades its border and fill
+   slowly instead of holding one static frame. */
+@keyframes task-chip-breathe-quiet {
+  0%, 100% { border-color: var(--color-border); background: var(--color-surface-subtle); }
+  50% { border-color: var(--color-accent-amber); background: var(--color-accent-amber-glow); }
+}
+  .task-chip.running { animation: task-chip-breathe-quiet 3s ease-in-out infinite; box-shadow: none; }
 }
 /* --color-text-on-primary-dark (not #fff) keeps this at a passing contrast
    ratio against --color-primary's light green, unlike white text (~2.8:1). */
