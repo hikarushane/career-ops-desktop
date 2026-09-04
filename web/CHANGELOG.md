@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.9.0](https://github.com/hikarushane/career-ops-desktop/compare/web-v0.8.1...web-v0.9.0) (2026-09-04)
+
+
+### Features
+
+* **web:** restrict the local dashboard API to same-origin and loopback ([b3974e6](https://github.com/hikarushane/career-ops-desktop/commit/b3974e6104d83c2714fd0d071898a7c7b9f68726))
+
+
+### Bug Fixes
+
+* **deps:** update web npm dependencies (major) ([1207eae](https://github.com/hikarushane/career-ops-desktop/commit/1207eae4b5799cb92602c99737fd2f0cee1319c9))
+* **deps:** update web npm dependencies (next 16.3.1, shaders 0.0.80) ([cf793f6](https://github.com/hikarushane/career-ops-desktop/commit/cf793f6bdfffd78b3c2613b202b9905c290bec0e))
+* **web:** block_hard survives the Explore round-trip — type, URL params, seed and serializer ([#3102](https://github.com/hikarushane/career-ops-desktop/issues/3102)) ([89d6b1b](https://github.com/hikarushane/career-ops-desktop/commit/89d6b1b708454cca863bcf11464c87b76400b14e))
+* **web:** classify a tracker-lock filesystem failure as itself, not as contention ([#3138](https://github.com/hikarushane/career-ops-desktop/issues/3138)) ([cf880eb](https://github.com/hikarushane/career-ops-desktop/commit/cf880eb55945019663e1b423499041097cb24ccd))
+* **web:** give the methodology link a real tap target and a new-tab cue ([#3023](https://github.com/hikarushane/career-ops-desktop/issues/3023)) ([344a116](https://github.com/hikarushane/career-ops-desktop/commit/344a116de15fd98c1e1d48aae9bf08bbdc4f067e))
+* **web:** keep child stderr out of the status response on the crash path ([#3022](https://github.com/hikarushane/career-ops-desktop/issues/3022)) ([883ebec](https://github.com/hikarushane/career-ops-desktop/commit/883ebec33c1c775bb295c4b4eecca31fc53066da))
+* **web:** keep the query string in the Explore dedup key so distinct postings don't collapse ([#3082](https://github.com/hikarushane/career-ops-desktop/issues/3082)) ([275e213](https://github.com/hikarushane/career-ops-desktop/commit/275e2137fb804a762caed8bed34194c5920b71c4))
+* **web:** keep the run stream alive during silent agent phases ([#3026](https://github.com/hikarushane/career-ops-desktop/issues/3026)) ([aaeb114](https://github.com/hikarushane/career-ops-desktop/commit/aaeb114238283ce3cc44b7b3e2168ed2d22c56a8))
+* **web:** key company logos with the Unicode-aware normalizer so non-Latin names don't collide ([#3134](https://github.com/hikarushane/career-ops-desktop/issues/3134)) ([7b9f858](https://github.com/hikarushane/career-ops-desktop/commit/7b9f8588f57d3313265c49f37d2055bb533a7d08))
+* **web:** persist the only installed CLI so jobs can start ([#2966](https://github.com/hikarushane/career-ops-desktop/issues/2966)) ([e80bf7e](https://github.com/hikarushane/career-ops-desktop/commit/e80bf7e60ce95e92dcd7501f97fda092b60b8f95))
+* **web:** report the uncapped weekly match count while keeping the render bounded ([#2662](https://github.com/hikarushane/career-ops-desktop/issues/2662)) ([6e9f029](https://github.com/hikarushane/career-ops-desktop/commit/6e9f0299dff6fc0903b97b349390408d1f859571))
+* **web:** resolve 27 unmapped states.yml aliases and fix the Turkish status fold ([#2918](https://github.com/hikarushane/career-ops-desktop/issues/2918)) ([360ce49](https://github.com/hikarushane/career-ops-desktop/commit/360ce490c2e8d610a76767261679ed6b02880c9c))
+* **web:** resolve company logos by name, not one guessed domain ([#2942](https://github.com/hikarushane/career-ops-desktop/issues/2942)) ([6096fc9](https://github.com/hikarushane/career-ops-desktop/commit/6096fc9497f3d8bd920d2eaa83c13c30fa989f3d))
+* **web:** safe Codex AI-search exec with mtime-keyed capability cache ([#2361](https://github.com/hikarushane/career-ops-desktop/issues/2361)) ([699f506](https://github.com/hikarushane/career-ops-desktop/commit/699f506f62427cdb5a93bef8247eb6c1fd6418ef))
+* **web:** salvage truncated JSON at each prefix's own depth, not one global pad ([#3142](https://github.com/hikarushane/career-ops-desktop/issues/3142)) ([a308bc5](https://github.com/hikarushane/career-ops-desktop/commit/a308bc5cc96197f3ed84ac75493d75c45a770f02))
+* **web:** show the retry card, not the update-checkout panel, for runtime scan errors ([#1904](https://github.com/hikarushane/career-ops-desktop/issues/1904)) ([29c0d69](https://github.com/hikarushane/career-ops-desktop/commit/29c0d69cb0e2c2c3507e2712eaf04f1633244722))
+* **web:** stamp pipeline first_seen with the local day, not UTC ([#3081](https://github.com/hikarushane/career-ops-desktop/issues/3081)) ([809e93b](https://github.com/hikarushane/career-ops-desktop/commit/809e93b419094dcc77c8f3d3f1a1c31c578a547a))
+* **web:** stop first-run from claiming no setup ([#2965](https://github.com/hikarushane/career-ops-desktop/issues/2965)) ([f028012](https://github.com/hikarushane/career-ops-desktop/commit/f0280129e63a063a88b00598cc09747cd70bc19e))
+* **web:** stop hiding an employer's whole board after one evaluation ([b56cde5](https://github.com/hikarushane/career-ops-desktop/commit/b56cde551d84ad5c28d7ea8b99edcc450a2b8b4c))
+* **web:** stop killing evaluate runs at 285s and misreporting the kill ([#3124](https://github.com/hikarushane/career-ops-desktop/issues/3124)) ([8a245ed](https://github.com/hikarushane/career-ops-desktop/commit/8a245edd677598aa539e74c7565be44b7676e4ab))
+* **web:** take the core followups lock so web writes cannot race the seeder ([#3034](https://github.com/hikarushane/career-ops-desktop/issues/3034)) ([3b761b0](https://github.com/hikarushane/career-ops-desktop/commit/3b761b09b2979eedf4eadbd9d3c24b9d61462f04))
+* **web:** Today primary action opens the report ([#2967](https://github.com/hikarushane/career-ops-desktop/issues/2967)) ([74781e6](https://github.com/hikarushane/career-ops-desktop/commit/74781e6d66784bff97e15c507db7383a7fa2ab59))
+
 ## [0.8.1](https://github.com/santifer/career-ops/compare/web-v0.8.0...web-v0.8.1) (2026-08-27)
 
 
