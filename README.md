@@ -40,6 +40,8 @@ brew install --cask <owner>/<tap>/career-ops
 
 從 [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases) 下載 `CareerOps_<version>_Windows.exe` 或 `CareerOps-Windows-<version>.zip`，並執行 NSIS installer。
 
+> 0.5.0 的 Windows 版由 release workflow 打包，但尚未在 Windows 機器上手動驗收；macOS 版已完整測過。遇到問題請開 issue。
+
 > 在正式簽章的公開 release 尚未提供前，macOS 或 Windows 可能會顯示系統對未簽章 App 的標準安全提示。
 
 每個 release 也會發布 `SHA256SUMS.txt`、`release-provenance.json`、已簽章 updater archives 與 `latest.json`。從 App 外安裝時，請用 checksum manifest 驗證下載內容。
@@ -141,14 +143,14 @@ CareerOps Desktop 會在背景檢查 fork 的 signed Tauri update feed。找到�
 | 功能 | CareerOps Desktop |
 | --- | --- |
 | **Onboarding** | 匯入背景資料、設定 AI、選擇分析語言、填求職偏好，不需要手動改 YAML。AI 依你的文件與偏好產生 `cv.md`、`config/profile.yml`、`modes/_profile.md`、`portals.yml` 四個檔，套用前可預覽、可附回饋重產。`portals.yml` 不會沿用範本的公司清單：AI 依你的目標國家與產業填入當地常用的求職平台（例如台灣的 104、1111、CakeResume、就業通、LinkedIn；德國的 StepStone、Indeed、LinkedIn，工程領域另有 get-in-engineering、ingenieur.de）與 15 到 40 家相符的公司。 |
-| **AI Provider** | 透過 provider abstraction 偵測並使用 Codex 等本機 AI CLI，不把 App 綁死在單一 agent。 |
-| **單一職缺分析** | 貼上職缺 URL，App 會先自己抓取職缺內容（LinkedIn 走公開 guest 端點，其他網站走一般 HTTP），抓不到時才請你貼上職缺說明；也可以直接貼整段 JD。抓取成功後才啟動 AI 評估。 |
-| **找職缺** | 在 UI 內執行 scanner；Home 的 **Process pending jobs** 卡片顯示待處理與需注意的筆數，按下即批次處理 `data/pipeline.md` 的職缺。 |
-| **任務中心** | 分析、掃描、批次與面試任務在切換畫面時不會中斷；Header 的任務 chip 顯示進行中／完成／失敗，點一下就回到該任務的活動記錄。活動記錄顯示 AI 實際在讀寫哪些檔案，成功與否以是否真的產出報告判定，而不是只看 exit code。 |
-| **Applications** | 用原生介面瀏覽既有 CareerOps pipeline、報告、狀態、PDF 與進度。報告卡上的 **Generate CV** 直接依報告產出客製 CV PDF；**Generate cover letter** 先請你回答四個問題（為什麼這家公司、要解決什麼問題、你的切入做法、語氣）再產出求職信 PDF。檔案產生後按鈕變成 **View CV**／**View cover letter**，在 Finder 或檔案總管中定位檔案。 |
-| **Interview** | 在 Desktop 裡使用 Prep Planner、Practice 與 Debrief。 |
-| **語言系統** | 自己選分析閱讀語言；CV、cover letter、面試材料則跟著每個 JD 的語言。 |
-| **Help / Settings** | 在 App 內管理個人資料、來源、AI Provider、語言與說明文件。Settings → AI 的 Model 是下拉選單：agy 讀取 `agy models`，claude／codex 以一次極小的即時呼叫探測每個候選 model 是否可用（結果快取 24 小時，Refresh 可重探）；Fast mode 只在 Claude Opus 系列可開，Effort 對 agy 不適用。 |
+| **AI Provider** | 透過 provider abstraction 偵測並使用本機 AI CLI，不把 App 綁死在單一 agent。0.5.0 驗證過的 provider 是 **Claude Code**、**Codex** 與 **Antigravity（agy）**；三者都要先在系統上安裝並登入。 |
+| **單一職缺分析** | 貼上職缺 URL，App 會先自己抓取職缺內容（LinkedIn 走公開 guest 端點；StepStone 等用 JavaScript 顯示內容的頁面讀取頁面內嵌的 JSON-LD 職缺資料；其他網站走一般 HTTP），抓不到或被擋（例如 Indeed）時才請你貼上職缺說明；也可以直接貼整段 JD。抓取成功後才啟動 AI 評估，完成後直接打開剛產生的報告卡。 |
+| **找職缺** | 在 UI 內執行 scanner；Home 的 **Process pending jobs** 卡片顯示待處理與需注意的筆數，按下即批次處理 `data/pipeline.md` 的職缺，一輪接一輪直到收件匣清空。 |
+| **任務中心** | 分析、掃描、批次與面試任務在切換畫面時不會中斷；Header 的任務 chip（進行中有琥珀色呼吸光暈）顯示進行中／完成／失敗，點一下就回到該任務的活動記錄。掃描或批次進行中按 Home 會直接顯示進度，進度頁左上角的上一頁不會取消任務。活動記錄顯示 AI 實際在讀寫哪些檔案，成功與否以是否真的產出報告判定，而不是只看 exit code。 |
+| **Applications** | 用原生介面瀏覽既有 CareerOps pipeline、報告、狀態、PDF 與進度。看板卡片可拖到目標狀態欄改狀態；報告面板頂端也有狀態選單，面板左緣可拖拉調整寬度，表格檢視在沒選列時占滿全寬。報告卡上的 **Generate CV** 直接依報告產出客製 CV PDF；**Generate cover letter** 先請你回答四個問題（為什麼這家公司、要解決什麼問題、你的切入做法、語氣）再產出求職信 PDF。檔案產生後按鈕變成 **View CV**／**View cover letter**，在 Finder 或檔案總管中定位檔案；**View job description** 在面板內展開 `jds/` 的原始職缺擷取檔。 |
+| **Interview** | Prep plan、Practice 與 Debrief 都是和 AI 的對話：先填一份簡短表單（例如面試日期與時間），AI 做完第一輪工作後可以繼續追問或補充，對話會保留。AI 寫進 `interview-prep/` 的計畫、練習紀錄與複盤會列在對話回覆下方和 Interview 頁的公司卡片下，點一下就在右側面板閱讀。 |
+| **語言系統** | 自己選分析閱讀語言；CV、cover letter、面試材料則跟著每個 JD 的語言。介面語言另外可在 Settings 的地球圖示分頁切換 English 或繁體中文。 |
+| **Help / Settings** | 在 App 內管理個人資料、來源、AI Provider、語言與說明文件。Settings → Job Search 是和第一次啟動相同的求職偏好表單，改完可請 AI 只重寫 `config/profile.yml`、`modes/_profile.md` 與 `portals.yml`（`cv.md` 不動），套用前先預覽。Settings → AI 的 Model 是下拉選單：agy 讀取 `agy models`，claude／codex 以一次極小的即時呼叫探測每個候選 model 是否可用（結果快取 24 小時，Refresh 可重探）；Fast mode 只在 Claude Opus 系列可開，Effort 對 agy 不適用。Help 的完整指南可切換中文或 English。 |
 | **Human in the loop** | CareerOps 可以分析、起草與建議，但最後決定與實際送出仍由使用者控制。Desktop 不會自動送出求職申請或寄出 outreach。 <!-- hitl: absolute guarantee. Do not add "automatically", "by itself", "without your permission" or any other hedge when translating this row. --> |
 
 ## 語言怎麼運作
