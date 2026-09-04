@@ -16,10 +16,17 @@ type Props = {
   root: string;
   initialUrl?: string;
   initialTaskId?: string | null;
-  onDone: () => void;
+  /** Called with the finished evaluation's report path (reports/NNN-….md) when there is exactly one. */
+  onDone: (reportPath?: string) => void;
 };
 
 type FetchState = { kind: 'idle' } | { kind: 'fetching' } | { kind: 'blocked'; url: string; reason: string };
+
+/** The report an evaluate task wrote, from its outcome artifacts (judge_outcome lists new files under reports/). */
+function reportArtifact(taskId: string | null): string | undefined {
+  const task = taskId ? getTask(taskId) : null;
+  return task?.outcome?.artifacts.find((a) => a.startsWith('reports/'));
+}
 
 function isUrl(value: string): boolean {
   return /^https?:\/\/\S+$/i.test(value.trim());
@@ -288,7 +295,9 @@ export default function Evaluate({ root, initialUrl, initialTaskId, onDone }: Pr
       taskId={taskId}
       title={isBatchTask ? 'Processing pending jobs' : 'Evaluating'}
       onRetry={isBatchTask ? retryBatch : retryEvaluate}
-      doneAction={{ label: 'Back to pipeline', onClick: onDone }}
+      // A single evaluation hands its report path back so the Jobs board can
+      // open that card; a batch turn produces several, so it hands back none.
+      doneAction={{ label: 'Back to pipeline', onClick: () => onDone(isBatchTask ? undefined : reportArtifact(taskId)) }}
       onCancelled={isBatchTask ? onDone : () => setTaskId(null)}
     />
   );

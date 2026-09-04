@@ -18,7 +18,7 @@ import Toolbar from '../components/Toolbar';
 type Props = {
   root: string;
   data: ListResult;
-  onReload: () => Promise<void>;
+  onReload: () => Promise<unknown>;
   initialSelected?: string;
   /** Tab to open on; the scanner's "Review inbox" lands on 'inbox'. */
   initialFilter?: FilterKey;

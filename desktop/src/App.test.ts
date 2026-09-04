@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import Scanner from './screens/Scanner';
+import Evaluate from './screens/Evaluate';
 import { initialState } from './lib/updater';
 
 const mocks = vi.hoisted(() => ({
@@ -150,6 +151,43 @@ describe('workspace onboarding routing', () => {
     expect(mocks.listApplications).not.toHaveBeenCalled();
     hooks.beginRender();
     expect((App() as ElementNode).type).toBe('main');
+  });
+});
+
+describe('evaluate done routing', () => {
+  it('opens the Jobs board with the freshly written report selected', async () => {
+    const row = { number: 19, reportNumber: '019', reportPath: 'reports/019-acme-2026-09-04.md', company: 'Acme', role: 'PM' };
+    mocks.listApplications.mockResolvedValue({ ok: true, ...data, applications: [row] });
+    hooks.reset([
+      '/workspace', true, { ok: true, careerOpsPath: '/workspace', trackerPath: null, missing: [], ready: true },
+      null, null, data, 'evaluate', true, undefined, undefined,
+      'interview-plan', '', '', 'task-e', initialState, false, 'inbox',
+    ]);
+    hooks.beginRender();
+    const tree = App() as ElementNode;
+    const evaluate = findByType(tree, Evaluate) as { props: { onDone: (reportPath?: string) => Promise<void> } } | null;
+    expect(evaluate).not.toBeNull();
+    await evaluate!.props.onDone('reports/019-acme-2026-09-04.md');
+    const state = hooks.current();
+    expect(state[6]).toBe('pipeline');
+    expect(state[9]).toBe('019');
+    expect(state[state.length - 1]).toBeUndefined();
+  });
+
+  it('opens the Jobs board with nothing selected when no report path comes back', async () => {
+    mocks.listApplications.mockResolvedValue({ ok: true, ...data });
+    hooks.reset([
+      '/workspace', true, { ok: true, careerOpsPath: '/workspace', trackerPath: null, missing: [], ready: true },
+      null, null, data, 'evaluate', true, undefined, '007',
+      'interview-plan', '', '', 'task-b', initialState, false, undefined,
+    ]);
+    hooks.beginRender();
+    const tree = App() as ElementNode;
+    const evaluate = findByType(tree, Evaluate) as { props: { onDone: (reportPath?: string) => Promise<void> } } | null;
+    await evaluate!.props.onDone(undefined);
+    const state = hooks.current();
+    expect(state[6]).toBe('pipeline');
+    expect(state[9]).toBeUndefined();
   });
 });
 
