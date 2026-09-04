@@ -10,7 +10,7 @@ const entries: InboxEntry[] = [
 ];
 
 function render(over: Partial<Parameters<typeof InboxTable>[0]> = {}) {
-  return JSON.stringify(InboxTable({ entries, query: '', onProcessPending: vi.fn(), batchStarting: false, onOpenError: vi.fn(), ...over }));
+  return JSON.stringify(InboxTable({ entries, query: '', onProcessPending: vi.fn(), batchStarting: false, batchRunning: false, onOpenError: vi.fn(), ...over }));
 }
 
 describe('InboxTable', () => {
@@ -27,6 +27,12 @@ describe('InboxTable', () => {
     const text = render({ query: 'hamburg' });
     expect(text).toContain('Broken Co');
     expect(text).not.toContain('n8n');
+  });
+
+  it('offers a way back to a running batch even when nothing is pending', () => {
+    const text = render({ entries: [], batchRunning: true });
+    expect(text).toMatch(/View progress/);
+    expect(text).toMatch(/"disabled":false/);
   });
 
   it('shows an empty state instead of an empty table', () => {

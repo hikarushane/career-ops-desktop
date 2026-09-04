@@ -7,10 +7,13 @@ type Props = {
   root: string;
   data: ListResult;
   onNavigate: (screen: string, params?: Record<string, string>) => void;
+  /** A batch start is in flight: the button is disabled to stop a double start. */
   batchStarting?: boolean;
+  /** A batch is already running: the button reopens it instead of starting another. */
+  batchRunning?: boolean;
 };
 
-export default function Home({ root: _root, data, onNavigate, batchStarting }: Props) {
+export default function Home({ root: _root, data, onNavigate, batchStarting, batchRunning }: Props) {
   const [url, setUrl] = useState('');
   const m = data.metrics;
 
@@ -59,8 +62,12 @@ export default function Home({ root: _root, data, onNavigate, batchStarting }: P
         <div className="action-card">
           <h2>Process pending jobs</h2>
           <p>{`${data.pipelineSummary.pending} pending in your inbox${data.pipelineSummary.failed > 0 ? ` · ${data.pipelineSummary.failed} need attention` : ''}.`}</p>
-          <button className="btn-secondary" disabled={data.pipelineSummary.pending === 0 || !!batchStarting} onClick={() => onNavigate('batch')}>
-            {processPendingLabel(data.pipelineSummary.pending)}
+          <button
+            className="btn-secondary"
+            disabled={(data.pipelineSummary.pending === 0 && !batchRunning) || !!batchStarting}
+            onClick={() => onNavigate('batch')}
+          >
+            {processPendingLabel(data.pipelineSummary.pending, !!batchRunning)}
           </button>
         </div>
       </section>

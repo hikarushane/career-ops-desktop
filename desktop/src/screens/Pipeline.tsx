@@ -24,10 +24,11 @@ type Props = {
   initialFilter?: FilterKey;
   onProcessPending: () => void;
   batchStarting: boolean;
+  batchRunning: boolean;
 };
 
 export default function Pipeline({
-  root, data, onReload, initialSelected, initialFilter, onProcessPending, batchStarting,
+  root, data, onReload, initialSelected, initialFilter, onProcessPending, batchStarting, batchRunning,
 }: Props) {
   const [filter, setFilter] = useState<FilterKey>(initialFilter ?? 'all');
   const [sort, setSort] = useState<SortKey>('score');
@@ -136,6 +137,7 @@ export default function Pipeline({
           query={query}
           onProcessPending={onProcessPending}
           batchStarting={batchStarting}
+          batchRunning={batchRunning}
           onOpenError={(message) => setWriteError({ stale: false, message })}
         />
       ) : view === 'grouped' ? (

@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import Scanner from './screens/Scanner';
 import Evaluate from './screens/Evaluate';
+import Home from './screens/Home';
+import Interview from './screens/Interview';
 import { initialState } from './lib/updater';
 
 const mocks = vi.hoisted(() => ({
@@ -47,16 +49,21 @@ vi.mock('./api', () => ({
   listApplications: mocks.listApplications,
   prepareOnboardingWorkspace: mocks.prepareOnboardingWorkspace,
 }));
+const taskStore = vi.hoisted(() => ({
+  running: [] as { taskId: string; taskType: string; args: Record<string, string> }[],
+  startTask: vi.fn(),
+}));
 vi.mock('./lib/taskStore', () => ({
   useTasks: () => [],
-  useRunningTasks: () => [],
+  useRunningTasks: () => taskStore.running,
   initTaskStore: vi.fn(),
   dismiss: vi.fn(),
-  startTask: vi.fn(),
+  startTask: taskStore.startTask,
 }));
 
 afterEach(() => {
   hooks.reset([]);
+  taskStore.running = [];
   vi.resetAllMocks();
 });
 
@@ -188,6 +195,50 @@ describe('evaluate done routing', () => {
     const state = hooks.current();
     expect(state[6]).toBe('pipeline');
     expect(state[9]).toBeUndefined();
+  });
+});
+
+// State slots: 0 root, 1 rootLoaded, 2 probe, 3 error, 4 workspaceError, 5 data,
+// 6 screen, 7 onboarded, 8 evalUrl, 9 pipelineSelected, 10 iwMode, 11 iwCompany,
+// 12 iwRole, 13 activeTaskId, 14 updateState, 15 showUpdateModal, 16 pipelineFilter
+function renderAt(screen: string) {
+  hooks.reset([
+    '/workspace', true, { ok: true, careerOpsPath: '/workspace', trackerPath: null, missing: [], ready: true },
+    null, null, { ...data, pipelineSummary: { pending: 3, processed: 0, failed: 0 } }, screen, true, undefined, undefined,
+    'interview-plan', '', '', null, initialState, false, undefined,
+  ]);
+  hooks.beginRender();
+  return App() as ElementNode;
+}
+
+describe('coming back to a running task', () => {
+  it('reopens the running scan when Find matching jobs is visited again', () => {
+    taskStore.running = [{ taskId: 'task-s', taskType: 'scan', args: {} }];
+    const home = findByType(renderAt('home'), Home) as { props: { onNavigate: (s: string) => void } } | null;
+    home!.props.onNavigate('scanner');
+    const state = hooks.current();
+    expect(state[6]).toBe('scanner');
+    expect(state[13]).toBe('task-s');
+  });
+
+  it('reopens the running batch instead of starting another one', () => {
+    taskStore.running = [{ taskId: 'task-b', taskType: 'batch', args: { limit: '3' } }];
+    const home = findByType(renderAt('home'), Home) as { props: { onNavigate: (s: string) => void; batchRunning?: boolean } } | null;
+    expect(home!.props.batchRunning).toBe(true);
+    home!.props.onNavigate('batch');
+    const state = hooks.current();
+    expect(state[6]).toBe('evaluate');
+    expect(state[13]).toBe('task-b');
+    expect(taskStore.startTask).not.toHaveBeenCalled();
+  });
+
+  it('reopens the running prep for the same company from the Interview screen', () => {
+    taskStore.running = [{ taskId: 'task-i', taskType: 'interview-plan', args: { company: 'Acme', role: 'PM' } }];
+    const interview = findByType(renderAt('interview'), Interview) as { props: { onAction: (a: string, app: { company: string; role: string }) => void } } | null;
+    interview!.props.onAction('interview-plan', { company: 'Acme', role: 'PM' });
+    expect(hooks.current()[13]).toBe('task-i');
+    interview!.props.onAction('interview-plan', { company: 'Other', role: 'PM' });
+    expect(hooks.current()[13]).toBeNull();
   });
 });
 

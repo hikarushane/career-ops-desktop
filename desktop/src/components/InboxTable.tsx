@@ -7,7 +7,10 @@ type Props = {
   entries: InboxEntry[];
   query: string;
   onProcessPending: () => void;
+  /** A batch start is in flight: the button is disabled to stop a double start. */
   batchStarting: boolean;
+  /** A batch is already running: the button reopens it instead of starting another. */
+  batchRunning: boolean;
   onOpenError: (message: string) => void;
 };
 
@@ -18,7 +21,7 @@ type Props = {
  * through evaluation. Same derived table language as AppTable (DESIGN.md
  * defines no table); the attention pill follows §5.9 chip geometry.
  */
-export default function InboxTable({ entries, query, onProcessPending, batchStarting, onOpenError }: Props) {
+export default function InboxTable({ entries, query, onProcessPending, batchStarting, batchRunning, onOpenError }: Props) {
   const rows = entries.filter((e) => matchesInboxSearch(e, query));
   const pending = entries.filter((e) => e.state === 'pending').length;
   const failed = entries.length - pending;
@@ -30,8 +33,8 @@ export default function InboxTable({ entries, query, onProcessPending, batchStar
           {`${pending} pending${failed > 0 ? ` · ${failed} need attention` : ''}. `}
           Scanned postings wait here until an evaluation turns them into Jobs.
         </p>
-        <button className="btn-primary" disabled={pending === 0 || batchStarting} onClick={onProcessPending}>
-          {processPendingLabel(pending)}
+        <button className="btn-primary" disabled={(pending === 0 && !batchRunning) || batchStarting} onClick={onProcessPending}>
+          {processPendingLabel(pending, batchRunning)}
         </button>
       </div>
       {rows.length === 0 ? (

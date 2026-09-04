@@ -206,18 +206,27 @@ export default function App() {
       setPipelineFilter(params?.tab as FilterKey | undefined);
       setScreen('pipeline');
     } else if (target === 'scanner') {
-      // A fresh visit to the scanner (not a reopen from the header chip)
-      // must not inherit a stale activeTaskId left over from a previous
-      // evaluate/batch/interview session — Scanner would otherwise try to
-      // hydrate a task of the wrong type.
-      setActiveTaskId(null);
+      // Leaving the scanner mid-scan and coming back must show that scan
+      // again, not a fresh Start button. Otherwise a visit must not inherit
+      // a stale activeTaskId from a previous evaluate/batch/interview
+      // session — Scanner would try to hydrate a task of the wrong type.
+      setActiveTaskId(runningTasks.find((t) => t.taskType === 'scan')?.taskId ?? null);
       setScreen('scanner');
     } else if (target === 'batch') {
-      void startBatch(data!.pipelineSummary.pending);
+      // Same for a running batch: every "Evaluate all pending" button turns
+      // into "View progress" while one runs, and reopens it here.
+      const running = runningTasks.find((t) => t.taskType === 'batch');
+      if (running) {
+        setEvalUrl(undefined);
+        setActiveTaskId(running.taskId);
+        setScreen('evaluate');
+      } else {
+        void startBatch(data!.pipelineSummary.pending);
+      }
     } else {
       setScreen(target as Screen);
     }
-  }, [data, startBatch]);
+  }, [data, startBatch, runningTasks]);
 
   // After an evaluation, land on the Jobs board with the new report's card
   // open. The tracker row is matched by report path, since the task only
@@ -247,16 +256,18 @@ export default function App() {
 
   const startInterviewWorkflow = useCallback(
     (mode: string, app: Application) => {
-      // A fresh start (not a reopen from the header chip) must not inherit
-      // a stale activeTaskId from a previous session — see the 'scanner'
-      // branch of navigate() above for the same concern.
-      setActiveTaskId(null);
+      // Coming back to a prep that is still running for this company shows
+      // that run; otherwise a fresh start must not inherit a stale
+      // activeTaskId from a previous session — see the 'scanner' branch of
+      // navigate() above for the same concern.
+      const running = runningTasks.find((t) => t.taskType === mode && t.args.company === app.company);
+      setActiveTaskId(running?.taskId ?? null);
       setIwMode(mode as typeof iwMode);
       setIwCompany(app.company);
       setIwRole(app.role);
       setScreen('interview-workflow');
     },
-    [],
+    [runningTasks],
   );
 
   if (error) {
@@ -302,7 +313,7 @@ export default function App() {
   function renderScreen() {
     switch (screen) {
       case 'home':
-        return <Home root={root!} data={data!} onNavigate={navigate} batchStarting={batchRunning || batchStartInFlight} />;
+        return <Home root={root!} data={data!} onNavigate={navigate} batchStarting={batchStartInFlight} batchRunning={batchRunning} />;
       case 'pipeline':
         return (
           <Pipeline
@@ -312,7 +323,8 @@ export default function App() {
             initialSelected={pipelineSelected}
             initialFilter={pipelineFilter}
             onProcessPending={() => navigate('batch')}
-            batchStarting={batchRunning || batchStartInFlight}
+            batchStarting={batchStartInFlight}
+            batchRunning={batchRunning}
           />
         );
       case 'progress':

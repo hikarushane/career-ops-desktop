@@ -83,6 +83,28 @@ describe('Home', () => {
     expect(onNavigate).toHaveBeenCalledWith('batch');
   });
 
+  it('turns the batch button into View progress while a batch is running', () => {
+    const onNavigate = vi.fn();
+    hooks.reset(['']);
+    hooks.beginRender();
+    const tree = Home({
+      root: '/w',
+      data: {
+        ok: true,
+        applications: [],
+        metrics: { Total: 0, ByStatus: {}, AvgScore: 0, TopScore: 0, WithPDF: 0, Actionable: 0 },
+        progress: {} as never,
+        pipelineSummary: { pending: 0, processed: 3, failed: 0 }, inbox: [],
+      },
+      onNavigate,
+      batchRunning: true,
+    }) as ElementNode;
+    const button = findButton(tree, 'View progress');
+    expect(button?.props?.disabled).toBe(false);
+    button?.props?.onClick?.();
+    expect(onNavigate).toHaveBeenCalledWith('batch');
+  });
+
   it('disables the batch button when there is nothing pending', () => {
     hooks.reset(['']);
     hooks.beginRender();
