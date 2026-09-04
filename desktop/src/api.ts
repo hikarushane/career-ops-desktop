@@ -256,7 +256,8 @@ export type TaskType =
   | 'interview-plan'
   | 'interview-practice'
   | 'interview-debrief'
-  | 'profile-generate';
+  | 'profile-generate'
+  | 'profile-update';
 
 export type TaskStarted = {
   task_id: string;

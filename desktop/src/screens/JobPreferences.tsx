@@ -4,6 +4,10 @@ type Props = {
   value: Preferences;
   onChange: (next: Preferences) => void;
   onContinue: () => void;
+  /** Label of the submit button; onboarding's "Continue" by default. */
+  continueLabel?: string;
+  /** Inside Settings the tab already has a heading, so the form drops its own. */
+  compact?: boolean;
 };
 
 const RELOCATION: { id: Relocation; label: string }[] = [
@@ -12,17 +16,21 @@ const RELOCATION: { id: Relocation; label: string }[] = [
   { id: 'no', label: 'No' },
 ];
 
-export default function JobPreferences({ value, onChange, onContinue }: Props) {
+export default function JobPreferences({ value, onChange, onContinue, continueLabel = 'Continue', compact = false }: Props) {
   const set = <K extends keyof Preferences>(key: K, next: Preferences[K]) =>
     onChange({ ...value, [key]: next });
 
   return (
-    <div className="setup-screen">
-      <h1>What are you looking for?</h1>
-      <p className="setup-subtitle">
-        These answers shape your profile, your target roles, and which job boards get scanned.
-        Everything is optional and can be edited later in Settings.
-      </p>
+    <div className={compact ? 'preferences-embedded' : 'setup-screen'}>
+      {!compact && (
+        <>
+          <h1>What are you looking for?</h1>
+          <p className="setup-subtitle">
+            These answers shape your profile, your target roles, and which job boards get scanned.
+            Everything is optional and can be edited later in Settings.
+          </p>
+        </>
+      )}
 
       <div className="preferences-form">
         <label>
@@ -69,7 +77,7 @@ export default function JobPreferences({ value, onChange, onContinue }: Props) {
       </div>
 
       <div className="setup-actions">
-        <button className="btn-primary" onClick={onContinue}>Continue</button>
+        <button className="btn-primary" onClick={onContinue}>{continueLabel}</button>
       </div>
     </div>
   );

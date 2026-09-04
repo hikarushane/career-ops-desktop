@@ -16,6 +16,10 @@ const GENERATION_TARGETS: [&str; 4] = [
     "modes/_profile.md",
     "portals.yml",
 ];
+/// What a job-search preferences update may touch: targeting lives in the
+/// profile files and the scanner config, never in the CV (AGENTS.md Data
+/// Contract).
+const PROFILE_UPDATE_TARGETS: [&str; 3] = ["config/profile.yml", "modes/_profile.md", "portals.yml"];
 const GENERATION_TEMPLATES: [&str; 3] = [
     "config/profile.example.yml",
     "modes/_profile.template.md",
@@ -49,6 +53,26 @@ Write modes/_profile.md and every narrative field in {analysisLanguage}. Write c
 
 Rules: never invent employers, titles, dates, degrees, or numbers. Reformulate and reorganise, never fabricate. Do not run scripts, install anything, or write any other file. When finished, print one line per file you wrote."#;
 
+const PROFILE_UPDATE_PROMPT: &str = r#"You are updating the job-search targeting of an existing CareerOps workspace. The current directory is a disposable staging copy of it; write files directly here.
+
+The user changed their job-search preferences in the app. In their own words:
+{preferences}
+
+Read the current config/profile.yml, modes/_profile.md and portals.yml, and the templates they follow:
+- config/profile.example.yml
+- modes/_profile.template.md
+- templates/portals.example.yml
+Read cv.md for context only; do not modify it.
+
+Update exactly these three files in place so they reflect the preferences above, keeping everything the preferences do not touch:
+1. config/profile.yml: target roles, locations, remote/relocation policy, salary expectations and any other field the preferences speak to. Keep language.analysis as {analysisLanguage}.
+2. modes/_profile.md: archetypes, North Star, location policy and compensation targets, consistent with the new preferences; keep the narrative and proof points unless the preferences contradict them.
+3. portals.yml: title_filter, location_filter and search_queries derived from the new role keywords, regions and cities; add or drop job_boards and tracked_companies only where a target country or industry changed. Keep the file's structure and stay under 300 lines.
+
+Write modes/_profile.md and every narrative field in {analysisLanguage}.
+
+Rules: never invent employers, titles, dates, degrees, or numbers. Do not run scripts, install anything, or write any other file. When finished, print one line per file you changed."#;
+
 const PROFILE_FEEDBACK_SECTION: &str = r#"
 
 A previous attempt produced the files below. The user reviewed them and asks for these changes:
@@ -72,8 +96,19 @@ Previous portals.yml:
 {previous_portals}
 ---"#;
 
-fn render_generation_prompt(args: &HashMap<String, String>) -> String {
-    let mut prompt = build_prompt(PROFILE_GENERATE_PROMPT, args);
+/// Whether a task type runs in a staging copy of the workspace and lands
+/// through the review-and-apply flow, and which files that flow covers.
+fn generation_targets(task_type: &str) -> Option<&'static [&'static str]> {
+    match task_type {
+        "profile-generate" => Some(&GENERATION_TARGETS),
+        "profile-update" => Some(&PROFILE_UPDATE_TARGETS),
+        _ => None,
+    }
+}
+
+fn render_generation_prompt(task_type: &str, args: &HashMap<String, String>) -> String {
+    let template = if task_type == "profile-update" { PROFILE_UPDATE_PROMPT } else { PROFILE_GENERATE_PROMPT };
+    let mut prompt = build_prompt(template, args);
     if args.get("feedback").map(|f| !f.trim().is_empty()).unwrap_or(false) {
         let mut filled = args.clone();
         for key in ["previous_cv", "previous_profile_yml", "previous_profile_md", "previous_portals"] {
@@ -104,6 +139,8 @@ pub struct GenerationResult {
 struct GenerationStaging {
     workspace: PathBuf,
     staging: TempDir,
+    /// The files this generation is expected to write (generation_targets).
+    targets: &'static [&'static str],
 }
 
 #[derive(Serialize, Clone)]
@@ -266,6 +303,10 @@ fn get_task_def(task_type: &str) -> Option<TaskDef> {
         }),
         "profile-generate" => Some(TaskDef {
             prompt_template: PROFILE_GENERATE_PROMPT,
+            required_args: &["preferences", "analysisLanguage"],
+        }),
+        "profile-update" => Some(TaskDef {
+            prompt_template: PROFILE_UPDATE_PROMPT,
             required_args: &["preferences", "analysisLanguage"],
         }),
         _ => None,
@@ -791,8 +832,8 @@ fn validate_target(relative: &str, content: &str) -> Result<(), String> {
     }
 }
 
-fn inspect_generation(staging: &Path) -> Vec<GenerationFile> {
-    GENERATION_TARGETS
+fn inspect_generation(staging: &Path, targets: &[&str]) -> Vec<GenerationFile> {
+    targets
         .iter()
         .map(|relative| {
             let path = staging.join(relative);
@@ -822,11 +863,15 @@ fn inspect_generation(staging: &Path) -> Vec<GenerationFile> {
         .collect()
 }
 
-fn generation_is_complete(files: &[GenerationFile]) -> bool {
-    files.len() == GENERATION_TARGETS.len() && files.iter().all(|file| file.valid)
+fn generation_is_complete(files: &[GenerationFile], targets: &[&str]) -> bool {
+    files.len() == targets.len() && files.iter().all(|file| file.valid)
 }
 
-fn apply_generation_at(workspace: &Path, staging: &Path) -> Result<Vec<String>, String> {
+/// Copies `targets` from the staging copy into the workspace, backing up the
+/// files it replaces. A staged file identical to the workspace's (the staging
+/// copy starts from the workspace, so an update that leaves a file alone
+/// keeps it byte-for-byte) is neither rewritten nor backed up nor listed.
+fn apply_generation_at(workspace: &Path, staging: &Path, targets: &[&str]) -> Result<Vec<String>, String> {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| error.to_string())?
@@ -834,11 +879,13 @@ fn apply_generation_at(workspace: &Path, staging: &Path) -> Result<Vec<String>, 
     let backup_root = workspace.join(GENERATION_BACKUP_ROOT).join(stamp.to_string());
     let mut applied = Vec::new();
 
-    for relative in GENERATION_TARGETS {
+    for relative in targets {
         let source = staging.join(relative);
         if !source.is_file() {
             continue;
         }
+        let content = fs::read(&source)
+            .map_err(|error| format!("failed to read generated {relative}: {error}"))?;
         let destination = workspace.join(relative);
         match fs::symlink_metadata(&destination) {
             Ok(metadata) if metadata.file_type().is_symlink() => {
@@ -847,6 +894,9 @@ fn apply_generation_at(workspace: &Path, staging: &Path) -> Result<Vec<String>, 
                 ));
             }
             Ok(_) => {
+                if fs::read(&destination).map(|current| current == content).unwrap_or(false) {
+                    continue;
+                }
                 let backup = backup_root.join(relative);
                 if let Some(parent) = backup.parent() {
                     fs::create_dir_all(parent).map_err(|error| {
@@ -863,14 +913,12 @@ fn apply_generation_at(workspace: &Path, staging: &Path) -> Result<Vec<String>, 
             fs::create_dir_all(parent)
                 .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
         }
-        let content = fs::read(&source)
-            .map_err(|error| format!("failed to read generated {relative}: {error}"))?;
         let temporary = destination.with_extension("careerops-tmp");
         fs::write(&temporary, &content)
             .map_err(|error| format!("failed to write {relative}: {error}"))?;
         fs::rename(&temporary, &destination)
             .map_err(|error| format!("failed to replace {relative}: {error}"))?;
-        applied.push(relative.to_owned());
+        applied.push((*relative).to_owned());
     }
     Ok(applied)
 }
@@ -1129,14 +1177,15 @@ pub fn run_task(
         }
     }
 
-    let is_generation = input.task_type == "profile-generate";
+    let targets = generation_targets(&input.task_type);
+    let is_generation = targets.is_some();
     let options = input.model_options.clone().unwrap_or_default();
     let cmd_args_base = provider_args(&input.provider_id, &options)
         .ok_or_else(|| format!("unknown provider: {}", input.provider_id))?;
 
     let language_instruction = language_context_instruction(input.language_context.as_ref())?;
     let prompt = if is_generation {
-        render_generation_prompt(&input.args)
+        render_generation_prompt(&input.task_type, &input.args)
     } else {
         format!(
             "{}\n\n{}",
@@ -1179,11 +1228,11 @@ pub fn run_task(
     }
     cmd_args.push(prompt);
 
-    if let Some(staging) = staging {
+    if let (Some(staging), Some(targets)) = (staging, targets) {
         let mut generations = state.generations.lock().map_err(|e| e.to_string())?;
         generations.insert(
             task_id.clone(),
-            GenerationStaging { workspace: workspace.clone(), staging },
+            GenerationStaging { workspace: workspace.clone(), staging, targets },
         );
     }
 
@@ -1228,12 +1277,12 @@ pub fn run_task(
             let mut reported: HashSet<&'static str> = HashSet::new();
             let exit_code = loop {
                 if let Some(staging) = &staging_path {
-                    for relative in GENERATION_TARGETS {
+                    for relative in targets.unwrap_or(&[]) {
                         if !reported.contains(relative) && staging.join(relative).is_file() {
                             reported.insert(relative);
                             let _ = a.emit(
                                 "generation-progress",
-                                GenerationProgress { task_id: tid.clone(), file: relative.to_owned() },
+                                GenerationProgress { task_id: tid.clone(), file: (*relative).to_owned() },
                             );
                         }
                     }
@@ -1299,8 +1348,8 @@ pub fn generation_result(
     let entry = generations
         .get(&task_id)
         .ok_or_else(|| "This profile generation has expired. Generate again.".to_owned())?;
-    let files = inspect_generation(entry.staging.path());
-    let complete = generation_is_complete(&files);
+    let files = inspect_generation(entry.staging.path(), entry.targets);
+    let complete = generation_is_complete(&files, entry.targets);
     Ok(GenerationResult { task_id, files, complete })
 }
 
@@ -1313,7 +1362,7 @@ pub fn apply_generation(
     let entry = generations
         .remove(&task_id)
         .ok_or_else(|| "This profile generation has expired. Generate again.".to_owned())?;
-    let applied = apply_generation_at(&entry.workspace, entry.staging.path());
+    let applied = apply_generation_at(&entry.workspace, entry.staging.path(), entry.targets);
     if applied.is_err() {
         generations.insert(task_id, entry);
     }
@@ -1341,20 +1390,54 @@ mod tests {
         generation_is_complete, get_task_def, inspect_generation, judge_outcome,
         language_context_instruction, packaged_runtime_paths_for_executable, provider_args,
         render_generation_prompt, snapshot_artifacts, watched_dirs, with_optional_context, LanguageContext,
-        ModelOptions, PackagedJsRuntime, RunnerState,
+        ModelOptions, PackagedJsRuntime, RunnerState, GENERATION_TARGETS, PROFILE_UPDATE_TARGETS,
     };
+
+    #[test]
+    fn profile_update_prompt_scopes_the_run_to_the_targeting_files() {
+        let mut args = HashMap::new();
+        args.insert("preferences".to_owned(), "- Target regions: Netherlands".to_owned());
+        args.insert("analysisLanguage".to_owned(), "zh-TW".to_owned());
+        let prompt = render_generation_prompt("profile-update", &args);
+        assert!(prompt.contains("- Target regions: Netherlands"));
+        assert!(prompt.contains("do not modify it"));
+        assert!(prompt.contains("Keep language.analysis as zh-TW"));
+        assert!(!prompt.contains("Produce exactly these four files"));
+        assert_eq!(super::generation_targets("profile-update"), Some(&PROFILE_UPDATE_TARGETS[..]));
+        assert_eq!(super::generation_targets("evaluate"), None);
+    }
+
+    #[test]
+    fn apply_generation_skips_files_the_staging_left_unchanged() {
+        let workspace = tempfile::tempdir().unwrap();
+        let staging = tempfile::tempdir().unwrap();
+        fs::write(workspace.path().join("cv.md"), "# same").unwrap();
+        fs::create_dir_all(workspace.path().join("config")).unwrap();
+        fs::write(workspace.path().join("config/profile.yml"), "old: 1").unwrap();
+        fs::write(staging.path().join("cv.md"), "# same").unwrap();
+        fs::create_dir_all(staging.path().join("config")).unwrap();
+        fs::write(staging.path().join("config/profile.yml"), "new: 2").unwrap();
+
+        let applied = apply_generation_at(workspace.path(), staging.path(), &GENERATION_TARGETS).unwrap();
+        assert_eq!(applied, vec!["config/profile.yml".to_owned()]);
+        assert_eq!(fs::read_to_string(workspace.path().join("config/profile.yml")).unwrap(), "new: 2");
+        let backups: Vec<_> = fs::read_dir(workspace.path().join(".careerops-backup")).unwrap().flatten().collect();
+        assert_eq!(backups.len(), 1);
+        assert!(backups[0].path().join("config/profile.yml").is_file());
+        assert!(!backups[0].path().join("cv.md").exists(), "unchanged cv.md must not be backed up");
+    }
 
     #[test]
     fn feedback_section_is_included_only_when_feedback_is_given() {
         let mut args = HashMap::new();
         args.insert("preferences".to_owned(), "- Regions: DE".to_owned());
         args.insert("analysisLanguage".to_owned(), "en".to_owned());
-        let without = render_generation_prompt(&args);
+        let without = render_generation_prompt("profile-generate", &args);
         assert!(!without.contains("A previous attempt"));
 
         args.insert("feedback".to_owned(), "Use British spelling".to_owned());
         args.insert("previous_cv".to_owned(), "# Old CV".to_owned());
-        let with = render_generation_prompt(&args);
+        let with = render_generation_prompt("profile-generate", &args);
         assert!(with.contains("A previous attempt produced the files below"));
         assert!(with.contains("Use British spelling"));
         assert!(with.contains("# Old CV"));
@@ -1637,7 +1720,7 @@ mod tests {
         fs::write(root.join("config/profile.yml"), "candidate: [unclosed\n").unwrap();
         fs::write(root.join("modes/_profile.md"), "").unwrap();
 
-        let files = inspect_generation(root);
+        let files = inspect_generation(root, &GENERATION_TARGETS);
         let by_path: std::collections::HashMap<_, _> =
             files.iter().map(|f| (f.path.as_str(), f)).collect();
 
@@ -1648,7 +1731,7 @@ mod tests {
         assert_eq!(by_path["modes/_profile.md"].issue.as_deref(), Some("file is empty"));
         assert!(by_path["portals.yml"].content.is_none());
         assert!(!by_path["portals.yml"].valid);
-        assert!(!generation_is_complete(&files));
+        assert!(!generation_is_complete(&files, &GENERATION_TARGETS));
     }
 
     #[test]
@@ -1659,7 +1742,7 @@ mod tests {
         fs::write(staging.path().join("cv.md"), "# New CV\n").unwrap();
         fs::write(staging.path().join("config/profile.yml"), "candidate:\n  full_name: A\n").unwrap();
 
-        let applied = apply_generation_at(workspace.path(), staging.path()).unwrap();
+        let applied = apply_generation_at(workspace.path(), staging.path(), &GENERATION_TARGETS).unwrap();
 
         assert_eq!(applied, vec!["cv.md".to_owned(), "config/profile.yml".to_owned()]);
         assert_eq!(fs::read_to_string(workspace.path().join("cv.md")).unwrap(), "# New CV\n");
@@ -1687,7 +1770,7 @@ mod tests {
         let staging = tempfile::tempdir().unwrap();
         fs::write(staging.path().join("cv.md"), "# New CV\n").unwrap();
 
-        let error = apply_generation_at(workspace.path(), staging.path()).unwrap_err();
+        let error = apply_generation_at(workspace.path(), staging.path(), &GENERATION_TARGETS).unwrap_err();
 
         assert!(error.contains("symlink"));
         assert_eq!(fs::read_to_string(outside.path().join("victim.md")).unwrap(), "keep me");

@@ -334,6 +334,9 @@ summary:focus-visible {
 .setup-actions { display: flex; gap: 8px; margin-top: 16px; }
 
 /* --- Job preferences form --- */
+/* Inside Settings the form sits in the tab's own flow, left-aligned. */
+.preferences-embedded .preferences-form { margin: 12px 0 0; }
+.preferences-embedded .setup-actions { margin-bottom: 24px; }
 .preferences-form {
   display: grid;
   gap: 0.9rem;

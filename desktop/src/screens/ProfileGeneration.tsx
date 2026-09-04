@@ -9,13 +9,39 @@ type Props = {
   preferences: JobPreferences;
   onComplete: () => void;
   onSkip: () => void;
+  /**
+   * `generate` (default) writes all four profile files from documents/;
+   * `update` rewrites only the targeting files from changed preferences and
+   * leaves cv.md alone (Settings > Job Search).
+   */
+  mode?: 'generate' | 'update';
 };
 
 type Phase = 'running' | 'preview' | 'error';
 
-const TARGETS: GenerationTarget[] = ['cv.md', 'config/profile.yml', 'modes/_profile.md', 'portals.yml'];
+const GENERATE_TARGETS: GenerationTarget[] = ['cv.md', 'config/profile.yml', 'modes/_profile.md', 'portals.yml'];
+const UPDATE_TARGETS: GenerationTarget[] = ['config/profile.yml', 'modes/_profile.md', 'portals.yml'];
 
-export default function ProfileGeneration({ root, preferences, onComplete, onSkip }: Props) {
+const COPY = {
+  generate: {
+    running: 'Generating your profile',
+    runningHint: 'The AI is reading your documents and writing four profile files. This usually takes one to three minutes.',
+    review: 'Review your profile',
+    complete: 'All four files were generated. Apply them to your workspace, or regenerate if something looks off.',
+    skip: 'Skip for now',
+  },
+  update: {
+    running: 'Updating your targeting',
+    runningHint: 'The AI is rewriting your target roles, locations and scanner settings from the new preferences. Your CV is not touched.',
+    review: 'Review the changes',
+    complete: 'The targeting files were rewritten. Apply them to your workspace, or regenerate if something looks off.',
+    skip: 'Cancel',
+  },
+} as const;
+
+export default function ProfileGeneration({ root, preferences, onComplete, onSkip, mode = 'generate' }: Props) {
+  const TARGETS = mode === 'update' ? UPDATE_TARGETS : GENERATE_TARGETS;
+  const copy = COPY[mode];
   const [phase, setPhase] = useState<Phase>('running');
   const [taskId, setTaskId] = useState<string | null>(null);
   const [written, setWritten] = useState<GenerationTarget[]>([]);
@@ -46,13 +72,13 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
       const generated = await generateProfile(root, preferencesToPrompt(preferences), analysisLanguage, {
         onStarted: (id) => { activeTask.current = id; setTaskId(id); },
         onFileWritten: (file) => setWritten((current) => (current.includes(file) ? current : [...current, file])),
-      }, feedback);
+      }, feedback, mode === 'update' ? 'profile-update' : 'profile-generate');
       // Only discard the previous staged draft once the new one has actually
       // landed — a failed feedback regeneration must not destroy the reviewed
       // draft with no way back.
       if (previous) void discardGeneration(previous.taskId).catch(() => {});
       setResult(generated);
-      setSelected(generated.files.find((file) => file.content !== null)?.path ?? 'cv.md');
+      setSelected(generated.files.find((file) => file.content !== null)?.path ?? TARGETS[0]);
       setPhase('preview');
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : 'Profile generation failed.';
@@ -67,7 +93,7 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
         setPhase('error');
       }
     }
-  }, [root, preferences]);
+  }, [root, preferences, mode, TARGETS]);
 
   useEffect(() => {
     if (started.current) return;
@@ -122,11 +148,9 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
   if (phase === 'running') {
     return (
       <div className="setup-screen">
-        <h1><span className="animated-dots">Generating your profile</span></h1>
-        <p className="setup-subtitle">
-          The AI is reading your documents and writing four profile files. This usually takes one to three minutes.
-        </p>
-        <p className="setup-hint" role="status" aria-live="polite">{`${written.length} of 4 files written`}</p>
+        <h1><span className="animated-dots">{copy.running}</span></h1>
+        <p className="setup-subtitle">{copy.runningHint}</p>
+        <p className="setup-hint" role="status" aria-live="polite">{`${written.length} of ${TARGETS.length} files written`}</p>
         <div className="profile-gen-steps">
           {TARGETS.map((file) => {
             const done = written.includes(file);
@@ -140,7 +164,7 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
           })}
         </div>
         <div className="setup-actions">
-          <button className="btn-ghost" onClick={skip}>Skip for now</button>
+          <button className="btn-ghost" onClick={skip}>{copy.skip}</button>
         </div>
       </div>
     );
@@ -154,7 +178,7 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
         {error && <pre className="intake-error" role="alert">{error}</pre>}
         <div className="setup-actions">
           <button className="btn-primary" onClick={regenerate}>Try again</button>
-          <button className="btn-ghost" onClick={skip}>Skip for now</button>
+          <button className="btn-ghost" onClick={skip}>{copy.skip}</button>
         </div>
       </div>
     );
@@ -164,10 +188,10 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
 
   return (
     <div className="setup-screen generation-preview">
-      <h1>Review your profile</h1>
+      <h1>{copy.review}</h1>
       <p className="setup-subtitle">
         {result.complete
-          ? 'All four files were generated. Apply them to your workspace, or regenerate if something looks off.'
+          ? copy.complete
           : 'Some files are missing or did not pass validation. You can still apply the ones that look right, or regenerate.'}
       </p>
 
@@ -197,7 +221,7 @@ export default function ProfileGeneration({ root, preferences, onComplete, onSki
         </button>
         <button className="btn-secondary" onClick={() => setFeedbackOpen(true)} disabled={applying}>Regenerate with feedback…</button>
         <button className="btn-secondary" onClick={regenerate} disabled={applying}>Regenerate from scratch</button>
-        <button className="btn-ghost" onClick={skip} disabled={applying}>Skip for now</button>
+        <button className="btn-ghost" onClick={skip} disabled={applying}>{copy.skip}</button>
       </div>
 
       {feedbackOpen && (

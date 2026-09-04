@@ -1,5 +1,22 @@
-import { describe, expect, it } from 'vitest';
-import { EMPTY_PREFERENCES, hasAnyPreference, preferencesToPrompt, type JobPreferences } from './jobPreferences';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  EMPTY_PREFERENCES, hasAnyPreference, loadPreferences, preferencesToPrompt, savePreferences, type JobPreferences,
+} from './jobPreferences';
+
+const store = vi.hoisted(() => {
+  const data = new Map<string, unknown>();
+  return {
+    data,
+    fail: false,
+    load: vi.fn(async () => {
+      if (store.fail) throw new Error('store unavailable');
+      return { get: async (k: string) => data.get(k), set: async (k: string, v: unknown) => { data.set(k, v); } };
+    }),
+  };
+});
+vi.mock('@tauri-apps/plugin-store', () => ({ load: store.load }));
+
+afterEach(() => { store.data.clear(); store.fail = false; });
 
 describe('jobPreferences', () => {
   it('EMPTY_PREFERENCES has no preference set', () => {
@@ -10,28 +27,32 @@ describe('jobPreferences', () => {
     expect(hasAnyPreference({ ...EMPTY_PREFERENCES, relocation: 'yes' })).toBe(true);
   });
 
-  it('serialises filled fields into a prompt block', () => {
-    const prefs: JobPreferences = {
-      regions: 'Germany, Netherlands',
-      keywords: 'Manufacturing Engineer',
-      industries: '',
-      salary: 'EUR 70k-85k',
-      relocation: 'yes',
-      preferredCities: 'Hamburg',
-      notes: '',
-    };
-    const prompt = preferencesToPrompt(prefs);
-    expect(prompt).toContain('- Target regions: Germany, Netherlands');
-    expect(prompt).toContain('- Willing to relocate: yes');
-    expect(prompt).not.toContain('Other notes');
+  it('detects a filled text field as a preference', () => {
+    expect(hasAnyPreference({ ...EMPTY_PREFERENCES, keywords: 'PM' })).toBe(true);
   });
 
-  it('returns fallback line when nothing is filled', () => {
-    expect(preferencesToPrompt(EMPTY_PREFERENCES)).toContain('No preferences provided');
+  it('renders only the filled fields as prompt lines', () => {
+    const p: JobPreferences = { ...EMPTY_PREFERENCES, regions: 'Germany', salary: 'EUR 80k', relocation: 'no' };
+    expect(preferencesToPrompt(p)).toBe('- Target regions: Germany\n- Expected salary: EUR 80k\n- Willing to relocate: no');
   });
 
-  it('serialises industries after keywords', () => {
-    const prompt = preferencesToPrompt({ ...EMPTY_PREFERENCES, keywords: 'PM', industries: 'Automotive, Semiconductor' });
-    expect(prompt).toBe('- Role keywords: PM\n- Industries: Automotive, Semiconductor');
+  it('falls back to an inference hint when nothing is filled', () => {
+    expect(preferencesToPrompt(EMPTY_PREFERENCES)).toMatch(/No preferences provided/);
+  });
+});
+
+describe('remembered preferences', () => {
+  it('round-trips per workspace and fills gaps with the empty defaults', async () => {
+    await savePreferences('/w', { ...EMPTY_PREFERENCES, regions: 'Netherlands' });
+    expect(await loadPreferences('/w')).toEqual({ ...EMPTY_PREFERENCES, regions: 'Netherlands' });
+    expect(await loadPreferences('/other')).toEqual(EMPTY_PREFERENCES);
+    store.data.set('job-preferences./w', { keywords: 'PM' });
+    expect(await loadPreferences('/w')).toEqual({ ...EMPTY_PREFERENCES, keywords: 'PM' });
+  });
+
+  it('degrades to the defaults and never throws when the store is unavailable', async () => {
+    store.fail = true;
+    expect(await loadPreferences('/w')).toEqual(EMPTY_PREFERENCES);
+    await expect(savePreferences('/w', EMPTY_PREFERENCES)).resolves.toBeUndefined();
   });
 });

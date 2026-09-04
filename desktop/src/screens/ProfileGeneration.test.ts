@@ -153,7 +153,8 @@ describe('ProfileGeneration', () => {
     expect(send).toBeDefined();
     await send?.props?.onClick?.();
     expect(api.generateProfile).toHaveBeenCalledWith('/w', expect.any(String), 'en', expect.any(Object),
-      expect.objectContaining({ instructions: 'Shorter summary', previous: expect.objectContaining({ 'cv.md': '# CV' }) }));
+      expect.objectContaining({ instructions: 'Shorter summary', previous: expect.objectContaining({ 'cv.md': '# CV' }) }),
+      'profile-generate');
     // Let the success path's deferred discardGeneration(previous.taskId) settle so it
     // cannot leak into a later test's assertions on the same shared mock.
     await new Promise((resolve) => setTimeout(resolve, 0));

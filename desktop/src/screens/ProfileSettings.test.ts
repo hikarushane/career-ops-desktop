@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ProfileSettings from './ProfileSettings';
+import JobPreferences from './JobPreferences';
 
 const hooks = vi.hoisted(() => {
   let state: unknown[] = [];
@@ -11,6 +12,9 @@ const hooks = vi.hoisted(() => {
     },
     beginRender() {
       cursor = 0;
+    },
+    current() {
+      return state;
     },
     useState(initial: unknown) {
       const index = cursor++;
@@ -70,7 +74,12 @@ vi.mock('./ProfileGeneration', () => {
   function ProfileGeneration(props: Record<string, unknown>) { return { type: 'ProfileGeneration', props }; }
   return { default: ProfileGeneration };
 });
-vi.mock('../lib/jobPreferences', () => ({ EMPTY_PREFERENCES: {} }));
+const preferencesLib = vi.hoisted(() => ({
+  EMPTY_PREFERENCES: { regions: '', keywords: '', industries: '', salary: '', relocation: 'maybe', preferredCities: '', notes: '' },
+  loadPreferences: vi.fn(async () => ({})),
+  savePreferences: vi.fn(async () => {}),
+}));
+vi.mock('../lib/jobPreferences', () => preferencesLib);
 
 afterEach(() => {
   hooks.reset();
@@ -139,7 +148,8 @@ function findById(node: unknown, id: string): ElementNode | undefined {
 }
 
 // State order: tab, providers, preferredId, model, effort, fastMode, updateCheck,
-// catalog, catalogState, customModel, settingsLoaded, rawFilesError, regenerating
+// catalog, catalogState, customModel, settingsLoaded, rawFilesError, regenerating,
+// preferences, updatingProfile
 function findByType(node: unknown, typeName: string): ElementNode | undefined {
   if (Array.isArray(node)) {
     for (const child of node) {
@@ -249,5 +259,66 @@ describe('ProfileSettings background tab', () => {
     hooks.beginRender();
     const updated = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     expect(findByRole(updated, 'alert')?.props?.children).toBe('ForbiddenPath');
+  });
+});
+
+describe('ProfileSettings job search tab', () => {
+  const prefs = { ...preferencesLib.EMPTY_PREFERENCES, regions: 'Netherlands' };
+  const base = ['preferences', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, false];
+
+  function findButtonByText(node: unknown, label: string): ElementNode | undefined {
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        const found = findButtonByText(child, label);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    if (typeof node !== 'object' || node === null) return undefined;
+    const element = node as ElementNode;
+    if (element.type === 'button' && textContent(element) === label) return element;
+    return findButtonByText(element.props?.children, label);
+  }
+
+  // The tree is unrendered, so the form shows up as a JobPreferences element
+  // carrying its props rather than as its inputs.
+  function findPreferencesForm(node: unknown): (ElementNode & { props: { value?: unknown; continueLabel?: string; compact?: boolean; onContinue?: () => void } }) | undefined {
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        const found = findPreferencesForm(child);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    if (typeof node !== 'object' || node === null) return undefined;
+    const element = node as ElementNode;
+    if (element.type === JobPreferences) return element as ReturnType<typeof findPreferencesForm>;
+    return findPreferencesForm(element.props?.children);
+  }
+
+  it('shows the remembered preferences form and hands the answers to an AI update on submit', () => {
+    hooks.reset([...base, prefs, false]);
+    hooks.beginRender();
+    const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    const form = findPreferencesForm(tree);
+    expect(form?.props.value).toEqual(prefs);
+    expect(form?.props.compact).toBe(true);
+    expect(form?.props.continueLabel).toBe('Update profile with these preferences');
+    expect(findButtonByText(tree, 'Update profile with these preferences')).toBeUndefined();
+    form?.props.onContinue?.();
+    expect(preferencesLib.savePreferences).toHaveBeenCalledWith('/w', prefs);
+    expect(hooks.current()[14]).toBe(true);
+  });
+
+  it('runs ProfileGeneration in update mode with those preferences while updating', () => {
+    hooks.reset([...base, prefs, true]);
+    hooks.beginRender();
+    const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    const generation = findByType(tree, 'ProfileGeneration') as (ElementNode & { props: { mode?: string; preferences?: unknown; onComplete?: () => void } }) | undefined;
+    expect(generation?.props.mode).toBe('update');
+    expect(generation?.props.preferences).toEqual(prefs);
+    generation?.props.onComplete?.();
+    expect(hooks.current()[14]).toBe(false);
+    expect(findPreferencesForm(tree)).toBeUndefined();
   });
 });
