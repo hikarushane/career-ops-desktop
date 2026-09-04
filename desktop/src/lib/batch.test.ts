@@ -4,12 +4,16 @@ import { BATCH_LIMIT, batchArgs, batchTaskLabel, processPendingLabel } from './b
 describe('batch sizing', () => {
   it('evaluates five entries per agent turn', () => {
     expect(BATCH_LIMIT).toBe(5);
-    expect(batchArgs()).toEqual({ limit: '5' });
+    expect(batchArgs()).toEqual({ limit: '3' });
   });
 
   it('labels the button as evaluating everything, since the desktop chains turns', () => {
     expect(processPendingLabel(45)).toBe('Evaluate all pending');
     expect(processPendingLabel(0)).toBe('Evaluate all pending');
+  });
+
+  it('turns the button into a way back to a batch that is already running', () => {
+    expect(processPendingLabel(45, true)).toBe('View progress');
   });
 
   it('labels the task chip with progress against the whole inbox', () => {

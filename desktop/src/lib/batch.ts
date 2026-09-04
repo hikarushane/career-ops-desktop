@@ -7,13 +7,17 @@
  */
 export const BATCH_LIMIT = 5;
 
+// TESTING OVERRIDE: cap at 3 per press; revert to BATCH_LIMIT before release
 export function batchArgs(): Record<string, string> {
-  return { limit: String(BATCH_LIMIT) };
+  return { limit: '3' };
 }
 
-/** Button label. The caller disables it when nothing is pending. */
-export function processPendingLabel(_pending: number): string {
-  return 'Evaluate all pending';
+/**
+ * Button label. The caller disables it when nothing is pending; while a batch
+ * is already running the same button reopens that run instead of starting one.
+ */
+export function processPendingLabel(_pending: number, running = false): string {
+  return running ? 'View progress' : 'Evaluate all pending';
 }
 
 /** Task-chip label: this turn's slice against the whole inbox. */
