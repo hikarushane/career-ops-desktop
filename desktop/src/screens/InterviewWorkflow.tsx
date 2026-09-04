@@ -5,7 +5,7 @@ import { cancel, getTask, startTask, useTasks } from '../lib/taskStore';
 import { languageSettings, type LanguageContext, type LanguageSettings, type TaskType } from '../api';
 import {
   INTAKE_FIELDS, buildContext, findSession, findSessionByTask, intakeComplete, intakeMessage,
-  loadSessions, replyFromTask, saveSessions, sessionKey, upsertSession,
+  loadSessions, maskTime, replyFromTask, saveSessions, sessionKey, upsertSession,
   type IntakeField, type InterviewMode, type JobFiles, type Session,
 } from '../lib/interviewSession';
 
@@ -165,6 +165,10 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
             <option value="">{f.required ? 'Choose…' : 'Not sure'}</option>
             {(f.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
+        ) : f.type === 'time' ? (
+          // A plain masked field: the native time control needs a mouse click
+          // to move from hours to minutes, this one takes "1430" straight.
+          <input id={id} type="text" inputMode="numeric" placeholder="14:30" maxLength={5} value={value} onChange={(e) => set(maskTime(e.target.value))} />
         ) : (
           <input id={id} type={f.type} value={value} placeholder={f.placeholder} onChange={(e) => set(e.target.value)} />
         )}
@@ -225,7 +229,13 @@ export default function InterviewWorkflow({ root, mode, company, role, report, i
               rows={3}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder={busy ? 'Waiting for the AI…' : 'Reply, ask a follow-up, or paste new details'}
+              // Enter sends, Shift+Enter breaks the line (chat convention).
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                if (!busy && !starting && message.trim()) void send(message.trim());
+              }}
+              placeholder={busy ? 'Waiting for the AI…' : 'Reply, ask a follow-up, or paste new details (Enter sends, Shift+Enter for a new line)'}
               aria-label="Message"
               disabled={busy}
             />

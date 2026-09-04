@@ -76,9 +76,30 @@ export function sessionKey(mode: InterviewMode, company: string, role: string): 
   return `${mode}|${company.trim().toLowerCase()}|${role.trim().toLowerCase()}`;
 }
 
-/** Whether every required intake field has a value. */
+const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * Formats a typed time as HH:MM while typing: digits only, and the colon
+ * appears once the hour is followed by a third digit ("143" → "14:3"), so
+ * backspacing over the colon does not fight the mask. A leading "9:" style
+ * hour is kept as typed.
+ */
+export function maskTime(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2 && !raw.includes(':')) return digits;
+  const colonAt = raw.includes(':') && raw.indexOf(':') <= 2 ? raw.indexOf(':') : 2;
+  const hour = digits.slice(0, colonAt);
+  const minute = digits.slice(colonAt, colonAt + 2);
+  return hour === '' ? '' : `${hour}:${minute}`;
+}
+
+/** Whether every required intake field has a usable value. */
 export function intakeComplete(mode: InterviewMode, values: Record<string, string>): boolean {
-  return INTAKE_FIELDS[mode].every((f) => !f.required || (values[f.key] ?? '').trim() !== '');
+  return INTAKE_FIELDS[mode].every((f) => {
+    const value = (values[f.key] ?? '').trim();
+    if (f.type === 'time') return value === '' ? !f.required : TIME_RE.test(value);
+    return !f.required || value !== '';
+  });
 }
 
 /** The first message of a session: the intake answers as a readable list. */
