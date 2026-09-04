@@ -1,12 +1,16 @@
 // fetch-posting downloads a job posting over plain HTTP and extracts its
 // text, so the desktop app can capture the JD before spending AI tokens on
 // it. LinkedIn's public job pages redirect to a login wall for guests, so
-// LinkedIn URLs go through the unauthenticated jobs-guest API instead; every
-// other host is scraped as generic HTML.
+// LinkedIn URLs go through the unauthenticated jobs-guest API instead. Every
+// other host is read from its schema.org JobPosting JSON-LD when it has one
+// (job boards and most ATS pages emit it for Google for Jobs, and it carries
+// the full description even when the visible page is rendered client-side),
+// falling back to generic HTML extraction.
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -95,10 +99,15 @@ func fetchPosting(raw string, client *http.Client) (FetchPostingResult, error) {
 	if err != nil {
 		return FetchPostingResult{}, err
 	}
+	if r, ok := jobPostingFromJSONLD(doc); ok {
+		return r, nil
+	}
 	title := normalize(textOf(first(doc, "title")))
 	body := first(doc, "main")
 	if body == nil {
-		body = first(doc, "article")
+		// Job boards wrap related-job teasers in <article> too, so the first
+		// <article> on the page is often a 200-character card, not the posting.
+		body = largest(doc, "article")
 	}
 	if body == nil {
 		body = first(doc, "body")
@@ -127,6 +136,144 @@ func fetchLinkedInGuest(id string, client *http.Client) (FetchPostingResult, err
 	}
 	full := strings.TrimSpace(strings.Join([]string{title, company, location, "", text}, "\n"))
 	return FetchPostingResult{OK: true, Source: "linkedin-guest", Title: title, Company: company, Location: location, Text: full, FetchedAt: now()}, nil
+}
+
+// jobPostingFromJSONLD reads a schema.org JobPosting from the page's
+// <script type="application/ld+json"> blocks (a bare object, an array, or an
+// @graph wrapper). It returns ok=false when the page has no JobPosting, or
+// when its description is too short to be the posting itself (some boards
+// only embed a teaser), so the caller falls back to HTML extraction.
+func jobPostingFromJSONLD(doc *html.Node) (FetchPostingResult, bool) {
+	for _, s := range scriptsOfType(doc, "application/ld+json") {
+		var v interface{}
+		if err := json.Unmarshal([]byte(textOf(s)), &v); err != nil {
+			continue
+		}
+		jp := findJobPosting(v)
+		if jp == nil {
+			continue
+		}
+		desc := str(jp["description"])
+		// Some sites entity-escape the HTML inside the JSON string; unescape
+		// only when there are no real tags, so a plain description is untouched.
+		if !strings.Contains(desc, "<") && strings.Contains(desc, "&lt;") {
+			desc = html.UnescapeString(desc)
+		}
+		frag, err := html.Parse(strings.NewReader(desc))
+		if err != nil {
+			continue
+		}
+		text := normalize(textOf(frag))
+		if len([]rune(text)) < minPostingChars {
+			continue
+		}
+		title := normalize(str(jp["title"]))
+		company := normalize(str(field(jp["hiringOrganization"], "name")))
+		location := normalize(jobLocationOf(jp["jobLocation"]))
+		full := strings.TrimSpace(strings.Join([]string{title, company, location, "", text}, "\n"))
+		return FetchPostingResult{OK: true, Source: "json-ld", Title: title, Company: company, Location: location, Text: full, FetchedAt: now()}, true
+	}
+	return FetchPostingResult{}, false
+}
+
+// findJobPosting walks decoded JSON depth-first and returns the first object
+// whose @type is (or includes) "JobPosting", or nil.
+func findJobPosting(v interface{}) map[string]interface{} {
+	switch x := v.(type) {
+	case map[string]interface{}:
+		if isType(x["@type"], "JobPosting") {
+			return x
+		}
+		for _, child := range x {
+			if found := findJobPosting(child); found != nil {
+				return found
+			}
+		}
+	case []interface{}:
+		for _, child := range x {
+			if found := findJobPosting(child); found != nil {
+				return found
+			}
+		}
+	}
+	return nil
+}
+
+// isType reports whether a JSON-LD @type value (a string or a list of
+// strings) names want.
+func isType(v interface{}, want string) bool {
+	switch x := v.(type) {
+	case string:
+		return x == want
+	case []interface{}:
+		for _, t := range x {
+			if s, ok := t.(string); ok && s == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// str returns v as a string, or "" when it is not one.
+func str(v interface{}) string {
+	s, _ := v.(string)
+	return s
+}
+
+// field returns key from v when v is a JSON object, or nil.
+func field(v interface{}, key string) interface{} {
+	if m, ok := v.(map[string]interface{}); ok {
+		return m[key]
+	}
+	return nil
+}
+
+// jobLocationOf extracts a display location from a JobPosting's jobLocation,
+// which may be one Place or a list of them, each with a PostalAddress object
+// or a plain address string. The first locality found wins; an empty result
+// is fine — Location is informational.
+func jobLocationOf(v interface{}) string {
+	places, ok := v.([]interface{})
+	if !ok {
+		places = []interface{}{v}
+	}
+	for _, p := range places {
+		addr := field(p, "address")
+		if s := str(addr); s != "" {
+			return s
+		}
+		for _, key := range []string{"addressLocality", "addressRegion", "addressCountry"} {
+			if s := str(field(addr, key)); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// scriptsOfType returns every <script> element whose type attribute equals
+// typ, in document order.
+func scriptsOfType(root *html.Node, typ string) []*html.Node {
+	var out []*html.Node
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "script" {
+			for _, a := range n.Attr {
+				if a.Key == "type" && strings.EqualFold(strings.TrimSpace(a.Val), typ) {
+					out = append(out, n)
+					break
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	if root != nil {
+		walk(root)
+	}
+	return out
 }
 
 // now returns the current UTC time, RFC3339-formatted, as FetchedAt.
@@ -200,6 +347,30 @@ func first(root *html.Node, tag string) *html.Node {
 		}
 	}
 	return nil
+}
+
+// largest returns the element with the given tag whose text content is the
+// longest, or nil. Nested matches are not descended into: the outer element
+// already contains the inner one's text.
+func largest(root *html.Node, tag string) *html.Node {
+	var best *html.Node
+	bestLen := -1
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == tag {
+			if l := len(textOf(n)); l > bestLen {
+				best, bestLen = n, l
+			}
+			return
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	if root != nil {
+		walk(root)
+	}
+	return best
 }
 
 // hasClassToken reports whether n's class attribute contains class as a

@@ -147,7 +147,7 @@ export type ProvidersResult = {
 
 export type FetchPostingResult = {
   ok: true;
-  source: 'linkedin-guest' | 'html';
+  source: 'linkedin-guest' | 'json-ld' | 'html';
   title: string;
   company: string;
   location: string;
