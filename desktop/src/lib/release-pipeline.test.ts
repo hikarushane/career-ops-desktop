@@ -231,6 +231,20 @@ describe('installed runtime package inputs', () => {
     }
   });
 
+  it('pins the CRLF license hash for the Windows archives, which differ from the tarballs', () => {
+    const manifest = readJson(join(DESKTOP, 'scripts', 'node-runtime.json'));
+    for (const target of ['x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc']) {
+      expect(manifest.artifacts[target].licenseSha256, target)
+        .toBe('8cc9bb466b19fc7e7cc99d03e9df1132021fda8b01eea2624c58bb372dbef576');
+    }
+    for (const target of ['aarch64-apple-darwin', 'x86_64-apple-darwin', 'x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu']) {
+      expect(manifest.artifacts[target].licenseSha256, target).toBeUndefined();
+    }
+    for (const script of ['build-sidecar.mjs', 'verify-packaged-runtime.mjs']) {
+      expect(readFileSync(join(DESKTOP, 'scripts', script), 'utf8')).toContain('artifact.licenseSha256 ?? ');
+    }
+  });
+
   it('pins exact target distributions and never copies the mutable build-host runtime', () => {
     const build = readFileSync(join(DESKTOP, 'scripts', 'build-sidecar.mjs'), 'utf8');
     const manifestPath = join(DESKTOP, 'scripts', 'node-runtime.json');

@@ -38,6 +38,7 @@
       "sha256": "fec025a6da31757e3b6af84c5a1628e9d38442ca99a2161091d78f2fcfa35ef3",
       "binary": "node-v22.23.2-win-arm64/node.exe",
       "license": "node-v22.23.2-win-arm64/LICENSE",
+      "licenseSha256": "8cc9bb466b19fc7e7cc99d03e9df1132021fda8b01eea2624c58bb372dbef576",
       "architecture": "arm64"
     },
     "x86_64-pc-windows-msvc": {
@@ -45,6 +46,7 @@
       "sha256": "1177b4137ba5adaa56354ae40f1080c7450e8ae09cecb47da459d1c52ac99f97",
       "binary": "node-v22.23.2-win-x64/node.exe",
       "license": "node-v22.23.2-win-x64/LICENSE",
+      "licenseSha256": "8cc9bb466b19fc7e7cc99d03e9df1132021fda8b01eea2624c58bb372dbef576",
       "architecture": "x64"
     }
   }
