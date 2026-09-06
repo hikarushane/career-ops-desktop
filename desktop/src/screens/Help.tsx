@@ -25,7 +25,7 @@ const GUIDE_LANGUAGES: { code: 'zh-TW' | 'en'; label: string }[] = [
 ];
 
 export const DESKTOP_REPO_URL = 'https://github.com/hikarushane/career-ops-desktop';
-export const UPSTREAM_REPO_URL = 'https://github.com/santifer/career-ops';
+export const UPSTREAM_REPO_URL = 'https://github.com/career-ops-hq/career-ops';
 
 type Props = { root: string };
 

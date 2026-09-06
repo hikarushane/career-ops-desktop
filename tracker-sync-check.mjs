@@ -49,7 +49,7 @@
  *      node tracker-sync-check.mjs --interviews-file path/to/active-interviews.md
  *      node tracker-sync-check.mjs --self-test
  *
- * Issue #1504 — github.com/santifer/career-ops
+ * Issue #1504 — github.com/career-ops-hq/career-ops
  */
 
 import { readFileSync, existsSync } from 'fs';
@@ -62,14 +62,14 @@ import { resolveColumns, parseTrackerRow } from './tracker-parse.mjs';
 import { roleFuzzyMatch } from './role-matcher.mjs';
 import { normalizeCompanyName, companySimilarity } from './invite-match.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
+import { getCareerOpsRoot, resolveTrackerPath } from './path-resolver.mjs';
 
 const CAREER_OPS = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_APPS_FILE = existsSync(join(CAREER_OPS, 'data/applications.md'))
-  ? join(CAREER_OPS, 'data/applications.md')
-  : join(CAREER_OPS, 'applications.md');
-const DEFAULT_INTERVIEWS_FILE = existsSync(join(CAREER_OPS, 'data/active-interviews.md'))
-  ? join(CAREER_OPS, 'data/active-interviews.md')
-  : join(CAREER_OPS, 'active-interviews.md');
+const DATA_ROOT = getCareerOpsRoot();
+const DEFAULT_APPS_FILE = resolveTrackerPath(DATA_ROOT);
+const DEFAULT_INTERVIEWS_FILE = existsSync(join(DATA_ROOT, 'data/active-interviews.md'))
+  ? join(DATA_ROOT, 'data/active-interviews.md')
+  : join(DATA_ROOT, 'active-interviews.md');
 
 // --- CLI args ---
 const args = process.argv.slice(2);

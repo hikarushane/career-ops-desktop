@@ -119,8 +119,15 @@ jobs:
         uses: openai/codex-action@v1
         with:
           prompt-file: .github/prompts/upstream-maintenance.md
+          # The action reads the key from this input only (it feeds a localhost
+          # proxy so Codex never sees it); an OPENAI_API_KEY env var is ignored.
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          # The prompt asks Codex to `git merge` and `git commit`. The default
+          # workspace-write sandbox keeps .git read-only, so the "clean
+          # integrated commit" check below could never pass. The runner is
+          # disposable and safety-strategy stays at its drop-sudo default.
+          sandbox: danger-full-access
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           UPSTREAM_SHA: ${{ steps.diff.outputs.upstream_sha }}
           LAST_SHA: ${{ steps.upstream.outputs.last_sha }}
           HAS_CONFLICTS: ${{ steps.merge.outputs.has_conflicts }}
@@ -172,7 +179,7 @@ jobs:
     if: needs.upstream-sync.outputs.has_update == 'true'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # the merge step below needs it
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
@@ -204,9 +211,16 @@ jobs:
             --body-file "$RUNNER_TEMP/upstream-pr.md" \
             "${LABEL_ARGS[@]}"
 
-      - name: Enable auto-merge only for unprotected conflict-free syncs
+      # Every gate already ran on the branch before the PR existed, and main has
+      # no branch protection, so GitHub refuses to arm auto-merge on a PR that
+      # is already mergeable (the repository's auto-merge flag is off as well).
+      # Merge directly instead; contested syncs stay open for human review.
+      # Always a real merge commit, never a squash: squashing would leave the
+      # merge-base with upstream where it was, so every later sync would replay
+      # the same upstream commits and conflict on them again.
+      - name: Merge unprotected conflict-free syncs right away
         if: needs.upstream-sync.outputs.had_conflicts == 'false' && needs.upstream-sync.outputs.has_protected == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SYNC_BRANCH: ${{ needs.upstream-sync.outputs.sync_branch }}
-        run: gh pr merge --auto --squash "$SYNC_BRANCH"
+        run: gh pr merge --merge --delete-branch "$SYNC_BRANCH"

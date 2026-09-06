@@ -14,13 +14,21 @@
 import { readFileSync, copyFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { getCareerOpsRoot, resolveTrackerPath } from './path-resolver.mjs';
 import {
-  openTrackerTransaction, rebuildRow, resolveTrackerPath,
-  loadCanonicalStates, resolveCanonicalState,} from './tracker-utils.mjs';
+  openTrackerTransaction, rebuildRow,
+  loadCanonicalStates, resolveCanonicalState,
+} from './tracker-utils.mjs';
 import { resolveColumns, parseTrackerRow } from './tracker-parse.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
 
-const CAREER_OPS = dirname(fileURLToPath(import.meta.url));
+// System Layer files (templates/, modes/, scripts) live in the codebase and are
+// resolved from this module's own directory; only User Layer data follows the
+// configurable data root. Binding both to getCareerOpsRoot() made states.yml
+// unreadable under CAREER_OPS_ROOT / .career-ops-data, and the catch below
+// turned that into a silent "everything is unknown" (#3500).
+const CODEBASE_ROOT = dirname(fileURLToPath(import.meta.url));
+const CAREER_OPS = getCareerOpsRoot();
 const APPS_FILE = resolveTrackerPath(CAREER_OPS);
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -32,10 +40,17 @@ let statesCache = null;
 /** Canonical states from templates/states.yml, read once per CLI run. */
 function canonicalStates() {
   if (statesCache) return statesCache;
+  const statesFile = join(CODEBASE_ROOT, 'templates', 'states.yml');
   try {
-    statesCache = loadCanonicalStates(join(CAREER_OPS, 'templates', 'states.yml'));
-  } catch {
-    statesCache = []; // broken install: fall through to "unknown", never a stale copy
+    statesCache = loadCanonicalStates(statesFile);
+  } catch (err) {
+    // Broken install: fall through to "unknown", never a stale copy — but say
+    // so. The silent [] is what made #3500 invisible: a states.yml looked up in
+    // the wrong tree is indistinguishable from one that is genuinely missing,
+    // and the whole tracker normalized to unknown without a word.
+    console.error(`[normalize-statuses] cannot read canonical states from ${statesFile}: ${err.message}`);
+    console.error('[normalize-statuses] every status will be reported as unknown until this is fixed.');
+    statesCache = [];
   }
   return statesCache;
 }

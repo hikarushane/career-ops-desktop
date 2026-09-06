@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.5.1
+
+Released 2026-09-06.
+
+- Integrated CareerOps core 1.32.0 at fe06051ba57c78934b89355bebe2c67f3a5cdb14.
+- Evaluations from that core rate how much each requirement matters to the posting, and whether that weight is stated by the JD, implied by its structure, or inferred; every report archives the job description verbatim; tracker additions carry a header row, so a score can never land in the status column.
+- Zero-token scanning gains Collage HR, Telegram channels, Feishu Jobs and MokaHR. CLI users also get `audit-portals.mjs`, `fetch-jd.mjs`, and an external data directory (`CAREER_OPS_ROOT`).
+- A workspace keeps the core it was created with; updating the app does not replace it. New workspaces start from 1.32.0 (see the README).
+- Upstream moved to career-ops-hq/career-ops; the Help screen links there.
+- Cover letters named `{company}-{role}-cover.pdf` keep resolving in the dashboard under the core's stricter company matching.
+- macOS only, like 0.5.0. The Windows installer follows once the workspace-initialization tests pass on Windows.
+
 ## v0.5.0
 
 Released 2026-09-04.

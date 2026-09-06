@@ -340,7 +340,7 @@ describe('updater configuration', () => {
 describe('fork metadata', () => {
   it('.fork/upstream.json has required fields', () => {
     const upstream = readJson(join(ROOT, '.fork', 'upstream.json'));
-    expect(upstream.repository).toBe('santifer/career-ops');
+    expect(upstream.repository).toBe('career-ops-hq/career-ops');
     expect(upstream.branch).toBe('main');
     expect(upstream.lastIntegratedSha).toMatch(/^[0-9a-f]{40}$/);
   });
