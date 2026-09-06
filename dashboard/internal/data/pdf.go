@@ -279,7 +279,12 @@ func ResolveCoverLetters(careerOpsPath string, app model.CareerApplication, entr
 	var globMatches []string
 	for _, p := range globbed {
 		base := strings.ToLower(filepath.Base(p))
-		if matchesCompanySlug(base, slug) {
+		// generate-cover-letter.mjs names its default output
+		// {company}-{role}-cover.pdf, so the slug opens the basename with no
+		// hyphen in front of it. matchesCompanySlug wants a hyphen on both
+		// sides; lend it the leading one so that first segment counts too,
+		// while "meta" still cannot match "metabase-…".
+		if matchesCompanySlug("-"+base, slug) {
 			if rel, err := filepath.Rel(careerOpsPath, p); err == nil {
 				globMatches = append(globMatches, filepath.ToSlash(rel))
 			}

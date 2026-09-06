@@ -214,6 +214,16 @@ func TestResolveCoverLettersGlobFallback(t *testing.T) {
 	}
 }
 
+func TestResolveCoverLettersGlobFallbackNeedsWholeSlug(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "output/metabase-pm-cover.pdf", "pdf")
+
+	app := model.CareerApplication{Company: "Meta"}
+	if got := ResolveCoverLetters(root, app, LoadPDFEntriesByPath(root)); len(got) != 0 {
+		t.Fatalf("expected no cover letter for a company that only prefixes another, got %v", got)
+	}
+}
+
 func TestResolveCoverLettersNoMatch(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "output/cv-acme.pdf", "pdf")
