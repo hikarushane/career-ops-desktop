@@ -78,12 +78,14 @@ import { resolveColumns, parseTrackerRow, normalizeTextKey } from './tracker-par
 import { asciiFold } from './lib/ascii-fold.mjs';
 import { flagValue, hasFlag, validateFlags } from './lib/cli-flags.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
+import { getCareerOpsRoot } from './path-resolver.mjs';
 
 const CAREER_OPS = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_CSV = join(CAREER_OPS, 'data/Connections.csv');
-const TRACKER_PATH = join(CAREER_OPS, 'data/applications.md');
-const PORTALS_PATH = join(CAREER_OPS, 'portals.yml');
-const CONTACTS_PATH = join(CAREER_OPS, 'data/contacts.tsv');
+const DATA_ROOT = getCareerOpsRoot();
+const DEFAULT_CSV = join(DATA_ROOT, 'data/Connections.csv');
+const TRACKER_PATH = join(DATA_ROOT, 'data/applications.md');
+const PORTALS_PATH = join(DATA_ROOT, 'portals.yml');
+const CONTACTS_PATH = join(DATA_ROOT, 'data/contacts.tsv');
 
 const args = process.argv.slice(2);
 
@@ -494,7 +496,7 @@ export function parseKnownContacts(content) {
  */
 export function secondDegreeSearchUrl(company) {
   const q = encodeURIComponent(String(company || '').trim());
-  return `https://www.linkedin.com/search/people/?keywords=${q}&network=%5B%22S%22%5D`;
+  return `https://www.linkedin.com/search/results/people/?keywords=${q}&network=%5B%22S%22%5D`;
 }
 
 // --- Join ------------------------------------------------------------------
@@ -788,7 +790,7 @@ function selfTest() {
   check('2nd-degree url encodes the company', url.includes('keywords=Acme%20%26%20Co'));
   check('2nd-degree url filters to 2nd degree', url.includes('network=%5B%22S%22%5D'));
   check('2nd-degree url is linkedin people search',
-    url.startsWith('https://www.linkedin.com/search/people/?'));
+    url.startsWith('https://www.linkedin.com/search/results/people/?'));
 
   const placeholders = parseTrackerTargets([
     '| # | Date | Company | Role | Score | Status | PDF | Report | Notes |',

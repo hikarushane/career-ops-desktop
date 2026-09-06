@@ -23,6 +23,7 @@ import {
 import { randomUUID } from 'crypto';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { getCareerOpsRoot } from './path-resolver.mjs';
 import {
   extractTrackerReportNumbers, parseTrackerRow, resolveColumns,
 } from './tracker-parse.mjs';
@@ -31,7 +32,7 @@ import {
 } from './tracker-utils.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
 
-const ROOT = dirname(fileURLToPath(import.meta.url));
+const ROOT = getCareerOpsRoot();
 const MAX_SENTINEL_AGE_MS = 4 * 60 * 60 * 1000;
 const MAX_RETRIES = 50;
 const MAX_COUNT = 50;
@@ -299,6 +300,19 @@ export async function gcStaleReportReservations(options = {}) {
 async function runCli() {
   const [,, cmd, arg] = process.argv;
   const options = {};
+
+  if (cmd === '--help' || cmd === '-h') {
+    process.stdout.write([
+      'Usage: node reserve-report-num.mjs [--count <1-N>] [--release <NNN>[-<MMM>]] [--gc]',
+      '',
+      '  (no flags)                Reserve 1 report number (default)',
+      `  --count <1-${MAX_COUNT}>            Reserve N report numbers, printed as a range`,
+      '  --release <NNN>[-<MMM>]  Release a previously reserved number or range',
+      '  --gc                      Garbage-collect stale reservation sentinels',
+      '',
+    ].join('\n'));
+    return 0;
+  }
 
   if (cmd === '--release') {
     const match = (arg || '').match(/^(\d+)(?:-(\d+))?$/);

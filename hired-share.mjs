@@ -34,7 +34,7 @@ import { isMainModule } from './lib/is-main-module.mjs';
 import { parseTrackerRow, resolveColumns, isSeparatorRow, isHeaderRow } from './tracker-parse.mjs';
 import { resolveTrackerPath, resolveWorkspaceRoot } from './tracker-utils.mjs';
 
-const REPO_URL = 'https://github.com/santifer/career-ops';
+const REPO_URL = 'https://github.com/career-ops-hq/career-ops';
 const TEMPLATE = 'i-got-hired.yml';
 const LEVELS = ['handle', 'role', 'count'];
 
@@ -161,7 +161,7 @@ async function main() {
   if (!report) { console.error(`--report is required (or use --status).\n\n${USAGE}`); process.exitCode = 1; return; }
   const hire = hires.find((h) => h.report === String(report).replace(/[^\d]/g, ''));
   if (!hire) {
-    console.error(`No tracker row with state Hired and report #${report}. Record the outcome first: node outcome.mjs --report ${report} hired`);
+    console.error(`No tracker row with state Hired and report #${report}. Record the outcome first: node outcome.mjs ${report} hired`);
     process.exitCode = 1; return;
   }
 
