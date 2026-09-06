@@ -52,8 +52,8 @@ func TestRunListParsesFixture(t *testing.T) {
 	if first.Archetype != "Platform / Infra" {
 		t.Errorf("Archetype = %q, want %q", first.Archetype, "Platform / Infra")
 	}
-	if first.PDFPath != "output/cv-offerpad.pdf" {
-		t.Errorf("PDFPath = %q, want %q", first.PDFPath, "output/cv-offerpad.pdf")
+	if first.PDFPath != "output/cv-candidate-offerpad-2026-06-05.pdf" {
+		t.Errorf("PDFPath = %q, want %q", first.PDFPath, "output/cv-candidate-offerpad-2026-06-05.pdf")
 	}
 
 	// Row 2's notes contain "Interview" while its status is "Applied".
@@ -71,15 +71,15 @@ func TestRunListResolvesPDFPathWithoutTrackerCheckmark(t *testing.T) {
 	}
 
 	// Row 2 (Acme) carries a ❌ in the tracker's PDF column, but
-	// testdata/career-ops/output/cv-acme.pdf exists on disk. PDFPath (and
-	// HasPDF) must be resolved from the filesystem for every application,
-	// not gated on the tracker emoji.
+	// testdata/career-ops/output/cv-candidate-acme-2026-06-05.pdf exists on
+	// disk. PDFPath (and HasPDF) must be resolved from the filesystem for
+	// every application, not gated on the tracker emoji.
 	acme := res.Applications[1]
 	if acme.Company != "Acme" {
 		t.Fatalf("expected Applications[1] to be Acme, got %q", acme.Company)
 	}
-	if acme.PDFPath != "output/cv-acme.pdf" {
-		t.Errorf("Acme PDFPath = %q, want %q", acme.PDFPath, "output/cv-acme.pdf")
+	if acme.PDFPath != "output/cv-candidate-acme-2026-06-05.pdf" {
+		t.Errorf("Acme PDFPath = %q, want %q", acme.PDFPath, "output/cv-candidate-acme-2026-06-05.pdf")
 	}
 	if !acme.HasPDF {
 		t.Errorf("expected Acme HasPDF = true once a matching CV file is resolved on disk")
