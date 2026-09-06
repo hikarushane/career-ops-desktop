@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.5.1
+
+Released 2026-09-06.
+
+- Integrated CareerOps core 1.32.0 at fe06051ba57c78934b89355bebe2c67f3a5cdb14.
+
 ## v0.5.0
 
 Released 2026-09-04.
