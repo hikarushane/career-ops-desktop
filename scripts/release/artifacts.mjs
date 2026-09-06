@@ -5,6 +5,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFi
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMainModule } from '../../lib/is-main-module.mjs';
+import { isNestedCheckout } from '../../lib/mjs-files.mjs';
 import { releaseNotesSection } from './release-lib.mjs';
 
 function arg(name, fallback = null) {
@@ -16,7 +17,14 @@ function walk(dir) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
-    return entry.isDirectory() ? walk(path) : [path];
+    if (entry.isDirectory()) {
+      // This walks the Tauri bundle output, where no checkout can sit; guarded
+      // anyway so the shared-walker gate (tests/mjs-files.test.mjs) needs no
+      // fork-specific exemption.
+      if (isNestedCheckout(path)) return [];
+      return walk(path);
+    }
+    return [path];
   });
 }
 

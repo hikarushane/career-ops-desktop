@@ -14,6 +14,7 @@ import {
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMainModule } from '../../lib/is-main-module.mjs';
+import { isNestedCheckout } from '../../lib/mjs-files.mjs';
 import { extractArrayFromSource } from '../../update-system.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -101,7 +102,11 @@ function collectFiles(source, repoRelative, files) {
   if (!stat.isDirectory()) return;
 
   for (const name of readdirSync(source).sort()) {
-    collectFiles(join(source, name), join(repoRelative, name), files);
+    const child = join(source, name);
+    // A worktree or nested clone inside the checkout is somebody else's source
+    // tree and must never ship in the seed (lib/mjs-files.mjs, #3499).
+    if (isNestedCheckout(child)) continue;
+    collectFiles(child, join(repoRelative, name), files);
   }
 }
 
