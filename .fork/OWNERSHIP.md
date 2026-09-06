@@ -1,11 +1,11 @@
 # Fork Ownership
 
-This repository is a downstream fork of [santifer/career-ops](https://github.com/santifer/career-ops) that adds a native desktop application (CareerOps Desktop).
+This repository is a downstream fork of [career-ops-hq/career-ops](https://github.com/career-ops-hq/career-ops) (formerly `santifer/career-ops`) that adds a native desktop application (CareerOps Desktop).
 
 ## Relationship
 
 ```
-santifer/career-ops          (upstream — domain logic, CLI modes, scripts)
+career-ops-hq/career-ops     (upstream — domain logic, CLI modes, scripts)
         ↓
 fork repo                    (this repo — Desktop app, distribution, auto-updater)
 ```
