@@ -40,7 +40,7 @@ brew install --cask <owner>/<tap>/career-ops
 
 Download `CareerOps_<version>_Windows.exe` or `CareerOps-Windows-<version>.zip` from [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases), then run the NSIS installer.
 
-> **0.5.0 ships for macOS only.** The Windows installer follows in 0.5.1: the Windows sidecar and runtime verification already build in CI, but the workspace-initialization tests do not pass on Windows yet (the atomic install renames a directory while a handle is still open). It will be published once that is fixed and hand-tested on Windows.
+> **0.5.0 and 0.5.1 ship for macOS only.** The Windows installer follows in a later release: the Windows sidecar and runtime verification already build in CI, but the workspace-initialization tests do not pass on Windows yet (the atomic install renames a directory while a handle is still open). It will be published once that is fixed and hand-tested on Windows.
 
 > Until signed public releases are available, macOS or Windows may show the operating system's standard warning for unsigned applications.
 
@@ -66,6 +66,8 @@ On first launch, CareerOps offers a workspace in your operating system's normal 
 | Windows | `Documents\CareerOps` |
 
 You can choose a custom location instead, or select an existing CareerOps workspace. Existing `cv.md`, profile, tracker, reports, and output stay in that workspace.
+
+A workspace is created with a copy of the CareerOps core of that release (the evaluation, scan and tracker scripts and modes). Updating the app later does not replace the core inside an existing workspace; today the only way to get a newer core is to create a new workspace and move `cv.md`, profile, tracker, reports, and output into it.
 
 1. Create the default workspace or choose a custom location.
 2. Complete the profile prompts so evaluation uses your targets rather than shipped examples.

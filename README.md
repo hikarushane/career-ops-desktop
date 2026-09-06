@@ -40,7 +40,7 @@ brew install --cask <owner>/<tap>/career-ops
 
 從 [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases) 下載 `CareerOps_<version>_Windows.exe` 或 `CareerOps-Windows-<version>.zip`，並執行 NSIS installer。
 
-> **0.5.0 只提供 macOS 版。** Windows 安裝檔會在 0.5.1 提供：Windows 的 sidecar 與 runtime 驗證已在 CI 打包成功，但求職資料夾初始化的測試在 Windows 尚未通過（目錄 rename 時仍有開啟的 handle），修好並在 Windows 機器上驗收後才會發布。
+> **0.5.0 與 0.5.1 只提供 macOS 版。** Windows 安裝檔會在後續版本提供：Windows 的 sidecar 與 runtime 驗證已在 CI 打包成功，但求職資料夾初始化的測試在 Windows 尚未通過（目錄 rename 時仍有開啟的 handle），修好並在 Windows 機器上驗收後才會發布。
 
 > 在正式簽章的公開 release 尚未提供前，macOS 或 Windows 可能會顯示系統對未簽章 App 的標準安全提示。
 
@@ -66,6 +66,8 @@ brew install --cask <owner>/<tap>/career-ops
 | Windows | `Documents\CareerOps` |
 
 你也可以選擇自訂位置，或選取既有的 CareerOps workspace。既有的 `cv.md`、profile、tracker、reports 與 output 都會保留在該 workspace。
+
+Workspace 建立時會複製當時版本的 CareerOps core（評估、掃描、追蹤用的腳本與 modes）。之後更新 App 不會換掉既有 workspace 裡的 core；目前要拿到新版 core，只能新建一個 workspace，再把 `cv.md`、profile、tracker、reports 與 output 搬過去。
 
 1. 建立預設 workspace，或選擇自訂位置。
 2. 完成 profile 設定，讓 evaluation 使用你的目標，而不是 shipped examples。
