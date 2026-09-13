@@ -1348,6 +1348,25 @@ pub fn cancel_task(state: tauri::State<'_, RunnerState>, task_id: String) -> Res
         .get(&task_id)
         .ok_or_else(|| format!("no running task: {task_id}"))?;
 
+    terminate_task_process(*pid)
+}
+
+/// Windows has no `kill`, and a provider shim (`claude.cmd`) is a cmd.exe
+/// wrapper whose real work happens in child processes, so cancel must take
+/// the whole tree down (/T) rather than only the pid we spawned.
+#[cfg(windows)]
+fn terminate_task_process(pid: u32) -> Result<(), String> {
+    let mut taskkill = Command::new("taskkill");
+    taskkill.args(["/PID", &pid.to_string(), "/T", "/F"]);
+    hide_console(&mut taskkill);
+    taskkill
+        .output()
+        .map_err(|e| format!("taskkill failed: {e}"))?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn terminate_task_process(pid: u32) -> Result<(), String> {
     Command::new("kill")
         .arg(pid.to_string())
         .output()
@@ -1675,6 +1694,49 @@ mod tests {
             probe.trim_end(),
             "console-probe visible_window=false shares_parent_console=false"
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cancel_terminates_the_whole_task_tree_on_windows() {
+        use std::process::{Command, Stdio};
+        use std::time::{Duration, Instant};
+
+        // A provider shim (claude.cmd) is a cmd.exe wrapper that starts the
+        // real CLI as a child, which in turn starts node. Cancel must take
+        // the whole tree down: a surviving grandchild would keep running
+        // and keep writing into the workspace after the UI says "cancelled".
+        let sandbox = tempfile::tempdir().unwrap();
+        let target = sandbox.path().join("cv.md");
+        let ready = sandbox.path().join("ready");
+        fs::write(&target, "verified bytes\n").unwrap();
+        let grandchild_script = "const { appendFileSync } = require('node:fs'); setTimeout(() => appendFileSync(process.argv[1], 'LATE'), 1500);";
+        let child_script = format!(
+            "const child = require('node:child_process').spawn(process.execPath, ['-e', {}, process.argv[1]], {{ stdio: 'ignore' }}); require('node:fs').writeFileSync(process.argv[2], String(child.pid)); setTimeout(() => {{}}, 15000);",
+            serde_json::to_string(grandchild_script).unwrap()
+        );
+        let mut provider = Command::new("node")
+            .arg("-e")
+            .arg(child_script)
+            .arg(&target)
+            .arg(&ready)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !ready.exists() {
+            assert!(Instant::now() < deadline, "provider never started its child");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+
+        super::terminate_task_process(provider.id()).unwrap();
+
+        let status = provider.wait().unwrap();
+        assert!(!status.success(), "provider exited normally instead of being cancelled");
+        std::thread::sleep(Duration::from_millis(2000));
+        assert_eq!(fs::read_to_string(target).unwrap(), "verified bytes\n");
     }
 
     #[test]
