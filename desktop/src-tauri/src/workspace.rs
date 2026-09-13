@@ -725,6 +725,9 @@ enum CreatedEntryKind {
 
 struct CreatedEntry {
     parent: Dir,
+    // Only the Windows Missing-branch conversion (release_created_entries)
+    // reads this; the handle-holding rollback never needs the path.
+    #[cfg_attr(not(windows), allow(dead_code))]
     parent_path: PathBuf,
     name: OsString,
     kind: CreatedEntryKind,
