@@ -53,6 +53,7 @@ type commandRunner func(ctx context.Context, name string, args ...string) (stdou
 // execRunner is the production commandRunner: it actually runs name/args.
 func execRunner(ctx context.Context, name string, args ...string) (string, string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	hideWindow(cmd)
 	var out, errb strings.Builder
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()

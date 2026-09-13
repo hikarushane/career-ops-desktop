@@ -70,6 +70,7 @@ func run() error {
 		return err
 	}
 	command := exec.Command(runtimePath, runtimeArgs(os.Args[1:])...)
+	hideWindow(command)
 	command.Env = runtimeEnvironment(os.Environ())
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout

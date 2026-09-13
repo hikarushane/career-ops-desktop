@@ -126,6 +126,7 @@ func detectProvider(spec providerSpec) ProviderEntry {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, path, spec.versionArgs...)
+	hideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		e.State = StateError

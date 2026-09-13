@@ -1083,6 +1083,21 @@ fn packaged_js_runtime(app: &AppHandle) -> Result<PackagedJsRuntime, String> {
     Ok(paths)
 }
 
+/// Keep a console child from opening a window. The desktop binary is a GUI
+/// process with no console of its own, so on Windows every plain spawn of a
+/// console program (a provider's `claude.cmd` shim, `git`, `taskkill`) makes the
+/// system allocate a fresh, visible cmd.exe window for the child.
+/// CREATE_NO_WINDOW gives the child a console without a window instead.
+#[cfg(windows)]
+fn hide_console(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_console(_command: &mut Command) {}
+
 #[cfg(unix)]
 fn configure_provider_process_group(command: &mut Command) {
     use std::os::unix::process::CommandExt;
@@ -1205,12 +1220,13 @@ pub fn run_task(
     let workspace = canonical_workspace(&input.path)?;
     let before = snapshot_artifacts(&workspace, &input.task_type);
     if !workspace.join(".git").exists() {
-        let _ = std::process::Command::new("git")
-            .args(["init", "--quiet"])
+        let mut git = Command::new("git");
+        git.args(["init", "--quiet"])
             .current_dir(&workspace)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        hide_console(&mut git);
+        let _ = git.status();
     }
 
     let staging = if is_generation {
@@ -1243,7 +1259,11 @@ pub fn run_task(
         .args(&cmd_args)
         .current_dir(&execution_directory)
         .env("PATH", augmented_path());
+    hide_console(&mut command);
     let mut child = command
+        // Nothing ever feeds the provider; with no console behind it an
+        // inherited stdin would be an invalid handle rather than an EOF.
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -1581,6 +1601,80 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(450));
 
         assert_eq!(fs::read_to_string(target).unwrap(), "verified bytes\n");
+    }
+
+    #[cfg(windows)]
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetConsoleWindow() -> *mut std::ffi::c_void;
+        fn GetConsoleProcessList(process_list: *mut u32, process_count: u32) -> u32;
+    }
+
+    #[cfg(windows)]
+    #[link(name = "user32")]
+    extern "system" {
+        fn IsWindowVisible(window: *mut std::ffi::c_void) -> i32;
+    }
+
+    /// Probe half of `windows_subprocesses_get_no_console_window`: when that
+    /// test spawns this binary it reports which console the child landed in.
+    /// In a normal test run the environment variable is absent and this is a
+    /// no-op.
+    #[cfg(windows)]
+    #[test]
+    fn console_probe_child() {
+        let Ok(parent) = std::env::var("CAREEROPS_CONSOLE_PROBE_PARENT") else {
+            return;
+        };
+        let parent: u32 = parent.parse().unwrap();
+        let window = unsafe { GetConsoleWindow() };
+        let visible_window = !window.is_null() && unsafe { IsWindowVisible(window) } != 0;
+        let mut processes = [0u32; 256];
+        let count =
+            unsafe { GetConsoleProcessList(processes.as_mut_ptr(), processes.len() as u32) } as usize;
+        let shares_parent_console = processes[..count.min(processes.len())].contains(&parent);
+        println!(
+            "console-probe visible_window={visible_window} shares_parent_console={shares_parent_console}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_subprocesses_get_no_console_window() {
+        use std::process::{Command, Stdio};
+
+        // The desktop binary is a GUI process without a console, so a plain
+        // spawn of a console program (claude.cmd, git, taskkill) makes
+        // Windows pop a fresh, visible cmd.exe window. `hide_console` must
+        // hand the child a console of its own that has no window: neither
+        // inherited from us nor visible.
+        let module = module_path!();
+        let module = module.split_once("::").map(|(_, rest)| rest).unwrap_or(module);
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .arg(format!("{module}::console_probe_child"))
+            .args(["--exact", "--nocapture", "--test-threads=1"])
+            .env("CAREEROPS_CONSOLE_PROBE_PARENT", std::process::id().to_string())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        super::hide_console(&mut command);
+        let output = command.output().unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success(),
+            "probe run failed: {stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        // libtest prints "test <name> ... " on the same line before the
+        // probe's own output, so look for the marker anywhere in the line.
+        let probe = stdout
+            .lines()
+            .find_map(|line| line.find("console-probe ").map(|start| &line[start..]))
+            .unwrap_or_else(|| panic!("no probe line in: {stdout}"));
+        assert_eq!(
+            probe.trim_end(),
+            "console-probe visible_window=false shares_parent_console=false"
+        );
     }
 
     #[test]

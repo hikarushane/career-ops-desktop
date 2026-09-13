@@ -74,6 +74,7 @@ func runNodeJSON(root, script string, args ...string) (json.RawMessage, error) {
 		return nil, err
 	}
 	command := exec.Command(nodeRuntime, append([]string{filepath.Join(scriptRoot, script)}, args...)...)
+	hideWindow(command)
 	command.Dir = root
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
