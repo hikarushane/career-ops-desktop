@@ -24,7 +24,7 @@ Set these in the fork repo under Settings → Secrets and variables → Actions:
 |--------|---------|----------|
 | `TAURI_SIGNING_PRIVATE_KEY` | Updater signature (base64-encoded Ed25519 key) | Yes |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the signing key | Yes |
-| `OPENAI_API_KEY` | Codex upstream maintenance agent | For upstream sync |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code upstream maintenance agent — generate with `claude setup-token` on a Claude Pro/Max subscription (no API billing) | For upstream sync |
 | `APPLE_CERTIFICATE` | macOS code signing certificate (base64 .p12) | For signed macOS builds |
 | `APPLE_CERTIFICATE_PASSWORD` | Password for the .p12 | For signed macOS builds |
 | `APPLE_SIGNING_IDENTITY` | Code signing identity string | For signed macOS builds |

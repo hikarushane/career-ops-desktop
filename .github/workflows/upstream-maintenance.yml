@@ -114,26 +114,41 @@ jobs:
           npm install --ignore-scripts
           npm ci --prefix desktop
 
-      - name: Run Codex maintenance
+      - name: Run Claude Code maintenance
         if: steps.diff.outputs.has_update == 'true'
-        uses: openai/codex-action@v1
+        uses: anthropics/claude-code-action@v1
         with:
-          prompt-file: .github/prompts/upstream-maintenance.md
-          # The action reads the key from this input only (it feeds a localhost
-          # proxy so Codex never sees it); an OPENAI_API_KEY env var is ignored.
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          # The prompt asks Codex to `git merge` and `git commit`. The default
-          # workspace-write sandbox keeps .git read-only, so the "clean
-          # integrated commit" check below could never pass. The runner is
-          # disposable and safety-strategy stays at its drop-sudo default.
-          sandbox: danger-full-access
+          # Token from `claude setup-token` on a Claude Pro/Max subscription;
+          # nothing is billed to an API key. The repo's GITHUB_TOKEN replaces
+          # the action's GitHub App token: Claude only merges and commits
+          # locally, the "Push reviewed sync branch" step below does the push.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Read `.github/prompts/upstream-maintenance.md` and carry out the task
+            it describes. Its placeholders have these values:
+
+            - `$UPSTREAM_REPO` = ${{ steps.upstream.outputs.repo }}
+            - `$LAST_SHA` = ${{ steps.upstream.outputs.last_sha }}
+            - `$UPSTREAM_SHA` = ${{ steps.diff.outputs.upstream_sha }}
+            - `$HAS_CONFLICTS` = ${{ steps.merge.outputs.has_conflicts }}
+
+            The upstream commits are already fetched into the `upstream` remote
+            and the same values are exported as environment variables.
+          # The prompt asks Claude to `git merge`, edit conflicted files, run the
+          # test suites and `git commit`; the action disables Bash by default,
+          # so the tools it needs are allowed explicitly. The runner is
+          # disposable, so unrestricted Bash is the same trust level the Codex
+          # step ran at with `sandbox: danger-full-access`.
+          claude_args: |
+            --allowedTools "Bash,Read,Edit,MultiEdit,Write,Glob,Grep"
         env:
           UPSTREAM_SHA: ${{ steps.diff.outputs.upstream_sha }}
           LAST_SHA: ${{ steps.upstream.outputs.last_sha }}
           HAS_CONFLICTS: ${{ steps.merge.outputs.has_conflicts }}
           UPSTREAM_REPO: ${{ steps.upstream.outputs.repo }}
 
-      - name: Verify Codex produced a clean integrated commit
+      - name: Verify the agent produced a clean integrated commit
         if: steps.diff.outputs.has_update == 'true'
         env:
           UPSTREAM_SHA: ${{ steps.diff.outputs.upstream_sha }}
@@ -159,7 +174,7 @@ jobs:
           UPSTREAM_SHA: ${{ steps.diff.outputs.upstream_sha }}
         run: npm run release:prepare:ci
 
-      - name: Independent post-Codex critical CI
+      - name: Independent post-agent critical CI
         if: steps.diff.outputs.has_update == 'true'
         run: node scripts/release/readiness.mjs --skip-package
 
