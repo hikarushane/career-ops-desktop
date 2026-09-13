@@ -725,6 +725,7 @@ enum CreatedEntryKind {
 
 struct CreatedEntry {
     parent: Dir,
+    parent_path: PathBuf,
     name: OsString,
     kind: CreatedEntryKind,
     identity: Option<EntryIdentity>,
@@ -732,6 +733,7 @@ struct CreatedEntry {
 
 fn created_entry(
     parent: &Dir,
+    parent_path: &Path,
     name: &OsStr,
     kind: CreatedEntryKind,
     metadata: &cap_std::fs::Metadata,
@@ -740,15 +742,16 @@ fn created_entry(
         parent: parent
             .try_clone()
             .map_err(|error| format!("cannot retain workspace directory capability: {error}"))?,
+        parent_path: parent_path.to_path_buf(),
         name: name.to_os_string(),
         kind,
         identity: entry_identity(metadata),
     })
 }
 
-fn rollback_created_entries(entries: &[CreatedEntry]) -> Vec<String> {
+fn rollback_created_entries(entries: Vec<CreatedEntry>) -> Vec<String> {
     let mut failures = Vec::new();
-    for entry in entries.iter().rev() {
+    for entry in entries.into_iter().rev() {
         let current = match entry.parent.symlink_metadata(&entry.name) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
@@ -776,6 +779,186 @@ fn rollback_created_entries(entries: &[CreatedEntry]) -> Vec<String> {
         }
     }
     failures
+}
+
+#[cfg(windows)]
+struct ReleasedCreatedEntry {
+    parent_path: PathBuf,
+    name: OsString,
+    kind: CreatedEntryKind,
+    identity: Option<EntryIdentity>,
+}
+
+#[cfg(windows)]
+fn release_created_entries(entries: Vec<CreatedEntry>) -> Vec<ReleasedCreatedEntry> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            let CreatedEntry {
+                parent,
+                parent_path,
+                name,
+                kind,
+                identity,
+            } = entry;
+            drop(parent);
+            ReleasedCreatedEntry {
+                parent_path,
+                name,
+                kind,
+                identity,
+            }
+        })
+        .collect()
+}
+
+#[cfg(windows)]
+fn open_relative_dir_nofollow(root: &Dir, relative: &Path) -> Result<Dir, String> {
+    let mut directory = root
+        .try_clone()
+        .map_err(|error| format!("cannot retain workspace directory capability: {error}"))?;
+    for component in relative.components() {
+        let Component::Normal(name) = component else {
+            return Err("workspace rollback parent is not relative".to_owned());
+        };
+        directory = directory.open_dir_nofollow(name).map_err(|error| {
+            format!(
+                "cannot open rollback directory {} without following links: {error}",
+                relative.display()
+            )
+        })?;
+    }
+    Ok(directory)
+}
+
+#[cfg(windows)]
+fn rollback_released_entries(root: &Dir, entries: Vec<ReleasedCreatedEntry>) -> Vec<String> {
+    let mut failures = Vec::new();
+    for entry in entries.into_iter().rev() {
+        let parent = match open_relative_dir_nofollow(root, &entry.parent_path) {
+            Ok(parent) => parent,
+            Err(error) => {
+                failures.push(error);
+                continue;
+            }
+        };
+        let current = match parent.symlink_metadata(&entry.name) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                failures.push(format!("cannot inspect rollback entry: {error}"));
+                continue;
+            }
+        };
+        if entry.identity.is_none() || entry_identity(&current) != entry.identity {
+            failures.push(format!(
+                "workspace entry {} was replaced during rollback and was preserved",
+                Path::new(&entry.name).display()
+            ));
+            continue;
+        }
+        let result = match entry.kind {
+            CreatedEntryKind::File => parent.remove_file(&entry.name),
+            CreatedEntryKind::Directory => parent.remove_dir(&entry.name),
+        };
+        if let Err(error) = result {
+            failures.push(format!(
+                "cannot roll back workspace entry {}: {error}",
+                Path::new(&entry.name).display()
+            ));
+        }
+    }
+    failures
+}
+
+#[cfg(windows)]
+fn rollback_released_staging(
+    parent: &Dir,
+    staging_name: &OsStr,
+    staging_identity: Option<EntryIdentity>,
+    entries: Vec<ReleasedCreatedEntry>,
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    let metadata = match parent.symlink_metadata(staging_name) {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            failures.push(format!(
+                "workspace staging directory changed during cleanup and was preserved: {error}"
+            ));
+            return failures;
+        }
+    };
+    if staging_identity.is_none() || entry_identity(&metadata) != staging_identity {
+        failures.push(
+            "workspace staging directory identity changed during cleanup and was preserved"
+                .to_owned(),
+        );
+        return failures;
+    }
+    let staging = match parent.open_dir_nofollow(staging_name) {
+        Ok(staging) => staging,
+        Err(error) => {
+            failures.push(format!(
+                "workspace staging directory changed during cleanup and was preserved: {error}"
+            ));
+            return failures;
+        }
+    };
+    let opened_identity = staging
+        .dir_metadata()
+        .ok()
+        .and_then(|value| entry_identity(&value));
+    if opened_identity != staging_identity {
+        failures.push(
+            "workspace staging directory identity changed during cleanup and was preserved"
+                .to_owned(),
+        );
+        return failures;
+    }
+    failures.extend(rollback_released_entries(&staging, entries));
+    drop(staging);
+
+    let metadata = match parent.symlink_metadata(staging_name) {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            failures.push(format!(
+                "workspace staging directory changed before final cleanup and was preserved: {error}"
+            ));
+            return failures;
+        }
+    };
+    if staging_identity.is_none() || entry_identity(&metadata) != staging_identity {
+        failures.push(
+            "workspace staging directory identity changed before final cleanup and was preserved"
+                .to_owned(),
+        );
+        return failures;
+    }
+    if let Err(error) = parent.remove_dir(staging_name) {
+        failures.push(format!(
+            "cannot roll back workspace staging directory: {error}"
+        ));
+    }
+    failures
+}
+
+#[cfg(windows)]
+fn staging_error_with_cleanup(
+    error: String,
+    parent: &Dir,
+    staging_name: &OsStr,
+    staging_identity: Option<EntryIdentity>,
+    entries: Vec<ReleasedCreatedEntry>,
+) -> String {
+    let rollback = rollback_released_staging(parent, staging_name, staging_identity, entries);
+    if rollback.is_empty() {
+        error
+    } else {
+        format!(
+            "{error}; staging cleanup incomplete: {}",
+            rollback.join("; ")
+        )
+    }
 }
 
 fn copy_seed_contents<F>(
@@ -818,6 +1001,7 @@ where
             })?;
             created.push(created_entry(
                 target,
+                relative_parent,
                 &name,
                 CreatedEntryKind::Directory,
                 &directory.dir_metadata().map_err(|error| {
@@ -849,6 +1033,7 @@ where
             })?;
             created.push(created_entry(
                 target,
+                relative_parent,
                 &name,
                 CreatedEntryKind::File,
                 &destination
@@ -923,6 +1108,7 @@ where
                 })?;
                 created.push(created_entry(
                     &directory,
+                    current.parent().unwrap_or_else(|| Path::new("")),
                     name,
                     CreatedEntryKind::Directory,
                     &child.dir_metadata().map_err(|error| {
@@ -979,7 +1165,7 @@ where
         Ok(())
     });
     if let Err(error) = result {
-        let rollback = rollback_created_entries(&created);
+        let rollback = rollback_created_entries(created);
         return Err(if rollback.is_empty() {
             error
         } else {
@@ -1195,6 +1381,115 @@ fn install_staging_root(
     ))
 }
 
+#[cfg(windows)]
+fn finish_missing_root_install<F>(
+    location: &WorkspaceLocation,
+    staging_name: OsString,
+    staging_root: Dir,
+    staging_entry: CreatedEntry,
+    staged_entries: Vec<CreatedEntry>,
+    hook: &mut F,
+) -> Result<(), String>
+where
+    F: FnMut(BootstrapEvent) -> Result<(), String>,
+{
+    let staging_identity = staging_entry.identity;
+    let staged_entries = release_created_entries(staged_entries);
+    drop(staging_root);
+    drop(staging_entry);
+
+    if let Err(error) = hook(BootstrapEvent::BeforeMissingRootInstall(
+        staging_name.clone(),
+    )) {
+        return Err(staging_error_with_cleanup(
+            error,
+            &location.parent,
+            &staging_name,
+            staging_identity,
+            staged_entries,
+        ));
+    }
+
+    let current_staging = match location.parent.open_dir_nofollow(&staging_name) {
+        Ok(current) => current,
+        Err(error) => {
+            return Err(staging_error_with_cleanup(
+                format!("workspace staging directory changed before install: {error}"),
+                &location.parent,
+                &staging_name,
+                staging_identity,
+                staged_entries,
+            ));
+        }
+    };
+    let current_identity = current_staging
+        .dir_metadata()
+        .ok()
+        .and_then(|value| entry_identity(&value));
+    if staging_identity.is_none() || current_identity != staging_identity {
+        drop(current_staging);
+        return Err(staging_error_with_cleanup(
+            "workspace staging directory identity changed before install".to_owned(),
+            &location.parent,
+            &staging_name,
+            staging_identity,
+            staged_entries,
+        ));
+    }
+    drop(current_staging);
+
+    match location.parent.symlink_metadata(&location.name) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Ok(_) => {
+            return Err(staging_error_with_cleanup(
+                "workspace target changed before atomic install".to_owned(),
+                &location.parent,
+                &staging_name,
+                staging_identity,
+                staged_entries,
+            ));
+        }
+        Err(error) => {
+            return Err(staging_error_with_cleanup(
+                format!("cannot inspect workspace before atomic install: {error}"),
+                &location.parent,
+                &staging_name,
+                staging_identity,
+                staged_entries,
+            ));
+        }
+    }
+
+    if let Err(error) = install_staging_root(
+        &location.parent,
+        &location.parent_path,
+        &staging_name,
+        &location.name,
+    ) {
+        return Err(staging_error_with_cleanup(
+            format!("cannot atomically install workspace: {error}"),
+            &location.parent,
+            &staging_name,
+            staging_identity,
+            staged_entries,
+        ));
+    }
+
+    hook(BootstrapEvent::AfterMissingRootInstall)?;
+    let installed = location
+        .parent
+        .open_dir_nofollow(&location.name)
+        .map_err(|error| format!("installed workspace changed before validation: {error}"))?;
+    let installed_identity = installed
+        .dir_metadata()
+        .ok()
+        .and_then(|value| entry_identity(&value));
+    if staging_identity.is_none() || installed_identity != staging_identity {
+        return Err("installed workspace directory identity changed".to_owned());
+    }
+    Ok(())
+}
+
 fn initialize_workspace_from_seed_with_hook<F>(
     workspace: &Path,
     seed: &Path,
@@ -1250,6 +1545,7 @@ where
                 .map_err(|error| format!("cannot inspect workspace staging directory: {error}"))?;
             let staging_entry = created_entry(
                 &location.parent,
+                Path::new(""),
                 &staging_name,
                 CreatedEntryKind::Directory,
                 &staging_metadata,
@@ -1257,7 +1553,9 @@ where
             let staged_entries = match populate_empty_root(&staging_root, seed, &mut hook) {
                 Ok(entries) => entries,
                 Err(error) => {
-                    let rollback = rollback_created_entries(&[staging_entry]);
+                    #[cfg(windows)]
+                    drop(staging_root);
+                    let rollback = rollback_created_entries(vec![staging_entry]);
                     return Err(if rollback.is_empty() {
                         error
                     } else {
@@ -1268,64 +1566,79 @@ where
                     });
                 }
             };
-            if let Err(error) = hook(BootstrapEvent::BeforeMissingRootInstall(
-                staging_name.clone(),
-            )) {
-                let _ = rollback_created_entries(&staged_entries);
-                let _ = rollback_created_entries(&[staging_entry]);
-                return Err(error);
-            }
-            let current_staging = match location.parent.open_dir_nofollow(&staging_name) {
-                Ok(current) => current,
-                Err(error) => {
-                    let _ = rollback_created_entries(&staged_entries);
-                    let _ = rollback_created_entries(&[staging_entry]);
-                    return Err(format!(
-                        "workspace staging directory changed before install: {error}"
-                    ));
+
+            #[cfg(windows)]
+            finish_missing_root_install(
+                &location,
+                staging_name,
+                staging_root,
+                staging_entry,
+                staged_entries,
+                &mut hook,
+            )?;
+
+            #[cfg(not(windows))]
+            {
+                if let Err(error) = hook(BootstrapEvent::BeforeMissingRootInstall(
+                    staging_name.clone(),
+                )) {
+                    let _ = rollback_created_entries(staged_entries);
+                    let _ = rollback_created_entries(vec![staging_entry]);
+                    return Err(error);
                 }
-            };
-            if !same_cap_directory(&staging_root, &current_staging)? {
-                let _ = rollback_created_entries(&staged_entries);
-                let _ = rollback_created_entries(&[staging_entry]);
-                return Err(
-                    "workspace staging directory identity changed before install".to_owned(),
-                );
-            }
-            match location.parent.symlink_metadata(&location.name) {
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Ok(_) => {
-                    let _ = rollback_created_entries(&staged_entries);
-                    let _ = rollback_created_entries(&[staging_entry]);
-                    return Err("workspace target changed before atomic install".to_owned());
+                let current_staging = match location.parent.open_dir_nofollow(&staging_name) {
+                    Ok(current) => current,
+                    Err(error) => {
+                        let _ = rollback_created_entries(staged_entries);
+                        let _ = rollback_created_entries(vec![staging_entry]);
+                        return Err(format!(
+                            "workspace staging directory changed before install: {error}"
+                        ));
+                    }
+                };
+                if !same_cap_directory(&staging_root, &current_staging)? {
+                    let _ = rollback_created_entries(staged_entries);
+                    let _ = rollback_created_entries(vec![staging_entry]);
+                    return Err(
+                        "workspace staging directory identity changed before install".to_owned(),
+                    );
                 }
-                Err(error) => {
-                    let _ = rollback_created_entries(&staged_entries);
-                    let _ = rollback_created_entries(&[staging_entry]);
-                    return Err(format!(
-                        "cannot inspect workspace before atomic install: {error}"
-                    ));
+                match location.parent.symlink_metadata(&location.name) {
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                    Ok(_) => {
+                        let _ = rollback_created_entries(staged_entries);
+                        let _ = rollback_created_entries(vec![staging_entry]);
+                        return Err("workspace target changed before atomic install".to_owned());
+                    }
+                    Err(error) => {
+                        let _ = rollback_created_entries(staged_entries);
+                        let _ = rollback_created_entries(vec![staging_entry]);
+                        return Err(format!(
+                            "cannot inspect workspace before atomic install: {error}"
+                        ));
+                    }
                 }
-            }
-            if let Err(error) = install_staging_root(
-                &location.parent,
-                &location.parent_path,
-                &staging_name,
-                &location.name,
-            ) {
-                let _ = rollback_created_entries(&staged_entries);
-                let _ = rollback_created_entries(&[staging_entry]);
-                return Err(format!("cannot atomically install workspace: {error}"));
-            }
-            hook(BootstrapEvent::AfterMissingRootInstall)?;
-            let installed = location
-                .parent
-                .open_dir_nofollow(&location.name)
-                .map_err(|error| {
-                    format!("installed workspace changed before validation: {error}")
-                })?;
-            if !same_cap_directory(&staging_root, &installed)? {
-                return Err("installed workspace directory identity changed".to_owned());
+                if let Err(error) = install_staging_root(
+                    &location.parent,
+                    &location.parent_path,
+                    &staging_name,
+                    &location.name,
+                ) {
+                    let _ = rollback_created_entries(staged_entries);
+                    let _ = rollback_created_entries(vec![staging_entry]);
+                    return Err(format!("cannot atomically install workspace: {error}"));
+                }
+                hook(BootstrapEvent::AfterMissingRootInstall)?;
+                let installed =
+                    location
+                        .parent
+                        .open_dir_nofollow(&location.name)
+                        .map_err(|error| {
+                            format!("installed workspace changed before validation: {error}")
+                        })?;
+                if !same_cap_directory(&staging_root, &installed)? {
+                    return Err("installed workspace directory identity changed".to_owned());
+                }
             }
         }
     }
@@ -1816,6 +2129,34 @@ mod tests {
         assert!(workspace.join("reports").is_dir());
         assert!(workspace.join("output").is_dir());
         assert!(workspace.join("jds").is_dir());
+    }
+
+    #[test]
+    fn missing_root_hook_failure_removes_the_staging_directory() {
+        let parent = TempDir::new("missing-hook-failure");
+        let workspace = parent.path().join("CareerOps");
+        let seed = seed();
+
+        let error = initialize_workspace_from_seed_with_hook(&workspace, seed.path(), |event| {
+            if matches!(event, BootstrapEvent::BeforeMissingRootInstall(_)) {
+                return Err("injected pre-install failure".to_owned());
+            }
+            Ok(())
+        })
+        .expect_err("the hook failure must abort initialization");
+
+        assert!(error.contains("injected pre-install failure"));
+        assert!(!workspace.exists());
+        let remaining = fs::read_dir(parent.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<Vec<_>>();
+        assert!(
+            remaining.iter().all(|name| !name
+                .to_string_lossy()
+                .starts_with(".careerops-workspace-stage-")),
+            "staging entries were left behind: {remaining:?}"
+        );
     }
 
     #[test]
