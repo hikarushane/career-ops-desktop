@@ -94,6 +94,37 @@ describe('updater', () => {
     await Promise.all([background, manual]);
   });
 
+  it('a manual check joining an in-flight background check reports to its own listener', async () => {
+    // Settings › About mounts its own listener. If a background poll is
+    // still running when the user presses Check Now, the screen must still
+    // see "checking" and then the outcome, not stay blank.
+    let resolveCheck!: (value: null) => void;
+    const check = vi.fn(() => new Promise<null>((resolve) => { resolveCheck = resolve; }));
+    const controller = createUpdaterController({ check, relaunch: vi.fn() });
+    const backgroundStates: UpdateState[] = [];
+    const background = controller.checkForUpdate((state) => backgroundStates.push(state), currentVersion, false);
+    const manual = controller.checkForUpdate(onStateChange, currentVersion, true);
+    expect(states.map((state) => state.status)).toEqual(['checking']);
+    resolveCheck(null);
+    await Promise.all([background, manual]);
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(states.map((state) => state.status)).toEqual(['checking', 'up_to_date']);
+    expect(backgroundStates.map((state) => state.status)).toEqual(['checking', 'up_to_date']);
+  });
+
+  it('a manual check joining a failing background check sees the error, the background listener does not', async () => {
+    let rejectCheck!: (reason: Error) => void;
+    const check = vi.fn(() => new Promise<null>((_resolve, reject) => { rejectCheck = reject; }));
+    const controller = createUpdaterController({ check, relaunch: vi.fn() });
+    const backgroundStates: UpdateState[] = [];
+    const background = controller.checkForUpdate((state) => backgroundStates.push(state), currentVersion, false);
+    const manual = controller.checkForUpdate(onStateChange, currentVersion, true);
+    rejectCheck(new Error('no windows platform in latest.json'));
+    await Promise.all([background, manual]);
+    expect(states[states.length - 1]).toMatchObject({ status: 'error', error: 'Error: no windows platform in latest.json' });
+    expect(backgroundStates[backgroundStates.length - 1]).toMatchObject({ status: 'idle' });
+  });
+
   it('supports Later without mutating the available state', async () => {
     const update = { version: '0.2.0', downloadAndInstall: vi.fn() };
     const controller = createUpdaterController({ check: vi.fn().mockResolvedValue(update), relaunch: vi.fn() });
