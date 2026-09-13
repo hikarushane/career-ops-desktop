@@ -56,18 +56,58 @@ func useTestNode(t *testing.T) {
 }
 
 func TestManagedNodePathUsesPackagedSibling(t *testing.T) {
-	got := managedNodePath("/Applications/CareerOps.app/Contents/MacOS/career-data", "darwin")
-	want := "/Applications/CareerOps.app/Contents/MacOS/careerops-node"
-	if got != want {
-		t.Fatalf("got %q, want %q", got, want)
+	for _, test := range []struct {
+		name       string
+		executable string
+		goos       string
+		want       string
+	}{
+		{
+			name:       "darwin",
+			executable: filepath.FromSlash("/Applications/CareerOps.app/Contents/MacOS/career-data"),
+			goos:       "darwin",
+			want:       filepath.FromSlash("/Applications/CareerOps.app/Contents/MacOS/careerops-node"),
+		},
+		{
+			name:       "windows",
+			executable: filepath.Join("install", "career-data.exe"),
+			goos:       "windows",
+			want:       filepath.Join("install", "careerops-node.exe"),
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := managedNodePath(test.executable, test.goos); got != test.want {
+				t.Fatalf("got %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 
 func TestManagedScriptRootUsesPackagedResourceLayout(t *testing.T) {
-	executable := "/Applications/CareerOps.app/Contents/MacOS/career-data"
-	want := "/Applications/CareerOps.app/Contents/Resources/workspace-seed"
-	if got := managedScriptRoot(executable, "darwin"); got != want {
-		t.Fatalf("got %q, want %q", got, want)
+	for _, test := range []struct {
+		name       string
+		executable string
+		goos       string
+		want       string
+	}{
+		{
+			name:       "darwin",
+			executable: filepath.FromSlash("/Applications/CareerOps.app/Contents/MacOS/career-data"),
+			goos:       "darwin",
+			want:       filepath.FromSlash("/Applications/CareerOps.app/Contents/Resources/workspace-seed"),
+		},
+		{
+			name:       "windows",
+			executable: filepath.Join("install", "career-data.exe"),
+			goos:       "windows",
+			want:       filepath.Join("install", "workspace-seed"),
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := managedScriptRoot(test.executable, test.goos); got != test.want {
+				t.Fatalf("got %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 

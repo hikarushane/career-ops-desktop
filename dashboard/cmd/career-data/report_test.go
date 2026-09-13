@@ -31,7 +31,7 @@ func TestRunReportRejectsEscapingPath(t *testing.T) {
 	for _, rel := range []string{
 		"../../../etc/passwd",
 		"reports/../../go.mod",
-		"/etc/passwd",
+		filepath.Join(os.TempDir(), "careerops-outside-report.md"),
 	} {
 		if _, err := runReport("testdata/career-ops", rel); !errors.Is(err, errPathEscape) {
 			t.Errorf("runReport(%q) error = %v, want errPathEscape", rel, err)
