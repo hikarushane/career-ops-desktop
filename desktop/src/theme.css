@@ -137,6 +137,11 @@ body {
 .btn-ghost:hover { color: var(--color-text-primary); }
 .btn-ghost:disabled { opacity: 0.5; cursor: default; }
 .btn-ghost:disabled:hover { color: var(--color-text-secondary); }
+/* StatusSelect: the pill's own chevron sits over the hidden native arrow. */
+.status-select { position: relative; display: inline-flex; align-items: center; }
+.status-select-chevron { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.status-select select:disabled { opacity: 0.6; cursor: default; }
+
 button:focus-visible,
 select:focus-visible,
 summary:focus-visible {
