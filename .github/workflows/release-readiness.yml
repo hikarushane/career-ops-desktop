@@ -170,6 +170,6 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "NSIS install failed with exit code $($process.ExitCode)" }
           node desktop/scripts/verify-packaged-runtime.mjs --install-dir $installDir
           $signature = Get-AuthenticodeSignature (Join-Path $installDir 'runtime/careerops-node-runtime.exe')
-          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Node.js Foundation') {
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Node\.js Foundation|OpenJS Foundation') {
             throw "Installed Node.js runtime signature is invalid or has the wrong signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
           }
