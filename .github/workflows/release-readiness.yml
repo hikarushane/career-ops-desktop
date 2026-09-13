@@ -81,7 +81,7 @@ jobs:
         with:
           go-version-file: dashboard/go.mod
       - name: Install root runtime dependencies
-        run: npm ci --ignore-scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
       - run: npm ci
         working-directory: desktop
       - run: npm run build:sidecar
@@ -132,7 +132,7 @@ jobs:
         with:
           go-version-file: dashboard/go.mod
       - name: Install root runtime dependencies
-        run: npm ci --ignore-scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
       - run: npm ci
         working-directory: desktop
       - name: Build .exe sidecar
