@@ -2546,7 +2546,11 @@ mod tests {
 
         assert_eq!(listed, vec![
             folder.join("cv.pdf").to_string_lossy().into_owned(),
-            folder.join("nested/reference.md").to_string_lossy().into_owned(),
+            folder
+                .join("nested")
+                .join("reference.md")
+                .to_string_lossy()
+                .into_owned(),
             root.path().join("single.txt").to_string_lossy().into_owned(),
         ]);
     }
