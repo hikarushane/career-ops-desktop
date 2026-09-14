@@ -2,10 +2,11 @@
 // Verify a minisign signature produced by `tauri signer sign` against an updater
 // archive, using only node:crypto.
 //
-// Why this exists: the Windows release re-creates `<installer>.nsis.zip` after the
-// installer has been Authenticode-signed, then re-signs it with the updater key.
+// Why this exists: the Windows release Authenticode-signs the NSIS installer and
+// then re-signs that installer with the updater key (Tauri 2 reuses the installer
+// itself as the updater artifact, so its `.exe.sig` must cover the signed bytes).
 // Nothing else in the toolchain proves the resulting `.sig` actually matches the
-// archive we are about to publish -- `tauri signer` has no `verify` subcommand --
+// file we are about to publish -- `tauri signer` has no `verify` subcommand --
 // so a broken re-sign would only surface as an update failure on user machines.
 //
 // Formats accepted for both --pubkey and --sig:
