@@ -8,15 +8,6 @@
     "dialog:allow-open",
     "store:default",
     {
-      "identifier": "opener:allow-open-path",
-      "allow": [
-        { "path": "$HOME/**" },
-        { "path": "/Volumes/**" },
-        { "path": "/tmp/**" },
-        { "path": "/private/**" }
-      ]
-    },
-    {
       "identifier": "opener:allow-reveal-item-in-dir",
       "allow": [
         { "path": "$HOME/**" },

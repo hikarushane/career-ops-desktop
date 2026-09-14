@@ -9,6 +9,7 @@ use cap_std::ambient_authority;
 use cap_std::fs::{Dir, File as CapFile, OpenOptions as CapOpenOptions};
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -1961,6 +1962,78 @@ pub fn initialize_workspace(
     initialize_workspace_from_seed(Path::new(&path), &resource_dir.join("workspace-seed"))
 }
 
+#[cfg(windows)]
+fn validate_workspace_folder_prefix(path: &Path) -> Result<(), String> {
+    use std::path::Prefix;
+
+    // Only a plain drive-letter path (`D:\...`) is a folder the user can have
+    // picked in the directory dialog. Every other Windows prefix names
+    // something else: `\\server\share` is a remote share, `\\?\` and
+    // `\\?\UNC\` skip Win32 path normalisation, and `\\.\` addresses a device
+    // rather than a file. None of them belongs in a "show me my workspace"
+    // request, so they are refused rather than handed to the shell.
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_)) => Ok(()),
+        _ => Err("workspace folder must be on a local drive".to_owned()),
+    }
+}
+
+#[cfg(not(windows))]
+fn validate_workspace_folder_prefix(_path: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+/// Check that `path` is a real, directly named local directory.
+///
+/// Kept separate from [`open_workspace_folder`] so the rules below are unit
+/// testable without a `tauri::AppHandle` or a live file manager.
+fn validate_workspace_folder(path: &Path) -> Result<PathBuf, String> {
+    if !path.is_absolute() {
+        return Err("workspace folder must be an absolute path".to_owned());
+    }
+    validate_workspace_folder_prefix(path)?;
+
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("cannot inspect workspace folder: {error}"))?;
+    if metadata.file_type().is_symlink() {
+        return Err("workspace folder must not be a symlink".to_owned());
+    }
+    if !metadata.is_dir() {
+        return Err("workspace folder must be a directory".to_owned());
+    }
+
+    // Deliberately returned as given. `canonicalize` would follow links back
+    // to a target this function just refused to accept, and on Windows it
+    // yields a `\\?\` verbatim path — which the prefix rule above rejects and
+    // which some shells display badly.
+    Ok(path.to_path_buf())
+}
+
+/// Show a workspace **directory** in the platform file manager.
+///
+/// **Directory-only is the security control, not a convenience check.** The
+/// opener's `open_path` hands a *file* to the shell's association handler
+/// (`ShellExecute` on Windows), so a `.exe`, `.lnk`, `.bat` or `.desktop`
+/// reached through this command would be *run*, not revealed. This command
+/// must therefore never accept anything but a directory the caller named
+/// directly: no-follow metadata has to say directory and not symlink, which on
+/// Windows also rules out junctions and mount points — reparse points that
+/// resolve somewhere the caller never named.
+///
+/// The validation and the opener's own path resolution are not atomic. That
+/// TOCTOU window is accepted: swapping the directory for a link to an
+/// executable in between requires write access to the parent of a path the
+/// user picked themselves, and an attacker holding that can already drop
+/// executables the user will open by hand.
+#[tauri::command]
+pub fn open_workspace_folder(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let folder = validate_workspace_folder(Path::new(&path))?;
+
+    app.opener()
+        .open_path(folder.to_string_lossy(), None::<&str>)
+        .map_err(|error| format!("cannot open workspace folder: {error}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2950,5 +3023,115 @@ mod tests {
             .unwrap()
             .file_type()
             .is_symlink());
+    }
+
+    #[test]
+    fn validate_workspace_folder_accepts_an_existing_directory() {
+        let root = tempfile::tempdir().unwrap();
+
+        let actual = validate_workspace_folder(root.path()).unwrap();
+
+        assert_eq!(actual, root.path().to_path_buf());
+    }
+
+    #[test]
+    fn validate_workspace_folder_rejects_a_regular_file() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("cv.md");
+        fs::write(&file, "not a directory\n").unwrap();
+
+        let error = validate_workspace_folder(&file).unwrap_err();
+
+        assert!(error.contains("directory"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn validate_workspace_folder_rejects_a_relative_path() {
+        let error = validate_workspace_folder(Path::new("relative/dir")).unwrap_err();
+
+        assert!(error.contains("absolute"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn validate_workspace_folder_rejects_a_missing_path() {
+        let root = tempfile::tempdir().unwrap();
+
+        let error = validate_workspace_folder(&root.path().join("nope")).unwrap_err();
+
+        assert!(!error.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_directory_symlink() {
+        let root = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let link = root.path().join("workspace-link");
+        std::os::unix::fs::symlink(target.path(), &link).unwrap();
+
+        assert!(target.path().is_dir());
+
+        let error = validate_workspace_folder(&link).unwrap_err();
+
+        assert!(error.contains("symlink"), "unexpected error: {error}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_directory_junction() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("real-workspace");
+        fs::create_dir_all(&target).unwrap();
+        let link = root.path().join("workspace-link");
+
+        let status = std::process::Command::new("cmd")
+            .arg("/c")
+            .arg("mklink")
+            .arg("/J")
+            .arg(&link)
+            .arg(&target)
+            .status()
+            .unwrap();
+        assert!(status.success(), "mklink /J failed");
+        assert!(target.is_dir(), "junction target directory must exist");
+
+        let error = validate_workspace_folder(&link).unwrap_err();
+
+        assert!(
+            error.contains("symlink") || error.contains("link"),
+            "unexpected error: {error}",
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_drive_relative_path() {
+        let error = validate_workspace_folder(Path::new(r"D:foo")).unwrap_err();
+
+        assert!(error.contains("absolute"), "unexpected error: {error}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_unc_share() {
+        let error = validate_workspace_folder(Path::new(r"\\server\share\dir")).unwrap_err();
+
+        assert!(error.contains("local drive"), "unexpected error: {error}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_verbatim_path() {
+        let error = validate_workspace_folder(Path::new(r"\\?\C:\Windows")).unwrap_err();
+
+        assert!(error.contains("local drive"), "unexpected error: {error}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_device_namespace_path() {
+        let error = validate_workspace_folder(Path::new(r"\\.\C:\Windows")).unwrap_err();
+
+        assert!(error.contains("local drive"), "unexpected error: {error}");
     }
 }

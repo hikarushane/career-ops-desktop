@@ -1,5 +1,5 @@
 import { load } from '@tauri-apps/plugin-store';
-import { openPath } from '@tauri-apps/plugin-opener';
+import { invoke } from '@tauri-apps/api/core';
 
 const STORE_FILE = 'settings.json';
 const WORKSPACE_KEY = 'workspacePath';
@@ -30,6 +30,11 @@ export async function saveWorkspacePath(path: string): Promise<void> {
   await store.save();
 }
 
+// Goes through the Rust `open_workspace_folder` command rather than the
+// opener plugin's `openPath`: the plugin's IPC permission is scoped by a path
+// allowlist in capabilities/default.json, which cannot cover a workspace on an
+// arbitrary local drive. The command validates the path is a real directory
+// instead — see desktop/src-tauri/src/workspace.rs.
 export async function openWorkspaceFolder(path: string): Promise<void> {
-  await openPath(path);
+  await invoke('open_workspace_folder', { path });
 }

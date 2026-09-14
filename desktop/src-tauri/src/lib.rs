@@ -64,6 +64,7 @@ pub fn run() {
             workspace::save_job_capture,
             workspace::list_workspace_files,
             workspace::read_workspace_file,
+            workspace::open_workspace_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
