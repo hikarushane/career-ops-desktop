@@ -319,6 +319,21 @@ describe('Windows release signing', () => {
     );
   });
 
+  it('publishes only after both platform builds, so a Windows set can never arrive late', () => {
+    expect(release).toMatch(/publish-release:\n    needs: \[detect-release, build-macos, build-windows\]/);
+  });
+
+  it('uploads the plain executables so the GitHub artifact is one zip of PE files', () => {
+    // SignPath receives the GitHub artifact, which GitHub already stores as a
+    // ZIP; pre-zipping would nest a second archive the artifact configuration
+    // would have to describe. Phase 2 uploads the installer the same way.
+    const stage = stepBody('Stage the unsigned Windows executables');
+    expect(stage).not.toContain('Compress-Archive');
+    const upload = stepBody('Upload the unsigned Windows executables');
+    expect(upload).toContain('signpath-binaries/*.exe');
+    expect(upload).not.toContain('.zip');
+  });
+
   it('leaves the macOS job on tauri-action', () => {
     const buildMacos = release.slice(release.indexOf('\n  build-macos:'), release.indexOf('\n  build-windows:'));
     expect(buildMacos).toContain('tauri-apps/tauri-action@v1');

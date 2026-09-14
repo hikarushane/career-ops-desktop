@@ -226,7 +226,9 @@ jobs:
             if (-not (Test-Path $source)) { throw "sidecar missing: $source" }
             Copy-Item $source (Join-Path $staging "$name.exe")
           }
-          Compress-Archive -Path (Join-Path $staging '*.exe') -DestinationPath (Join-Path $env:RUNNER_TEMP 'windows-unsigned-binaries.zip') -Force
+          # No archive of our own: GitHub stores the uploaded files as one zip
+          # and SignPath receives that zip, so the artifact configuration is a
+          # single zip-file of pe-files rather than a zip inside a zip.
 
       - name: Upload the unsigned Windows executables
         id: unsigned_binaries
@@ -234,7 +236,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: windows-unsigned-binaries
-          path: ${{ runner.temp }}/windows-unsigned-binaries.zip
+          path: ${{ runner.temp }}/signpath-binaries/*.exe
           retention-days: 1
 
       - name: Sign the Windows executables with SignPath
@@ -505,7 +507,7 @@ jobs:
           retention-days: 5
 
   publish-release:
-    needs: [detect-release, build-macos]
+    needs: [detect-release, build-macos, build-windows]
     if: github.event_name == 'push' && needs.detect-release.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
