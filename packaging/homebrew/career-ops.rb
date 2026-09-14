@@ -2,7 +2,7 @@
 # This template is updated by the release workflow.
 # Tap repository variable: HOMEBREW_TAP_REPO
 cask "career-ops" do
-  version "0.5.1"
+  version "0.5.2"
   sha256 "RELEASE_SHA256_PLACEHOLDER"
 
   # The download URL is derived from .fork/release.json at release time.

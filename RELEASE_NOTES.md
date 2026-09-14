@@ -1,5 +1,19 @@
 # Release Notes
 
+## v0.5.2
+
+Released 2026-09-14.
+
+- **First Windows installer.** `CareerOps_0.5.2_Windows.exe` (NSIS, x64); the in-app updater uses `CareerOps_0.5.2_Windows.nsis.zip`. It is not Authenticode-signed yet, so SmartScreen shows "Windows protected your PC" on first run: choose *More info* → *Run anyway*. Some antivirus products flag unsigned installers; Avira is a known false positive (`FakeProgSelfRun`).
+- Creating a workspace at the default path on Windows no longer fails with os error 32 and no longer leaves a `.careerops-workspace-stage-*` folder behind: the staged copy releases its directory handles before the atomic install and verifies the installed directory's identity afterwards.
+- AI tasks on Windows no longer flash an empty console window; Cancel now terminates the whole task process tree (`taskkill /T`) instead of calling a `kill` that does not exist there.
+- Settings › Workspace *Open Folder* and Settings › My Background *Open raw files* work for a workspace on any local drive (the opener scope was limited to the home directory).
+- Reload re-reads the tracker again (the header button was passing its click event as the path), and an evaluation that finishes while another screen is open now refreshes the board on its own.
+- Check for Updates reports the outcome even when it joins the background poll, and every update request is bounded by a 30 s timeout instead of spinning forever.
+- The header task chip lists every running task in a menu when more than one is running; a row in Home's recent activity opens the report drawer in place instead of switching to Jobs; the status pill draws its own chevron so it looks the same on WebView2 and WebKit.
+- `go test ./...` passes on Windows (test expectations were macOS-specific).
+- Upstream Maintenance runs on a Claude subscription via `anthropics/claude-code-action` instead of an API key.
+
 ## v0.5.1
 
 Released 2026-09-06.
