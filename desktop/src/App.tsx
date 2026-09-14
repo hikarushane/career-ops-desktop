@@ -375,7 +375,16 @@ export default function App() {
   function renderScreen() {
     switch (screen) {
       case 'home':
-        return <Home root={root!} data={data!} onNavigate={navigate} batchStarting={batchStartInFlight} batchRunning={batchRunning} />;
+        return (
+          <Home
+            root={root!}
+            data={data!}
+            onNavigate={navigate}
+            onReload={reload}
+            batchStarting={batchStartInFlight}
+            batchRunning={batchRunning}
+          />
+        );
       case 'pipeline':
         return (
           <Pipeline
