@@ -291,8 +291,8 @@ jobs:
             }
           }
 
-      # `tauri bundle` is the ONLY producer of a .nsis.zip.sig when SignPath is
-      # not configured, so the updater key has to be present on both paths.
+      # `tauri bundle` is the ONLY producer of a `-setup.exe.sig` when SignPath
+      # is not configured, so the updater key has to be present on both paths.
       - name: Bundle the NSIS installer
         shell: pwsh
         working-directory: desktop
@@ -303,7 +303,10 @@ jobs:
           npx tauri bundle --ci --bundles nsis
           if ($LASTEXITCODE -ne 0) { throw "tauri bundle failed ($LASTEXITCODE)" }
 
-      # ---- Phase 2: sign the installer, then rebuild the updater archive ------
+      # ---- Phase 2: sign the installer, then re-sign it for the updater ------
+      # With bundle.createUpdaterArtifacts the NSIS installer IS the updater
+      # artifact (Tauri 2's v2 format), so there is nothing to repack: the
+      # signed installer only has to be minisigned again.
       - name: Upload the unsigned Windows installer
         id: unsigned_installer
         if: steps.signpath.outputs.configured == 'true'
@@ -343,34 +346,21 @@ jobs:
             throw "the signed installer is not signed by the expected signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
           }
 
-      # Tauri already built and signed an updater archive around the UNSIGNED
-      # installer. Deleting it before repacking is what stops that stale archive
-      # (and its valid-looking .sig) from being collected and published.
-      - name: Delete the stale updater archive and signature
+      # Tauri already minisigned the UNSIGNED installer. Deleting that signature
+      # after the signed installer replaces it -- and proving it is gone -- is
+      # what stops a valid-looking .sig over the unsigned bytes from being
+      # collected and published.
+      - name: Delete the stale updater signature
         if: steps.signpath.outputs.configured == 'true'
         shell: pwsh
         run: |
           $bundle = 'desktop/src-tauri/target/release/bundle/nsis'
-          $stale = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.nsis.zip' -or $_.Name -like '*.nsis.zip.sig' })
+          $stale = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.exe.sig' })
           foreach ($file in $stale) { Write-Host "  removing $($file.Name)"; Remove-Item $file.FullName -Force }
-          $left = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.nsis.zip' -or $_.Name -like '*.nsis.zip.sig' })
-          if ($left.Count -ne 0) { throw "stale updater archives remain: $($left.Name -join ', ')" }
+          $left = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.exe.sig' })
+          if ($left.Count -ne 0) { throw "stale updater signature remains: $($left.Name -join ', ')" }
 
-      - name: Repack the signed installer into the updater archive
-        if: steps.signpath.outputs.configured == 'true'
-        shell: pwsh
-        run: |
-          $bundle = 'desktop/src-tauri/target/release/bundle/nsis'
-          $installer = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.exe' })
-          if ($installer.Count -ne 1) { throw "expected exactly one NSIS installer in $bundle, found $($installer.Count)" }
-          # Same base name Tauri used, so artifacts.mjs collect and the updater
-          # manifest keep finding it.
-          $zipPath = $installer[0].FullName -replace '\.exe$', '.nsis.zip'
-          Compress-Archive -Path $installer[0].FullName -DestinationPath $zipPath -Force
-          if (-not (Test-Path $zipPath)) { throw "failed to create the updater archive $zipPath" }
-          Write-Host "  repacked $(Split-Path $zipPath -Leaf)"
-
-      - name: Sign the updater archive with the Tauri updater key
+      - name: Sign the installer with the Tauri updater key
         if: steps.signpath.outputs.configured == 'true'
         shell: pwsh
         working-directory: desktop
@@ -379,12 +369,12 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           $bundle = 'src-tauri/target/release/bundle/nsis'
-          $zip = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.nsis.zip' })
-          if ($zip.Count -ne 1) { throw "expected exactly one updater archive in $bundle, found $($zip.Count)" }
-          $zipPath = $zip[0].FullName
-          npx tauri signer sign $zipPath
+          $installer = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.exe' })
+          if ($installer.Count -ne 1) { throw "expected exactly one NSIS installer in $bundle, found $($installer.Count)" }
+          $installerPath = $installer[0].FullName
+          npx tauri signer sign $installerPath
           if ($LASTEXITCODE -ne 0) { throw "tauri signer sign failed ($LASTEXITCODE)" }
-          if (-not (Test-Path "$zipPath.sig")) { throw "tauri signer sign produced no .sig next to $($zip[0].Name)" }
+          if (-not (Test-Path "$installerPath.sig")) { throw "tauri signer sign produced no .sig next to $($installer[0].Name)" }
 
       # ---- Post-conditions: always, configured or not ------------------------
       # Asserting NotSigned on the unconfigured path is what stops a half-signed
@@ -396,48 +386,45 @@ jobs:
           CONFIGURED: ${{ steps.signpath.outputs.configured }}
         run: |
           $bundle = 'desktop/src-tauri/target/release/bundle/nsis'
-          $zip = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.nsis.zip' })
-          if ($zip.Count -ne 1) { throw "expected exactly one updater archive in $bundle, found $($zip.Count)" }
-          if (-not (Test-Path "$($zip[0].FullName).sig")) { throw "the updater archive has no .sig" }
-          $extract = Join-Path $env:RUNNER_TEMP 'nsis-check'
-          if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
-          Expand-Archive -Path $zip[0].FullName -DestinationPath $extract
-          $exes = @(Get-ChildItem $extract -Recurse -File | Where-Object { $_.Extension -eq '.exe' })
-          if ($exes.Count -ne 1) { throw "expected exactly one executable inside the updater archive, found $($exes.Count)" }
-          $signature = Get-AuthenticodeSignature $exes[0].FullName
-          Write-Host "archived installer: $($exes[0].Name) -> $($signature.Status) $($signature.SignerCertificate.Subject)"
+          $installer = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.exe' })
+          if ($installer.Count -ne 1) { throw "expected exactly one NSIS installer in $bundle, found $($installer.Count)" }
+          if (-not (Test-Path "$($installer[0].FullName).sig")) { throw "the installer has no updater signature (.sig)" }
+          # The installer IS the updater artifact, so the signature is checked on
+          # the published file itself; nothing is unpacked first.
+          $signature = Get-AuthenticodeSignature $installer[0].FullName
+          Write-Host "packaged installer: $($installer[0].Name) -> $($signature.Status) $($signature.SignerCertificate.Subject)"
           if ($env:CONFIGURED -eq 'true') {
             if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch $env:EXPECTED_SIGNER) {
-              throw "the archived installer is not signed by the expected signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
+              throw "the packaged installer is not signed by the expected signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
             }
           } elseif ($signature.Status -ne 'NotSigned') {
-            throw "SignPath is not configured, but the archived installer reports $($signature.Status); refusing a half-signed release"
+            throw "SignPath is not configured, but the packaged installer reports $($signature.Status); refusing a half-signed release"
           }
 
-      - name: Verify the updater archive signature
+      - name: Verify the updater signature
         shell: pwsh
         run: |
           $bundle = 'desktop/src-tauri/target/release/bundle/nsis'
-          $zip = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.nsis.zip' })
-          if ($zip.Count -ne 1) { throw "expected exactly one updater archive in $bundle, found $($zip.Count)" }
-          $zipPath = $zip[0].FullName
-          $sigPath = "$zipPath.sig"
+          $installer = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.exe' })
+          if ($installer.Count -ne 1) { throw "expected exactly one NSIS installer in $bundle, found $($installer.Count)" }
+          $installerPath = $installer[0].FullName
+          $sigPath = "$installerPath.sig"
           # Read the shipped key from the config rather than pasting a copy here:
           # a verifier checked against a key nobody ships proves nothing.
           $pubkey = node -p "require('./desktop/src-tauri/tauri.conf.json').plugins.updater.pubkey"
           if ($LASTEXITCODE -ne 0) { throw "could not read plugins.updater.pubkey from tauri.conf.json ($LASTEXITCODE)" }
-          node scripts/release/verify-minisign.mjs --pubkey "$pubkey" --file $zipPath --sig $sigPath
-          if ($LASTEXITCODE -ne 0) { throw "the updater archive signature does not verify against the shipped public key ($LASTEXITCODE)" }
+          node scripts/release/verify-minisign.mjs --pubkey "$pubkey" --file $installerPath --sig $sigPath
+          if ($LASTEXITCODE -ne 0) { throw "the installer signature does not verify against the shipped public key ($LASTEXITCODE)" }
           # Negative control, in the same run: a verifier that accepts everything
           # would pass the check above too.
-          $tampered = Join-Path $env:RUNNER_TEMP 'tampered.nsis.zip'
-          Copy-Item $zipPath $tampered -Force
+          $tampered = Join-Path $env:RUNNER_TEMP 'tampered-setup.exe'
+          Copy-Item $installerPath $tampered -Force
           $bytes = [System.IO.File]::ReadAllBytes($tampered)
           $bytes[$bytes.Length - 1] = $bytes[$bytes.Length - 1] -bxor 0xFF
           [System.IO.File]::WriteAllBytes($tampered, $bytes)
           node scripts/release/verify-minisign.mjs --pubkey "$pubkey" --file $tampered --sig $sigPath
-          if ($LASTEXITCODE -eq 0) { throw "the minisign verifier accepted a tampered archive" }
-          Write-Host "negative control passed: the tampered archive was rejected"
+          if ($LASTEXITCODE -eq 0) { throw "the minisign verifier accepted a tampered installer" }
+          Write-Host "negative control passed: the tampered installer was rejected"
 
       - name: Verify installed Windows runtime
         shell: pwsh

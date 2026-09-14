@@ -271,23 +271,33 @@ describe('Windows release signing', () => {
     );
   });
 
-  it('re-creates the updater archive from the signed installer, in that order', () => {
-    // The whole point of phase 2: Tauri signed an archive containing the
-    // UNSIGNED installer, so that archive and its .sig must be destroyed before
-    // the signed installer is repacked and re-signed.
+  it('re-signs the signed installer for the updater, in that order', () => {
+    // The whole point of phase 2: Tauri minisigned the UNSIGNED installer, so
+    // that .sig must be destroyed after the signed installer replaces it and
+    // before the signed installer is re-signed. There is no repack: with
+    // createUpdaterArtifacts the updater artifact IS the installer.
+    expect(buildWindows).not.toContain('- name: Repack the signed installer into the updater archive');
+    expect(buildWindows).not.toContain('.nsis.zip');
     const signInstaller = stepIndex('Sign the Windows installer with SignPath');
-    const deleteStale = stepIndex('Delete the stale updater archive and signature');
-    const repack = stepIndex('Repack the signed installer into the updater archive');
-    const resign = stepIndex('Sign the updater archive with the Tauri updater key');
-    expect(signInstaller).toBeLessThan(deleteStale);
-    expect(deleteStale).toBeLessThan(repack);
-    expect(repack).toBeLessThan(resign);
-    expect(buildWindows).toContain('Compress-Archive');
-    expect(buildWindows).toContain('tauri signer sign');
+    const replace = stepIndex('Replace the unsigned installer with the signed installer');
+    const deleteStale = stepIndex('Delete the stale updater signature');
+    const resign = stepIndex('Sign the installer with the Tauri updater key');
+    expect(signInstaller).toBeLessThan(replace);
+    expect(replace).toBeLessThan(deleteStale);
+    expect(deleteStale).toBeLessThan(resign);
+    // The stale signature is removed and its absence proved, never assumed.
+    const remove = stepBody('Delete the stale updater signature');
+    expect(remove).toMatch(/\*(-setup)?\.exe\.sig/);
+    expect(remove).toContain('Remove-Item');
+    expect(remove).toMatch(/throw "stale updater signature/);
+    // The re-signing runs on the installer and proves the .sig it should write.
+    const resignBody = stepBody('Sign the installer with the Tauri updater key');
+    expect(resignBody).toContain('npx tauri signer sign');
+    expect(resignBody).toMatch(/Test-Path "\$installerPath\.sig"/);
   });
 
-  it('signs the updater archive in both the configured and unconfigured paths', () => {
-    // `tauri bundle` is the only producer of a .nsis.zip.sig when SignPath is
+  it('signs the updater artifact in both the configured and unconfigured paths', () => {
+    // `tauri bundle` is the only producer of a -setup.exe.sig when SignPath is
     // not configured, so it must carry the updater key either way.
     expect(buildWindows).toContain('npx tauri bundle --ci --bundles nsis');
     const bundle = stepBody('Bundle the NSIS installer');
@@ -297,10 +307,20 @@ describe('Windows release signing', () => {
     expect(bundle).not.toContain('if: ');
   });
 
-  it('proves the published archive and every installed PE before collecting', () => {
-    stepIndex('Verify the Authenticode signature of the packaged installer');
-    stepIndex('Verify the updater archive signature');
-    expect(buildWindows).toContain('scripts/release/verify-minisign.mjs');
+  it('proves the published installer and every installed PE before collecting', () => {
+    // The installer is the published updater artifact, so Authenticode is
+    // checked on the file itself -- nothing is unpacked first.
+    const authenticode = stepBody('Verify the Authenticode signature of the packaged installer');
+    expect(authenticode).not.toContain('Expand-Archive');
+    expect(authenticode).toContain('Get-AuthenticodeSignature');
+    // The updater signature is verified over the installer and its .sig, with a
+    // tampered copy rejected in the same run: a verifier that accepts anything
+    // would pass the positive check too.
+    const minisign = stepBody('Verify the updater signature');
+    expect(minisign).toMatch(/node scripts\/release\/verify-minisign\.mjs --pubkey "\$pubkey" --file \$installerPath --sig \$sigPath/);
+    expect(minisign).toContain('$sigPath = "$installerPath.sig"');
+    expect(minisign).toMatch(/--file \$tampered --sig \$sigPath/);
+    expect(minisign).toMatch(/if \(\$LASTEXITCODE -eq 0\) \{ throw /);
     expect(buildWindows).toContain('plugins.updater.pubkey');
     // Allowlist: an unexpected PE in the install directory fails the build.
     expect(buildWindows).toContain('careerops-node-runtime.exe');
@@ -312,7 +332,7 @@ describe('Windows release signing', () => {
     // skipped a signing step otherwise reads exactly like a successful one.
     for (const step of [
       'Verify the Authenticode signature of the packaged installer',
-      'Verify the updater archive signature',
+      'Verify the updater signature',
       'Verify installed Windows runtime',
     ]) expect(stepBody(step), `${step} must not be gated`).not.toContain('if: ');
   });
