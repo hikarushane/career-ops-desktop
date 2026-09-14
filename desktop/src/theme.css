@@ -787,13 +787,30 @@ select#ai-model:disabled { opacity: 0.5; cursor: default; }
 .progress-empty p { font: 400 14px/1.5 var(--font-sans); max-width: 320px; }
 
 /* --- Header task chip --- */
-.task-chip { display: inline-flex; align-items: center; border-radius: 999px; font: 600 12px var(--font-sans); overflow: hidden; border: 1px solid var(--color-border); }
+.task-chip { position: relative; display: inline-flex; align-items: center; border-radius: 999px; font: 600 12px var(--font-sans); overflow: hidden; border: 1px solid var(--color-border); }
 .task-chip button { border: none; background: transparent; padding: 6px 12px; cursor: pointer; font: inherit; color: inherit; }
 .task-chip-main { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Dropdown listing every running task, opened from the multi-task chip. */
+.task-chip-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 10;
+  min-width: 220px; margin: 0; padding: 4px; list-style: none;
+  background: var(--color-canvas); border: 1px solid var(--color-border);
+  border-radius: var(--radius-control); box-shadow: var(--shadow-panel);
+}
+.task-chip-menu li { display: block; }
+.task-chip-menu button {
+  display: block; width: 100%; padding: 8px 10px; border-radius: var(--radius-control);
+  text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--color-text-primary);
+}
+.task-chip-menu button:hover { background: var(--color-surface-subtle); }
 .task-chip.running {
   background: var(--color-surface-subtle); color: var(--color-text-primary);
   border-color: var(--color-accent-amber);
   animation: task-chip-breathe 2.2s ease-in-out infinite;
+  /* The pill still clips its own corners; only the dropdown menu (a sibling,
+     not a descendant of the clipped background) needs to escape it. */
+  overflow: visible;
 }
 @keyframes task-chip-breathe {
   0%, 100% { box-shadow: 0 0 0 0 transparent; }

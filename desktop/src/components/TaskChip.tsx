@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { t } from '../lib/i18n';
 import type { TaskRecord } from '../lib/taskStore';
 
@@ -11,14 +12,65 @@ function minutes(startedAt: number) { return `${Math.max(0, Math.floor((Date.now
 type Props = { tasks: TaskRecord[]; onOpen: (taskId: string) => void; onDismiss: (taskId: string) => void };
 
 export default function TaskChip({ tasks, onOpen, onDismiss }: Props) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLSpanElement | null>(null);
+
+  // Only listen while the menu is open, so a chip that never opens its
+  // dropdown never pays for a document-wide listener.
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
   if (tasks.length === 0) return null;
   const running = tasks.filter((t) => t.state === 'running');
   if (running.length > 1) {
     return (
-      <span className="task-chip running">
-        <button className="task-chip-main" onClick={() => onOpen(running[0].taskId)}>
-          {t('{n} tasks running', { n: running.length })}
-        </button>
+      <span className="task-chip running" ref={containerRef}>
+        {open ? (
+          <>
+            <button
+              className="task-chip-main"
+              aria-haspopup="menu"
+              aria-expanded={open}
+              onClick={() => setOpen(false)}
+            >
+              {t('{n} tasks running', { n: running.length })}
+            </button>
+            <ul className="task-chip-menu" role="menu" aria-label={t('Running tasks')}>
+              {running.map((task) => (
+                <li key={task.taskId}>
+                  <button
+                    role="menuitem"
+                    onClick={() => { onOpen(task.taskId); setOpen(false); }}
+                  >
+                    {`${verb(task.taskType)} ${task.label} · ${minutes(task.startedAt)}`}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <button
+            className="task-chip-main"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            onClick={() => setOpen(true)}
+          >
+            {t('{n} tasks running', { n: running.length })}
+          </button>
+        )}
       </span>
     );
   }
