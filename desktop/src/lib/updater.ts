@@ -30,6 +30,12 @@ type StateListener = (state: UpdateState) => void;
 type Waiter = { listener: StateListener; manual: boolean };
 
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
+/**
+ * Upper bound on one update request. The updater plugin sets no timeout of
+ * its own, so a stalled connection would otherwise leave "Checking…" on
+ * screen indefinitely and make every later check join the stuck one.
+ */
+export const CHECK_TIMEOUT_MS = 30_000;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 export function initialState(): UpdateState {
@@ -133,7 +139,10 @@ export function createUpdaterController(dependencies: UpdaterDependencies) {
   };
 }
 
-const defaultController = createUpdaterController({ check, relaunch });
+const defaultController = createUpdaterController({
+  check: (options) => check({ timeout: CHECK_TIMEOUT_MS, ...options }),
+  relaunch,
+});
 
 export async function checkForUpdate(
   onStateChange: StateListener,

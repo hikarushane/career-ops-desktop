@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const pluginCheck = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/plugin-updater', () => ({ check: pluginCheck }));
+vi.mock('@tauri-apps/plugin-process', () => ({ relaunch: vi.fn() }));
+
 import {
+  CHECK_TIMEOUT_MS,
+  checkForUpdate,
   createUpdaterController,
   initialState,
   type UpdateState,
@@ -123,6 +130,17 @@ describe('updater', () => {
     await Promise.all([background, manual]);
     expect(states[states.length - 1]).toMatchObject({ status: 'error', error: 'Error: no windows platform in latest.json' });
     expect(backgroundStates[backgroundStates.length - 1]).toMatchObject({ status: 'idle' });
+  });
+
+  it('bounds every plugin check with a request timeout', async () => {
+    // The updater plugin has no default timeout: a stalled request keeps
+    // "Checking…" on screen forever and blocks every later check behind it.
+    pluginCheck.mockResolvedValue(null);
+    await checkForUpdate(onStateChange, currentVersion, true);
+    expect(pluginCheck).toHaveBeenCalledWith(expect.objectContaining({ timeout: CHECK_TIMEOUT_MS }));
+    expect(CHECK_TIMEOUT_MS).toBeGreaterThanOrEqual(10_000);
+    expect(CHECK_TIMEOUT_MS).toBeLessThanOrEqual(60_000);
+    expect(states.map((state) => state.status)).toEqual(['checking', 'up_to_date']);
   });
 
   it('supports Later without mutating the available state', async () => {
