@@ -190,3 +190,137 @@ describe('workflow enforcement', () => {
     expect(release).toMatch(/publish-release:[\s\S]*?permissions:\n      contents: write/);
   });
 });
+
+describe('Windows release signing', () => {
+  const release = readFileSync(join(ROOT, '.github/workflows/desktop-release.yml'), 'utf8');
+  // The build-windows job body, so an assertion about "the job" cannot be
+  // satisfied by a coincidental match inside build-macos or publish-release.
+  const buildWindows = release.slice(
+    release.indexOf('\n  build-windows:'),
+    release.indexOf('\n  publish-release:'),
+  );
+
+  /** Position of a named step inside build-windows, asserted to exist. */
+  function stepIndex(name: string) {
+    const index = buildWindows.indexOf(`- name: ${name}`);
+    expect(index, `build-windows has a step named "${name}"`).toBeGreaterThan(-1);
+    return index;
+  }
+
+  /** One step's YAML, from its `- name:` up to the next step at the same indent. */
+  function stepBody(name: string) {
+    const start = stepIndex(name);
+    const next = buildWindows.indexOf('\n      - ', start);
+    return buildWindows.slice(start, next === -1 ? undefined : next);
+  }
+
+  it('offers a dispatch dry run with a test-signing default', () => {
+    expect(release).toMatch(/^on:\n(?:.*\n)*?  workflow_dispatch:\n    inputs:\n/m);
+    expect(release).toMatch(
+      /signing_policy:\n(?:.*\n)*?        type: choice\n(?:.*\n)*?          - test-signing\n          - release-signing\n/,
+    );
+    expect(release).toMatch(/signing_policy:\n(?:.*\n)*?        default: test-signing\n/);
+    expect(release).toMatch(/expected_signer:\n(?:.*\n)*?        type: string\n/);
+    expect(release).toMatch(/expected_signer:\n(?:.*\n)*?        default: SignPath\n/);
+  });
+
+  it('builds Windows for a real release or an explicit dispatch, never otherwise', () => {
+    expect(buildWindows).toContain(
+      "if: github.event_name == 'workflow_dispatch' || needs.detect-release.outputs.should_release == 'true'",
+    );
+    expect(buildWindows).not.toContain('if: ${{ false }}');
+  });
+
+  it('confines the signing secret to the release-signing environment and read-only permissions', () => {
+    expect(buildWindows).toContain('environment: release-signing');
+    expect(buildWindows).toMatch(/permissions:\n      contents: read\n      actions: read\n/);
+    expect(buildWindows).not.toContain('contents: write');
+    // The API token is only ever read from the environment secret, never inlined.
+    expect(buildWindows).toContain('${{ secrets.SIGNPATH_API_TOKEN }}');
+  });
+
+  it('submits two signing requests, both gated on SignPath being configured', () => {
+    const submits = buildWindows.match(/SignPath\/github-action-submit-signing-request@v1/g) ?? [];
+    expect(submits).toHaveLength(2);
+    expect(buildWindows).toContain('artifact-configuration-slug: windows-binaries');
+    expect(buildWindows).toContain('artifact-configuration-slug: windows-installer');
+    // Every SignPath-dependent step is skipped when the org id is unset, so the
+    // unconfigured path still produces today's unsigned artifact set.
+    const gates = buildWindows.match(/steps\.signpath\.outputs\.configured == 'true'/g) ?? [];
+    expect(gates.length).toBeGreaterThanOrEqual(2);
+    expect(buildWindows).toContain("vars.SIGNPATH_ORGANIZATION_ID != ''");
+    expect(buildWindows).toContain('wait-for-completion: true');
+    expect(buildWindows).toContain('wait-for-completion-timeout-in-seconds: 7200');
+  });
+
+  it('chooses the policy and the expected signer from the trigger, never blank on a push', () => {
+    expect(buildWindows).toContain(
+      "${{ github.event_name == 'workflow_dispatch' && inputs.signing_policy || 'release-signing' }}",
+    );
+    expect(buildWindows).toContain(
+      "${{ github.event_name == 'workflow_dispatch' && inputs.expected_signer || 'SignPath Foundation' }}",
+    );
+  });
+
+  it('re-creates the updater archive from the signed installer, in that order', () => {
+    // The whole point of phase 2: Tauri signed an archive containing the
+    // UNSIGNED installer, so that archive and its .sig must be destroyed before
+    // the signed installer is repacked and re-signed.
+    const signInstaller = stepIndex('Sign the Windows installer with SignPath');
+    const deleteStale = stepIndex('Delete the stale updater archive and signature');
+    const repack = stepIndex('Repack the signed installer into the updater archive');
+    const resign = stepIndex('Sign the updater archive with the Tauri updater key');
+    expect(signInstaller).toBeLessThan(deleteStale);
+    expect(deleteStale).toBeLessThan(repack);
+    expect(repack).toBeLessThan(resign);
+    expect(buildWindows).toContain('Compress-Archive');
+    expect(buildWindows).toContain('tauri signer sign');
+  });
+
+  it('signs the updater archive in both the configured and unconfigured paths', () => {
+    // `tauri bundle` is the only producer of a .nsis.zip.sig when SignPath is
+    // not configured, so it must carry the updater key either way.
+    expect(buildWindows).toContain('npx tauri bundle --ci --bundles nsis');
+    const bundle = stepBody('Bundle the NSIS installer');
+    expect(bundle).toContain('TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}');
+    expect(bundle).toContain('TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}');
+    // Unconditional: it is the only producer of a .sig on the unsigned path.
+    expect(bundle).not.toContain('if: ');
+  });
+
+  it('proves the published archive and every installed PE before collecting', () => {
+    stepIndex('Verify the Authenticode signature of the packaged installer');
+    stepIndex('Verify the updater archive signature');
+    expect(buildWindows).toContain('scripts/release/verify-minisign.mjs');
+    expect(buildWindows).toContain('plugins.updater.pubkey');
+    // Allowlist: an unexpected PE in the install directory fails the build.
+    expect(buildWindows).toContain('careerops-node-runtime.exe');
+    expect(buildWindows).toContain('uninstall.exe');
+    expect(buildWindows).toContain('career-data.exe');
+    expect(buildWindows).toContain('NotSigned');
+    expect(buildWindows).toMatch(/unexpected|not on the allowlist/i);
+    // Post-conditions run on BOTH paths -- an unsigned build that silently
+    // skipped a signing step otherwise reads exactly like a successful one.
+    for (const step of [
+      'Verify the Authenticode signature of the packaged installer',
+      'Verify the updater archive signature',
+      'Verify installed Windows runtime',
+    ]) expect(stepBody(step), `${step} must not be gated`).not.toContain('if: ');
+  });
+
+  it('fails closed after every native command', () => {
+    const throws = buildWindows.match(/if \(\$LASTEXITCODE -ne 0\) \{ throw /g) ?? [];
+    expect(throws.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('leaves publishing on the push trigger only', () => {
+    expect(release).toMatch(
+      /publish-release:[\s\S]*?if: github\.event_name == 'push' && needs\.detect-release\.outputs\.should_release == 'true'/,
+    );
+  });
+
+  it('leaves the macOS job on tauri-action', () => {
+    const buildMacos = release.slice(release.indexOf('\n  build-macos:'), release.indexOf('\n  build-windows:'));
+    expect(buildMacos).toContain('tauri-apps/tauri-action@v1');
+  });
+});

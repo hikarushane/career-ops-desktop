@@ -10,6 +10,19 @@ on:
       - 'scripts/release/**'
       - 'RELEASE_NOTES.md'
       - 'release-prepared.json'
+  workflow_dispatch:
+    inputs:
+      signing_policy:
+        description: 'SignPath signing policy to submit against (dry runs use test-signing)'
+        type: choice
+        options:
+          - test-signing
+          - release-signing
+        default: test-signing
+      expected_signer:
+        description: 'Regex the Authenticode certificate subject must match'
+        type: string
+        default: SignPath
 
 permissions:
   contents: read
@@ -110,15 +123,31 @@ jobs:
 
   build-windows:
     needs: detect-release
-    # Windows is not part of the release gate yet: the Windows sidecar and
-    # runtime verification pass on windows-latest, but `cargo test` fails five
-    # workspace.rs tests (the atomic workspace install renames a directory
-    # while a handle is still open, os error 32). Until those pass, releases
-    # ship macOS only and finalizeArtifacts tolerates the missing Windows
-    # set. Re-enable this job and add it back to publish-release's `needs`
-    # once the Windows tests are green.
-    if: ${{ false }}
+    # A push builds Windows only for a real release (parity with build-macos); a
+    # workflow_dispatch always reaches the job, because between releases main's
+    # version tag already exists and should_release is false -- which is exactly
+    # the state the signing dry runs have to be exercised in.
+    if: github.event_name == 'workflow_dispatch' || needs.detect-release.outputs.should_release == 'true'
     runs-on: windows-latest
+    # The SignPath API token and the organization/project ids live in this
+    # environment, not at repository level, so no fork PR and no other workflow
+    # can reach them; the environment's deployment-branch rule pins them to main.
+    environment: release-signing
+    # Replaces the workflow-level block for this job only. `actions: read` is
+    # what the SignPath action needs to read job details and download the
+    # uploaded artifact with github.token; nothing here writes.
+    permissions:
+      contents: read
+      actions: read
+    env:
+      SIGNING_TRIPLE: x86_64-pc-windows-msvc
+      # Neither expression can resolve empty on a push: the `||` fallback makes
+      # release-signing / "SignPath Foundation" the only push-reachable values,
+      # so a push can never select the test certificate. Defined once here and
+      # referenced by both submit steps and every Authenticode assertion, so the
+      # two halves cannot drift apart.
+      SIGNING_POLICY_SLUG: ${{ github.event_name == 'workflow_dispatch' && inputs.signing_policy || 'release-signing' }}
+      EXPECTED_SIGNER: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_signer || 'SignPath Foundation' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -146,27 +175,317 @@ jobs:
       - name: Cargo checks
         run: cargo check --locked; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; cargo test --locked
         working-directory: desktop/src-tauri
-      - name: Build signed updater artifacts and NSIS installer
-        uses: tauri-apps/tauri-action@v1
+
+      - name: Check SignPath configuration
+        id: signpath
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          projectPath: desktop
-      - name: Verify installed Windows runtime
+          CONFIGURED: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        run: |
+          "configured=$($env:CONFIGURED)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ($env:CONFIGURED -eq 'true') {
+            Write-Host "::notice::Windows signing: SignPath policy '$($env:SIGNING_POLICY_SLUG)', expected signer /$($env:EXPECTED_SIGNER)/"
+          } else {
+            Write-Host "::notice::Windows signing: CONFIGURATION REQUIRED (SIGNPATH_ORGANIZATION_ID unset); building unsigned and asserting NotSigned"
+          }
+
+      # Build the executables WITHOUT bundling, so they can be signed before the
+      # NSIS bundler packs them into the installer.
+      - name: Build the Windows executables
+        shell: pwsh
+        working-directory: desktop
+        run: |
+          npx tauri build --ci --no-bundle
+          if ($LASTEXITCODE -ne 0) { throw "tauri build failed ($LASTEXITCODE)" }
+
+      - name: Verify the Rust build outputs
         shell: pwsh
         run: |
-          $installer = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis -Filter *.exe | Select-Object -First 1
-          if (-not $installer -or $installer.Length -eq 0) { throw 'NSIS installer missing or empty' }
+          $releaseDir = 'desktop/src-tauri/target/release'
+          $exes = @(Get-ChildItem $releaseDir -Filter *.exe -File)
+          Write-Host "Executables in ${releaseDir}:"
+          foreach ($exe in $exes) { Write-Host "  $($exe.Name)" }
+          if ($exes.Name -notcontains 'desktop.exe') {
+            throw "desktop.exe is missing from $releaseDir; the cargo package or mainBinaryName changed, and everything below signs the wrong file"
+          }
+
+      # ---- Phase 1: sign the executables -------------------------------------
+      # The sidecars are signed here rather than after bundling because the NSIS
+      # bundler packs them from desktop/src-tauri/binaries/, so the signed copies
+      # have to be back in that directory before `tauri bundle` runs.
+      - name: Stage the unsigned Windows executables
+        if: steps.signpath.outputs.configured == 'true'
+        shell: pwsh
+        run: |
+          $staging = Join-Path $env:RUNNER_TEMP 'signpath-binaries'
+          if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Copy-Item 'desktop/src-tauri/target/release/desktop.exe' (Join-Path $staging 'desktop.exe')
+          foreach ($name in @('career-data', 'careerops-node')) {
+            $source = "desktop/src-tauri/binaries/$name-$($env:SIGNING_TRIPLE).exe"
+            if (-not (Test-Path $source)) { throw "sidecar missing: $source" }
+            Copy-Item $source (Join-Path $staging "$name.exe")
+          }
+          Compress-Archive -Path (Join-Path $staging '*.exe') -DestinationPath (Join-Path $env:RUNNER_TEMP 'windows-unsigned-binaries.zip') -Force
+
+      - name: Upload the unsigned Windows executables
+        id: unsigned_binaries
+        if: steps.signpath.outputs.configured == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-unsigned-binaries
+          path: ${{ runner.temp }}/windows-unsigned-binaries.zip
+          retention-days: 1
+
+      - name: Sign the Windows executables with SignPath
+        if: steps.signpath.outputs.configured == 'true'
+        uses: SignPath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: windows-binaries
+          github-artifact-id: ${{ steps.unsigned_binaries.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: ${{ runner.temp }}/signed-binaries
+
+      - name: Install the signed executables into the build tree
+        if: steps.signpath.outputs.configured == 'true'
+        shell: pwsh
+        run: |
+          $signed = Join-Path $env:RUNNER_TEMP 'signed-binaries'
+          $releaseDir = 'desktop/src-tauri/target/release'
+          $binaries = 'desktop/src-tauri/binaries'
+          function Get-SignedBinary([string] $fileName) {
+            $found = @(Get-ChildItem $signed -Recurse -File -Filter $fileName)
+            if ($found.Count -ne 1) { throw "expected exactly one $fileName under $signed, found $($found.Count)" }
+            return $found[0].FullName
+          }
+          $verify = New-Object System.Collections.ArrayList
+          $desktopExe = Join-Path $releaseDir 'desktop.exe'
+          Copy-Item (Get-SignedBinary 'desktop.exe') $desktopExe -Force
+          [void] $verify.Add($desktopExe)
+          foreach ($name in @('career-data', 'careerops-node')) {
+            $signedExe = Get-SignedBinary "$name.exe"
+            # The bundler's source of truth, and every staged copy cargo made --
+            # missing one of these is how an unsigned sidecar reaches the
+            # installer while every other check still reports success.
+            $targets = @("$binaries/$name-$($env:SIGNING_TRIPLE).exe")
+            foreach ($staged in @("$releaseDir/$name.exe", "$releaseDir/$name-$($env:SIGNING_TRIPLE).exe")) {
+              if (Test-Path $staged) { $targets += $staged }
+            }
+            foreach ($target in $targets) {
+              Copy-Item $signedExe $target -Force
+              [void] $verify.Add($target)
+            }
+          }
+          foreach ($target in $verify) {
+            $signature = Get-AuthenticodeSignature $target
+            Write-Host "  $target -> $($signature.Status) $($signature.SignerCertificate.Subject)"
+            if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch $env:EXPECTED_SIGNER) {
+              throw "$target is not signed by the expected signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
+            }
+          }
+
+      # `tauri bundle` is the ONLY producer of a .nsis.zip.sig when SignPath is
+      # not configured, so the updater key has to be present on both paths.
+      - name: Bundle the NSIS installer
+        shell: pwsh
+        working-directory: desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          npx tauri bundle --ci --bundles nsis
+          if ($LASTEXITCODE -ne 0) { throw "tauri bundle failed ($LASTEXITCODE)" }
+
+      # ---- Phase 2: sign the installer, then rebuild the updater archive ------
+      - name: Upload the unsigned Windows installer
+        id: unsigned_installer
+        if: steps.signpath.outputs.configured == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-unsigned-installer
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 1
+
+      - name: Sign the Windows installer with SignPath
+        if: steps.signpath.outputs.configured == 'true'
+        uses: SignPath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: windows-installer
+          github-artifact-id: ${{ steps.unsigned_installer.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: ${{ runner.temp }}/signed-installer
+
+      - name: Replace the unsigned installer with the signed installer
+        if: steps.signpath.outputs.configured == 'true'
+        shell: pwsh
+        run: |
+          $bundle = 'desktop/src-tauri/target/release/bundle/nsis'
+          $installer = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.exe' })
+          if ($installer.Count -ne 1) { throw "expected exactly one NSIS installer in $bundle, found $($installer.Count)" }
+          $signed = @(Get-ChildItem (Join-Path $env:RUNNER_TEMP 'signed-installer') -Recurse -File -Filter *.exe)
+          if ($signed.Count -ne 1) { throw "expected exactly one signed installer from SignPath, found $($signed.Count)" }
+          Copy-Item $signed[0].FullName $installer[0].FullName -Force
+          $signature = Get-AuthenticodeSignature $installer[0].FullName
+          Write-Host "  $($installer[0].Name) -> $($signature.Status) $($signature.SignerCertificate.Subject)"
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch $env:EXPECTED_SIGNER) {
+            throw "the signed installer is not signed by the expected signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
+          }
+
+      # Tauri already built and signed an updater archive around the UNSIGNED
+      # installer. Deleting it before repacking is what stops that stale archive
+      # (and its valid-looking .sig) from being collected and published.
+      - name: Delete the stale updater archive and signature
+        if: steps.signpath.outputs.configured == 'true'
+        shell: pwsh
+        run: |
+          $bundle = 'desktop/src-tauri/target/release/bundle/nsis'
+          $stale = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.nsis.zip' -or $_.Name -like '*.nsis.zip.sig' })
+          foreach ($file in $stale) { Write-Host "  removing $($file.Name)"; Remove-Item $file.FullName -Force }
+          $left = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.nsis.zip' -or $_.Name -like '*.nsis.zip.sig' })
+          if ($left.Count -ne 0) { throw "stale updater archives remain: $($left.Name -join ', ')" }
+
+      - name: Repack the signed installer into the updater archive
+        if: steps.signpath.outputs.configured == 'true'
+        shell: pwsh
+        run: |
+          $bundle = 'desktop/src-tauri/target/release/bundle/nsis'
+          $installer = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.exe' })
+          if ($installer.Count -ne 1) { throw "expected exactly one NSIS installer in $bundle, found $($installer.Count)" }
+          # Same base name Tauri used, so artifacts.mjs collect and the updater
+          # manifest keep finding it.
+          $zipPath = $installer[0].FullName -replace '\.exe$', '.nsis.zip'
+          Compress-Archive -Path $installer[0].FullName -DestinationPath $zipPath -Force
+          if (-not (Test-Path $zipPath)) { throw "failed to create the updater archive $zipPath" }
+          Write-Host "  repacked $(Split-Path $zipPath -Leaf)"
+
+      - name: Sign the updater archive with the Tauri updater key
+        if: steps.signpath.outputs.configured == 'true'
+        shell: pwsh
+        working-directory: desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $bundle = 'src-tauri/target/release/bundle/nsis'
+          $zip = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.nsis.zip' })
+          if ($zip.Count -ne 1) { throw "expected exactly one updater archive in $bundle, found $($zip.Count)" }
+          $zipPath = $zip[0].FullName
+          npx tauri signer sign $zipPath
+          if ($LASTEXITCODE -ne 0) { throw "tauri signer sign failed ($LASTEXITCODE)" }
+          if (-not (Test-Path "$zipPath.sig")) { throw "tauri signer sign produced no .sig next to $($zip[0].Name)" }
+
+      # ---- Post-conditions: always, configured or not ------------------------
+      # Asserting NotSigned on the unconfigured path is what stops a half-signed
+      # release -- an unsigned build that silently skipped a signing step reads
+      # identically to a successful one without it.
+      - name: Verify the Authenticode signature of the packaged installer
+        shell: pwsh
+        env:
+          CONFIGURED: ${{ steps.signpath.outputs.configured }}
+        run: |
+          $bundle = 'desktop/src-tauri/target/release/bundle/nsis'
+          $zip = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.nsis.zip' })
+          if ($zip.Count -ne 1) { throw "expected exactly one updater archive in $bundle, found $($zip.Count)" }
+          if (-not (Test-Path "$($zip[0].FullName).sig")) { throw "the updater archive has no .sig" }
+          $extract = Join-Path $env:RUNNER_TEMP 'nsis-check'
+          if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
+          Expand-Archive -Path $zip[0].FullName -DestinationPath $extract
+          $exes = @(Get-ChildItem $extract -Recurse -File | Where-Object { $_.Extension -eq '.exe' })
+          if ($exes.Count -ne 1) { throw "expected exactly one executable inside the updater archive, found $($exes.Count)" }
+          $signature = Get-AuthenticodeSignature $exes[0].FullName
+          Write-Host "archived installer: $($exes[0].Name) -> $($signature.Status) $($signature.SignerCertificate.Subject)"
+          if ($env:CONFIGURED -eq 'true') {
+            if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch $env:EXPECTED_SIGNER) {
+              throw "the archived installer is not signed by the expected signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
+            }
+          } elseif ($signature.Status -ne 'NotSigned') {
+            throw "SignPath is not configured, but the archived installer reports $($signature.Status); refusing a half-signed release"
+          }
+
+      - name: Verify the updater archive signature
+        shell: pwsh
+        run: |
+          $bundle = 'desktop/src-tauri/target/release/bundle/nsis'
+          $zip = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.nsis.zip' })
+          if ($zip.Count -ne 1) { throw "expected exactly one updater archive in $bundle, found $($zip.Count)" }
+          $zipPath = $zip[0].FullName
+          $sigPath = "$zipPath.sig"
+          # Read the shipped key from the config rather than pasting a copy here:
+          # a verifier checked against a key nobody ships proves nothing.
+          $pubkey = node -p "require('./desktop/src-tauri/tauri.conf.json').plugins.updater.pubkey"
+          if ($LASTEXITCODE -ne 0) { throw "could not read plugins.updater.pubkey from tauri.conf.json ($LASTEXITCODE)" }
+          node scripts/release/verify-minisign.mjs --pubkey "$pubkey" --file $zipPath --sig $sigPath
+          if ($LASTEXITCODE -ne 0) { throw "the updater archive signature does not verify against the shipped public key ($LASTEXITCODE)" }
+          # Negative control, in the same run: a verifier that accepts everything
+          # would pass the check above too.
+          $tampered = Join-Path $env:RUNNER_TEMP 'tampered.nsis.zip'
+          Copy-Item $zipPath $tampered -Force
+          $bytes = [System.IO.File]::ReadAllBytes($tampered)
+          $bytes[$bytes.Length - 1] = $bytes[$bytes.Length - 1] -bxor 0xFF
+          [System.IO.File]::WriteAllBytes($tampered, $bytes)
+          node scripts/release/verify-minisign.mjs --pubkey "$pubkey" --file $tampered --sig $sigPath
+          if ($LASTEXITCODE -eq 0) { throw "the minisign verifier accepted a tampered archive" }
+          Write-Host "negative control passed: the tampered archive was rejected"
+
+      - name: Verify installed Windows runtime
+        shell: pwsh
+        env:
+          CONFIGURED: ${{ steps.signpath.outputs.configured }}
+        run: |
+          $bundle = 'desktop/src-tauri/target/release/bundle/nsis'
+          $installer = @(Get-ChildItem $bundle -File | Where-Object { $_.Name -like '*.exe' })
+          if ($installer.Count -ne 1 -or $installer[0].Length -eq 0) { throw 'NSIS installer missing or empty' }
           $installDir = Join-Path $env:RUNNER_TEMP 'CareerOps-installed'
-          $process = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          $process = Start-Process -FilePath $installer[0].FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "NSIS install failed with exit code $($process.ExitCode)" }
           node desktop/scripts/verify-packaged-runtime.mjs --install-dir $installDir
-          $signature = Get-AuthenticodeSignature (Join-Path $installDir 'runtime/careerops-node-runtime.exe')
-          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Node\.js Foundation|OpenJS Foundation') {
-            throw "Installed Node.js runtime signature is invalid or has the wrong signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
+          if ($LASTEXITCODE -ne 0) { throw "verify-packaged-runtime.mjs --install-dir failed ($LASTEXITCODE)" }
+          # Allowlist every PE the installer puts on disk. An executable nobody
+          # listed is either a new artifact that nobody decided how to sign, or
+          # one that quietly stayed unsigned -- both fail the build.
+          $ours = @('desktop.exe', 'career-data.exe', 'careerops-node.exe')
+          $pes = @(Get-ChildItem $installDir -Recurse -File | Where-Object { $_.Extension -in @('.exe', '.dll') })
+          Write-Host "Portable executables under ${installDir}:"
+          foreach ($pe in $pes) {
+            $relative = $pe.FullName.Substring($installDir.Length).TrimStart('\')
+            $signature = Get-AuthenticodeSignature $pe.FullName
+            Write-Host "  $relative -> $($signature.Status) $($signature.SignerCertificate.Subject)"
           }
+          foreach ($pe in $pes) {
+            $relative = $pe.FullName.Substring($installDir.Length).TrimStart('\')
+            $signature = Get-AuthenticodeSignature $pe.FullName
+            if ($relative -eq 'runtime\careerops-node-runtime.exe') {
+              # Node.js upstream, SHA-pinned by verify-packaged-runtime.mjs and never re-signed.
+              if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Node\.js Foundation|OpenJS Foundation') {
+                throw "Installed Node.js runtime signature is invalid or has the wrong signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
+              }
+              continue
+            }
+            # NSIS writes uninstall.exe at install time, so it can never be signed.
+            if ($relative -eq 'uninstall.exe') { continue }
+            if ($ours -contains $relative) {
+              if ($env:CONFIGURED -eq 'true') {
+                if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch $env:EXPECTED_SIGNER) {
+                  throw "$relative is not signed by the expected signer: $($signature.Status) $($signature.SignerCertificate.Subject)"
+                }
+              } elseif ($signature.Status -ne 'NotSigned') {
+                throw "SignPath is not configured, but $relative reports $($signature.Status); refusing a half-signed release"
+              }
+              continue
+            }
+            throw "unexpected portable executable in the install directory: $relative (not on the allowlist)"
+          }
+
       - name: Collect canonical artifacts
         shell: bash
         env:
@@ -187,7 +506,7 @@ jobs:
 
   publish-release:
     needs: [detect-release, build-macos]
-    if: needs.detect-release.outputs.should_release == 'true'
+    if: github.event_name == 'push' && needs.detect-release.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
