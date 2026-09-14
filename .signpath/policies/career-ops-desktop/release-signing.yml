@@ -1,0 +1,42 @@
+# SignPath trusted-build-system policy for the `release-signing` signing policy
+# of the `career-ops-desktop` project.
+#
+# SignPath reads this file from the DEFAULT BRANCH of this repository (confirmed
+# in https://docs.signpath.io/trusted-build-systems/github), not from the branch
+# being built -- which is what makes it a control rather than a suggestion: a
+# release branch cannot relax its own signing requirements, because only a merge
+# to main can change these rules.
+#
+# Every signing request submitted against `release-signing` is refused unless
+# the originating GitHub Actions run satisfies all of the conditions below. The
+# `test-signing` policy deliberately has no such file: it issues test
+# certificates only, and the dry runs that use it are exactly the runs that must
+# still work before the production controls are in place.
+github-policies:
+  runners:
+    # No self-hosted runners. A self-hosted runner is a machine outside GitHub's
+    # control that can substitute arbitrary bytes for the artifact between the
+    # build and the upload, which would make everything else here decorative.
+    require_github_hosted: true
+
+  build:
+    # A re-run replays a workflow against a build that already happened; its
+    # inputs are no longer what a reviewer diffed. New commit, new run.
+    disallow_reruns: true
+
+  branch_rulesets:
+    # PREREQUISITE (see the PR description): these require GitHub *rulesets* on
+    # this repository -- classic branch protection does NOT satisfy them, and a
+    # signing request is refused if no matching ruleset exists. `enforced_from`
+    # is deliberately omitted, so the rules are evaluated at signing time rather
+    # than required to have been in place for the whole audited history, which
+    # a fork with pre-existing history cannot demonstrate.
+    - condition:
+        rules:
+          - block_force_pushes: true
+          - require_pull_request:
+              min_required_approvals: 1
+      # No bypass actors: an admin push that skipped review must not be
+      # signable, which is the one path a maintainer would otherwise take
+      # "just this once" on release day.
+      allow_bypass_actors: false
