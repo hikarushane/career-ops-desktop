@@ -44,6 +44,14 @@ Download `CareerOps_<version>_Windows.exe` or `CareerOps-Windows-<version>.zip` 
 
 > Until signed public releases are available, macOS or Windows may show the operating system's standard warning for unsigned applications.
 
+### Code signing policy
+
+Windows installers and executables are signed with a certificate issued to SignPath Foundation: free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Team roles: committers, reviewers and approvers are the maintainer [@hikarushane](https://github.com/hikarushane); external contributions are merged only through reviewed pull requests.
+- Only binaries built by this repository's GitHub Actions workflows from this repository's source are signed; every release signing request is approved manually by an approver. The signature attests that the binaries were built by this repository's CI from this repository's source; dependency integrity relies on the reviewed lockfiles.
+- Privacy policy: the app collects and transmits no user data. The built-in updater only reads `latest.json` from GitHub Releases. All job-search data stays in a local folder chosen by the user.
+
 Every release also publishes `SHA256SUMS.txt`, `release-provenance.json`, signed updater archives, and `latest.json`. Verify downloads against the checksum manifest when installing outside the app.
 
 ## First launch

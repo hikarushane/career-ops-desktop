@@ -44,6 +44,14 @@ brew install --cask <owner>/<tap>/career-ops
 
 > 在正式簽章的公開 release 尚未提供前，macOS 或 Windows 可能會顯示系統對未簽章 App 的標準安全提示。
 
+### 程式碼簽章政策
+
+Windows 版安裝檔與執行檔由 SignPath Foundation 的憑證簽章：Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org)。
+
+- 團隊角色：提交者（Committers）、審查者（Reviewers）與核准者（Approvers）皆為維護者 [@hikarushane](https://github.com/hikarushane)；外部貢獻一律經 pull request 審查後合併。
+- 只簽由本 repo 的 GitHub Actions 從本 repo 原始碼建置的檔案；每次 release 的簽章請求都由核准者手動核准。簽章證明檔案由本 repo 的 CI 從本 repo 原始碼建置；依賴套件的完整性依靠經審查的 lockfile。
+- 隱私政策：本程式不蒐集、不傳送任何使用者資料；自動更新只向 GitHub Releases 讀取 `latest.json`。求職資料全部存在使用者自己選擇的本機資料夾。
+
 每個 release 也會發布 `SHA256SUMS.txt`、`release-provenance.json`、已簽章 updater archives 與 `latest.json`。從 App 外安裝時，請用 checksum manifest 驗證下載內容。
 
 ## 第一次啟動
