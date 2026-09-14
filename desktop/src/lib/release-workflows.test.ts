@@ -64,10 +64,11 @@ describe('release artifact finalization', () => {
       'CareerOps_1.2.3_macOS.dmg',
       'CareerOps_1.2.3_Windows.exe',
       'CareerOps_1.2.3_macOS.app.tar.gz',
-      'CareerOps_1.2.3_Windows.nsis.zip',
     ]) write(assets, name, `artifact:${name}`);
     write(assets, 'CareerOps_1.2.3_macOS.app.tar.gz.sig', 'mac-signature');
-    write(assets, 'CareerOps_1.2.3_Windows.nsis.zip.sig', 'win-signature');
+    // Tauri 2's v2 updater format reuses the NSIS installer itself, so the
+    // Windows updater signature sits next to the .exe; no .nsis.zip is built.
+    write(assets, 'CareerOps_1.2.3_Windows.exe.sig', 'win-signature');
     write(assets, 'macos-target.json', '{"platform":"darwin-aarch64"}\n');
     write(assets, 'windows-target.json', '{"platform":"windows-x86_64"}\n');
 
@@ -87,10 +88,18 @@ describe('release artifact finalization', () => {
       'CareerOps-macOS-1.2.3.zip',
       'CareerOps-Windows-1.2.3.zip',
       'CareerOps_1.2.3_macOS.app.tar.gz',
-      'CareerOps_1.2.3_Windows.nsis.zip',
       'latest.json',
       'release-provenance.json',
     ]) expect(sums).toContain(name);
+    expect(sums).not.toContain('.nsis.zip');
+    // The Windows updater downloads the installer itself, so latest.json has to
+    // point at the .exe -- a url naming an archive nobody builds is a silently
+    // broken updater, not a failed release.
+    const latest = JSON.parse(readFileSync(join(assets, 'latest.json'), 'utf8'));
+    expect(latest.platforms['windows-x86_64']).toEqual({
+      signature: 'win-signature',
+      url: 'https://github.com/acme/career-ops/releases/download/desktop-v1.2.3/CareerOps_1.2.3_Windows.exe',
+    });
     expect(JSON.parse(readFileSync(join(assets, 'release-provenance.json'), 'utf8'))).toEqual({
       version: '1.2.3',
       gitSha: 'b'.repeat(40),
