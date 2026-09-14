@@ -161,6 +161,9 @@ const SYSTEM_PATHS = [
   // updater can never replace it with upstream defaults.
   '.fork/OWNERSHIP.md',
   '.fork/protected-paths.json',
+  // SignPath trusted-build-system policies: release-signing rules read from
+  // the default branch, owned by the Desktop fork like the release scripts.
+  '.signpath/',
   '.githooks/',
   'packaging/',
   'scripts/release/',

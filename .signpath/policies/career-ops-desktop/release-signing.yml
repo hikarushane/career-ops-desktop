@@ -1,0 +1,32 @@
+# SignPath trusted-build-system policy for the `release-signing` signing policy
+# of the `career-ops-desktop` project.
+#
+# SignPath reads this file from the DEFAULT BRANCH of this repository (confirmed
+# in https://docs.signpath.io/trusted-build-systems/github), not from the branch
+# being built -- which is what makes it a control rather than a suggestion: a
+# release branch cannot relax its own signing requirements, because only a merge
+# to main can change these rules.
+#
+# Every signing request submitted against `release-signing` is refused unless
+# the originating GitHub Actions run satisfies all of the conditions below. The
+# `test-signing` policy deliberately has no such file: it issues test
+# certificates only, and the dry runs that use it are exactly the runs that must
+# still work before the production controls are in place.
+github-policies:
+  runners:
+    # No self-hosted runners. A self-hosted runner is a machine outside GitHub's
+    # control that can substitute arbitrary bytes for the artifact between the
+    # build and the upload, which would make everything else here decorative.
+    require_github_hosted: true
+
+  build:
+    # A re-run replays a workflow against a build that already happened; its
+    # inputs are no longer what a reviewer diffed. New commit, new run.
+    disallow_reruns: true
+
+  # No branch ruleset requirement for now: SignPath's `require_pull_request`
+  # needs a GitHub *ruleset* with at least one approval and no bypass actors,
+  # and a single-maintainer repository cannot satisfy that (GitHub does not let
+  # authors approve their own pull requests). The human gate for release
+  # signing is the approver on the SignPath side, who diffs the release commit
+  # before approving. Revisit when the project has a second reviewer.
