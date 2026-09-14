@@ -24,19 +24,9 @@ github-policies:
     # inputs are no longer what a reviewer diffed. New commit, new run.
     disallow_reruns: true
 
-  branch_rulesets:
-    # PREREQUISITE (see the PR description): these require GitHub *rulesets* on
-    # this repository -- classic branch protection does NOT satisfy them, and a
-    # signing request is refused if no matching ruleset exists. `enforced_from`
-    # is deliberately omitted, so the rules are evaluated at signing time rather
-    # than required to have been in place for the whole audited history, which
-    # a fork with pre-existing history cannot demonstrate.
-    - condition:
-        rules:
-          - block_force_pushes: true
-          - require_pull_request:
-              min_required_approvals: 1
-      # No bypass actors: an admin push that skipped review must not be
-      # signable, which is the one path a maintainer would otherwise take
-      # "just this once" on release day.
-      allow_bypass_actors: false
+  # No branch ruleset requirement for now: SignPath's `require_pull_request`
+  # needs a GitHub *ruleset* with at least one approval and no bypass actors,
+  # and a single-maintainer repository cannot satisfy that (GitHub does not let
+  # authors approve their own pull requests). The human gate for release
+  # signing is the approver on the SignPath side, who diffs the release commit
+  # before approving. Revisit when the project has a second reviewer.
