@@ -425,6 +425,11 @@ jobs:
           node scripts/release/verify-minisign.mjs --pubkey "$pubkey" --file $tampered --sig $sigPath
           if ($LASTEXITCODE -eq 0) { throw "the minisign verifier accepted a tampered installer" }
           Write-Host "negative control passed: the tampered installer was rejected"
+          # The step's result is the last native exit code, and the last native
+          # command above is the negative control, which is *supposed* to exit 1.
+          # Clear it so the expected rejection does not fail the step (run
+          # 34886768002 failed here with every check green).
+          $global:LASTEXITCODE = 0
 
       - name: Verify installed Windows runtime
         shell: pwsh

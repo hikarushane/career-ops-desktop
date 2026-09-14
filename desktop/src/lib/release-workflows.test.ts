@@ -321,6 +321,13 @@ describe('Windows release signing', () => {
     expect(minisign).toContain('$sigPath = "$installerPath.sig"');
     expect(minisign).toMatch(/--file \$tampered --sig \$sigPath/);
     expect(minisign).toMatch(/if \(\$LASTEXITCODE -eq 0\) \{ throw /);
+    // The negative control is the last native command of the step and exits 1
+    // on purpose; pwsh steps report the last native exit code, so it has to be
+    // cleared afterwards or the step fails with every check green (run
+    // 34886768002).
+    const negativeControl = minisign.indexOf('if ($LASTEXITCODE -eq 0) { throw');
+    const reset = minisign.indexOf('$global:LASTEXITCODE = 0');
+    expect(reset).toBeGreaterThan(negativeControl);
     expect(buildWindows).toContain('plugins.updater.pubkey');
     // Allowlist: an unexpected PE in the install directory fails the build.
     expect(buildWindows).toContain('careerops-node-runtime.exe');
