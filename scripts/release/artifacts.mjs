@@ -64,10 +64,13 @@ export function collectArtifacts({ platform, bundleDir, outputDir, version, targ
     copy(archive, `CareerOps_${version}_macOS.app.tar.gz`);
     copy(one(files, (path) => path === `${archive}.sig` || path.endsWith('.app.tar.gz.sig'), 'macOS updater signature'), `CareerOps_${version}_macOS.app.tar.gz.sig`);
   } else if (platform === 'windows') {
-    copy(one(files, (path) => path.endsWith('.exe'), 'NSIS installer'), `CareerOps_${version}_Windows.exe`);
-    const archive = one(files, (path) => path.endsWith('.nsis.zip'), 'Windows updater archive');
-    copy(archive, `CareerOps_${version}_Windows.nsis.zip`);
-    copy(one(files, (path) => path === `${archive}.sig` || path.endsWith('.nsis.zip.sig'), 'Windows updater signature'), `CareerOps_${version}_Windows.nsis.zip.sig`);
+    // With bundle.createUpdaterArtifacts the NSIS installer IS the Windows
+    // updater artifact (Tauri 2's v2 format): the bundler emits
+    // `CareerOps_<v>_x64-setup.exe` and `<same>.sig` and nothing else. A
+    // `.nsis.zip` only exists under the legacy "v1Compatible" setting.
+    const installer = one(files, (path) => path.endsWith('.exe'), 'NSIS installer');
+    copy(installer, `CareerOps_${version}_Windows.exe`);
+    copy(one(files, (path) => path === `${installer}.sig` || path.endsWith('-setup.exe.sig'), 'Windows updater signature'), `CareerOps_${version}_Windows.exe.sig`);
   } else {
     throw new Error(`unknown platform: ${platform}`);
   }
@@ -87,13 +90,14 @@ export function finalizeArtifacts({ root, assetsDir, version, repository, gitSha
   const macDmg = `CareerOps_${version}_macOS.dmg`;
   const winExe = `CareerOps_${version}_Windows.exe`;
   const macArchive = `CareerOps_${version}_macOS.app.tar.gz`;
-  const winArchive = `CareerOps_${version}_Windows.nsis.zip`;
   const macSignature = `${macArchive}.sig`;
-  const winSignature = `${winArchive}.sig`;
+  // The Windows updater downloads the installer itself, so its minisign
+  // signature is `<installer>.exe.sig` -- there is no separate archive.
+  const winSignature = `${winExe}.sig`;
   for (const filename of [macDmg, macArchive, macSignature, 'macos-target.json']) {
     if (!existsSync(join(assetsDir, filename))) throw new Error(`required release artifact missing: ${filename}`);
   }
-  const windowsFiles = [winExe, winArchive, winSignature, 'windows-target.json'];
+  const windowsFiles = [winExe, winSignature, 'windows-target.json'];
   const windowsPresent = windowsFiles.filter((filename) => existsSync(join(assetsDir, filename)));
   if (windowsPresent.length > 0 && windowsPresent.length < windowsFiles.length) {
     const missing = windowsFiles.filter((filename) => !windowsPresent.includes(filename));
@@ -115,7 +119,7 @@ export function finalizeArtifacts({ root, assetsDir, version, repository, gitSha
   const buildPlatforms = [macPlatform];
   if (withWindows) {
     const winPlatform = JSON.parse(readFileSync(join(assetsDir, 'windows-target.json'), 'utf8')).platform;
-    platforms[winPlatform] = { signature: readFileSync(join(assetsDir, winSignature), 'utf8').trim(), url: `${base}/${winArchive}` };
+    platforms[winPlatform] = { signature: readFileSync(join(assetsDir, winSignature), 'utf8').trim(), url: `${base}/${winExe}` };
     buildPlatforms.push(winPlatform);
   }
   const latest = { version, notes: section, pub_date: new Date().toISOString(), platforms };
@@ -126,7 +130,7 @@ export function finalizeArtifacts({ root, assetsDir, version, repository, gitSha
 
   const publicFiles = [
     macDmg, macArchive, macZip,
-    ...(withWindows ? [winExe, winArchive, winZip] : []),
+    ...(withWindows ? [winExe, winZip] : []),
     'latest.json', 'release-provenance.json',
   ];
   writeFileSync(join(assetsDir, 'SHA256SUMS.txt'), checksumLines(assetsDir, publicFiles));
