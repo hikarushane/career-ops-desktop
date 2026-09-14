@@ -9,6 +9,7 @@ use cap_std::ambient_authority;
 use cap_std::fs::{Dir, File as CapFile, OpenOptions as CapOpenOptions};
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -725,6 +726,10 @@ enum CreatedEntryKind {
 
 struct CreatedEntry {
     parent: Dir,
+    // Only the Windows Missing-branch conversion (release_created_entries)
+    // reads this; the handle-holding rollback never needs the path.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    parent_path: PathBuf,
     name: OsString,
     kind: CreatedEntryKind,
     identity: Option<EntryIdentity>,
@@ -732,6 +737,7 @@ struct CreatedEntry {
 
 fn created_entry(
     parent: &Dir,
+    parent_path: &Path,
     name: &OsStr,
     kind: CreatedEntryKind,
     metadata: &cap_std::fs::Metadata,
@@ -740,15 +746,16 @@ fn created_entry(
         parent: parent
             .try_clone()
             .map_err(|error| format!("cannot retain workspace directory capability: {error}"))?,
+        parent_path: parent_path.to_path_buf(),
         name: name.to_os_string(),
         kind,
         identity: entry_identity(metadata),
     })
 }
 
-fn rollback_created_entries(entries: &[CreatedEntry]) -> Vec<String> {
+fn rollback_created_entries(entries: Vec<CreatedEntry>) -> Vec<String> {
     let mut failures = Vec::new();
-    for entry in entries.iter().rev() {
+    for entry in entries.into_iter().rev() {
         let current = match entry.parent.symlink_metadata(&entry.name) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
@@ -776,6 +783,186 @@ fn rollback_created_entries(entries: &[CreatedEntry]) -> Vec<String> {
         }
     }
     failures
+}
+
+#[cfg(windows)]
+struct ReleasedCreatedEntry {
+    parent_path: PathBuf,
+    name: OsString,
+    kind: CreatedEntryKind,
+    identity: Option<EntryIdentity>,
+}
+
+#[cfg(windows)]
+fn release_created_entries(entries: Vec<CreatedEntry>) -> Vec<ReleasedCreatedEntry> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            let CreatedEntry {
+                parent,
+                parent_path,
+                name,
+                kind,
+                identity,
+            } = entry;
+            drop(parent);
+            ReleasedCreatedEntry {
+                parent_path,
+                name,
+                kind,
+                identity,
+            }
+        })
+        .collect()
+}
+
+#[cfg(windows)]
+fn open_relative_dir_nofollow(root: &Dir, relative: &Path) -> Result<Dir, String> {
+    let mut directory = root
+        .try_clone()
+        .map_err(|error| format!("cannot retain workspace directory capability: {error}"))?;
+    for component in relative.components() {
+        let Component::Normal(name) = component else {
+            return Err("workspace rollback parent is not relative".to_owned());
+        };
+        directory = directory.open_dir_nofollow(name).map_err(|error| {
+            format!(
+                "cannot open rollback directory {} without following links: {error}",
+                relative.display()
+            )
+        })?;
+    }
+    Ok(directory)
+}
+
+#[cfg(windows)]
+fn rollback_released_entries(root: &Dir, entries: Vec<ReleasedCreatedEntry>) -> Vec<String> {
+    let mut failures = Vec::new();
+    for entry in entries.into_iter().rev() {
+        let parent = match open_relative_dir_nofollow(root, &entry.parent_path) {
+            Ok(parent) => parent,
+            Err(error) => {
+                failures.push(error);
+                continue;
+            }
+        };
+        let current = match parent.symlink_metadata(&entry.name) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                failures.push(format!("cannot inspect rollback entry: {error}"));
+                continue;
+            }
+        };
+        if entry.identity.is_none() || entry_identity(&current) != entry.identity {
+            failures.push(format!(
+                "workspace entry {} was replaced during rollback and was preserved",
+                Path::new(&entry.name).display()
+            ));
+            continue;
+        }
+        let result = match entry.kind {
+            CreatedEntryKind::File => parent.remove_file(&entry.name),
+            CreatedEntryKind::Directory => parent.remove_dir(&entry.name),
+        };
+        if let Err(error) = result {
+            failures.push(format!(
+                "cannot roll back workspace entry {}: {error}",
+                Path::new(&entry.name).display()
+            ));
+        }
+    }
+    failures
+}
+
+#[cfg(windows)]
+fn rollback_released_staging(
+    parent: &Dir,
+    staging_name: &OsStr,
+    staging_identity: Option<EntryIdentity>,
+    entries: Vec<ReleasedCreatedEntry>,
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    let metadata = match parent.symlink_metadata(staging_name) {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            failures.push(format!(
+                "workspace staging directory changed during cleanup and was preserved: {error}"
+            ));
+            return failures;
+        }
+    };
+    if staging_identity.is_none() || entry_identity(&metadata) != staging_identity {
+        failures.push(
+            "workspace staging directory identity changed during cleanup and was preserved"
+                .to_owned(),
+        );
+        return failures;
+    }
+    let staging = match parent.open_dir_nofollow(staging_name) {
+        Ok(staging) => staging,
+        Err(error) => {
+            failures.push(format!(
+                "workspace staging directory changed during cleanup and was preserved: {error}"
+            ));
+            return failures;
+        }
+    };
+    let opened_identity = staging
+        .dir_metadata()
+        .ok()
+        .and_then(|value| entry_identity(&value));
+    if opened_identity != staging_identity {
+        failures.push(
+            "workspace staging directory identity changed during cleanup and was preserved"
+                .to_owned(),
+        );
+        return failures;
+    }
+    failures.extend(rollback_released_entries(&staging, entries));
+    drop(staging);
+
+    let metadata = match parent.symlink_metadata(staging_name) {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            failures.push(format!(
+                "workspace staging directory changed before final cleanup and was preserved: {error}"
+            ));
+            return failures;
+        }
+    };
+    if staging_identity.is_none() || entry_identity(&metadata) != staging_identity {
+        failures.push(
+            "workspace staging directory identity changed before final cleanup and was preserved"
+                .to_owned(),
+        );
+        return failures;
+    }
+    if let Err(error) = parent.remove_dir(staging_name) {
+        failures.push(format!(
+            "cannot roll back workspace staging directory: {error}"
+        ));
+    }
+    failures
+}
+
+#[cfg(windows)]
+fn staging_error_with_cleanup(
+    error: String,
+    parent: &Dir,
+    staging_name: &OsStr,
+    staging_identity: Option<EntryIdentity>,
+    entries: Vec<ReleasedCreatedEntry>,
+) -> String {
+    let rollback = rollback_released_staging(parent, staging_name, staging_identity, entries);
+    if rollback.is_empty() {
+        error
+    } else {
+        format!(
+            "{error}; staging cleanup incomplete: {}",
+            rollback.join("; ")
+        )
+    }
 }
 
 fn copy_seed_contents<F>(
@@ -818,6 +1005,7 @@ where
             })?;
             created.push(created_entry(
                 target,
+                relative_parent,
                 &name,
                 CreatedEntryKind::Directory,
                 &directory.dir_metadata().map_err(|error| {
@@ -849,6 +1037,7 @@ where
             })?;
             created.push(created_entry(
                 target,
+                relative_parent,
                 &name,
                 CreatedEntryKind::File,
                 &destination
@@ -923,6 +1112,7 @@ where
                 })?;
                 created.push(created_entry(
                     &directory,
+                    current.parent().unwrap_or_else(|| Path::new("")),
                     name,
                     CreatedEntryKind::Directory,
                     &child.dir_metadata().map_err(|error| {
@@ -979,7 +1169,7 @@ where
         Ok(())
     });
     if let Err(error) = result {
-        let rollback = rollback_created_entries(&created);
+        let rollback = rollback_created_entries(created);
         return Err(if rollback.is_empty() {
             error
         } else {
@@ -1195,6 +1385,115 @@ fn install_staging_root(
     ))
 }
 
+#[cfg(windows)]
+fn finish_missing_root_install<F>(
+    location: &WorkspaceLocation,
+    staging_name: OsString,
+    staging_root: Dir,
+    staging_entry: CreatedEntry,
+    staged_entries: Vec<CreatedEntry>,
+    hook: &mut F,
+) -> Result<(), String>
+where
+    F: FnMut(BootstrapEvent) -> Result<(), String>,
+{
+    let staging_identity = staging_entry.identity;
+    let staged_entries = release_created_entries(staged_entries);
+    drop(staging_root);
+    drop(staging_entry);
+
+    if let Err(error) = hook(BootstrapEvent::BeforeMissingRootInstall(
+        staging_name.clone(),
+    )) {
+        return Err(staging_error_with_cleanup(
+            error,
+            &location.parent,
+            &staging_name,
+            staging_identity,
+            staged_entries,
+        ));
+    }
+
+    let current_staging = match location.parent.open_dir_nofollow(&staging_name) {
+        Ok(current) => current,
+        Err(error) => {
+            return Err(staging_error_with_cleanup(
+                format!("workspace staging directory changed before install: {error}"),
+                &location.parent,
+                &staging_name,
+                staging_identity,
+                staged_entries,
+            ));
+        }
+    };
+    let current_identity = current_staging
+        .dir_metadata()
+        .ok()
+        .and_then(|value| entry_identity(&value));
+    if staging_identity.is_none() || current_identity != staging_identity {
+        drop(current_staging);
+        return Err(staging_error_with_cleanup(
+            "workspace staging directory identity changed before install".to_owned(),
+            &location.parent,
+            &staging_name,
+            staging_identity,
+            staged_entries,
+        ));
+    }
+    drop(current_staging);
+
+    match location.parent.symlink_metadata(&location.name) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Ok(_) => {
+            return Err(staging_error_with_cleanup(
+                "workspace target changed before atomic install".to_owned(),
+                &location.parent,
+                &staging_name,
+                staging_identity,
+                staged_entries,
+            ));
+        }
+        Err(error) => {
+            return Err(staging_error_with_cleanup(
+                format!("cannot inspect workspace before atomic install: {error}"),
+                &location.parent,
+                &staging_name,
+                staging_identity,
+                staged_entries,
+            ));
+        }
+    }
+
+    if let Err(error) = install_staging_root(
+        &location.parent,
+        &location.parent_path,
+        &staging_name,
+        &location.name,
+    ) {
+        return Err(staging_error_with_cleanup(
+            format!("cannot atomically install workspace: {error}"),
+            &location.parent,
+            &staging_name,
+            staging_identity,
+            staged_entries,
+        ));
+    }
+
+    hook(BootstrapEvent::AfterMissingRootInstall)?;
+    let installed = location
+        .parent
+        .open_dir_nofollow(&location.name)
+        .map_err(|error| format!("installed workspace changed before validation: {error}"))?;
+    let installed_identity = installed
+        .dir_metadata()
+        .ok()
+        .and_then(|value| entry_identity(&value));
+    if staging_identity.is_none() || installed_identity != staging_identity {
+        return Err("installed workspace directory identity changed".to_owned());
+    }
+    Ok(())
+}
+
 fn initialize_workspace_from_seed_with_hook<F>(
     workspace: &Path,
     seed: &Path,
@@ -1250,6 +1549,7 @@ where
                 .map_err(|error| format!("cannot inspect workspace staging directory: {error}"))?;
             let staging_entry = created_entry(
                 &location.parent,
+                Path::new(""),
                 &staging_name,
                 CreatedEntryKind::Directory,
                 &staging_metadata,
@@ -1257,7 +1557,9 @@ where
             let staged_entries = match populate_empty_root(&staging_root, seed, &mut hook) {
                 Ok(entries) => entries,
                 Err(error) => {
-                    let rollback = rollback_created_entries(&[staging_entry]);
+                    #[cfg(windows)]
+                    drop(staging_root);
+                    let rollback = rollback_created_entries(vec![staging_entry]);
                     return Err(if rollback.is_empty() {
                         error
                     } else {
@@ -1268,64 +1570,79 @@ where
                     });
                 }
             };
-            if let Err(error) = hook(BootstrapEvent::BeforeMissingRootInstall(
-                staging_name.clone(),
-            )) {
-                let _ = rollback_created_entries(&staged_entries);
-                let _ = rollback_created_entries(&[staging_entry]);
-                return Err(error);
-            }
-            let current_staging = match location.parent.open_dir_nofollow(&staging_name) {
-                Ok(current) => current,
-                Err(error) => {
-                    let _ = rollback_created_entries(&staged_entries);
-                    let _ = rollback_created_entries(&[staging_entry]);
-                    return Err(format!(
-                        "workspace staging directory changed before install: {error}"
-                    ));
+
+            #[cfg(windows)]
+            finish_missing_root_install(
+                &location,
+                staging_name,
+                staging_root,
+                staging_entry,
+                staged_entries,
+                &mut hook,
+            )?;
+
+            #[cfg(not(windows))]
+            {
+                if let Err(error) = hook(BootstrapEvent::BeforeMissingRootInstall(
+                    staging_name.clone(),
+                )) {
+                    let _ = rollback_created_entries(staged_entries);
+                    let _ = rollback_created_entries(vec![staging_entry]);
+                    return Err(error);
                 }
-            };
-            if !same_cap_directory(&staging_root, &current_staging)? {
-                let _ = rollback_created_entries(&staged_entries);
-                let _ = rollback_created_entries(&[staging_entry]);
-                return Err(
-                    "workspace staging directory identity changed before install".to_owned(),
-                );
-            }
-            match location.parent.symlink_metadata(&location.name) {
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Ok(_) => {
-                    let _ = rollback_created_entries(&staged_entries);
-                    let _ = rollback_created_entries(&[staging_entry]);
-                    return Err("workspace target changed before atomic install".to_owned());
+                let current_staging = match location.parent.open_dir_nofollow(&staging_name) {
+                    Ok(current) => current,
+                    Err(error) => {
+                        let _ = rollback_created_entries(staged_entries);
+                        let _ = rollback_created_entries(vec![staging_entry]);
+                        return Err(format!(
+                            "workspace staging directory changed before install: {error}"
+                        ));
+                    }
+                };
+                if !same_cap_directory(&staging_root, &current_staging)? {
+                    let _ = rollback_created_entries(staged_entries);
+                    let _ = rollback_created_entries(vec![staging_entry]);
+                    return Err(
+                        "workspace staging directory identity changed before install".to_owned(),
+                    );
                 }
-                Err(error) => {
-                    let _ = rollback_created_entries(&staged_entries);
-                    let _ = rollback_created_entries(&[staging_entry]);
-                    return Err(format!(
-                        "cannot inspect workspace before atomic install: {error}"
-                    ));
+                match location.parent.symlink_metadata(&location.name) {
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                    Ok(_) => {
+                        let _ = rollback_created_entries(staged_entries);
+                        let _ = rollback_created_entries(vec![staging_entry]);
+                        return Err("workspace target changed before atomic install".to_owned());
+                    }
+                    Err(error) => {
+                        let _ = rollback_created_entries(staged_entries);
+                        let _ = rollback_created_entries(vec![staging_entry]);
+                        return Err(format!(
+                            "cannot inspect workspace before atomic install: {error}"
+                        ));
+                    }
                 }
-            }
-            if let Err(error) = install_staging_root(
-                &location.parent,
-                &location.parent_path,
-                &staging_name,
-                &location.name,
-            ) {
-                let _ = rollback_created_entries(&staged_entries);
-                let _ = rollback_created_entries(&[staging_entry]);
-                return Err(format!("cannot atomically install workspace: {error}"));
-            }
-            hook(BootstrapEvent::AfterMissingRootInstall)?;
-            let installed = location
-                .parent
-                .open_dir_nofollow(&location.name)
-                .map_err(|error| {
-                    format!("installed workspace changed before validation: {error}")
-                })?;
-            if !same_cap_directory(&staging_root, &installed)? {
-                return Err("installed workspace directory identity changed".to_owned());
+                if let Err(error) = install_staging_root(
+                    &location.parent,
+                    &location.parent_path,
+                    &staging_name,
+                    &location.name,
+                ) {
+                    let _ = rollback_created_entries(staged_entries);
+                    let _ = rollback_created_entries(vec![staging_entry]);
+                    return Err(format!("cannot atomically install workspace: {error}"));
+                }
+                hook(BootstrapEvent::AfterMissingRootInstall)?;
+                let installed =
+                    location
+                        .parent
+                        .open_dir_nofollow(&location.name)
+                        .map_err(|error| {
+                            format!("installed workspace changed before validation: {error}")
+                        })?;
+                if !same_cap_directory(&staging_root, &installed)? {
+                    return Err("installed workspace directory identity changed".to_owned());
+                }
             }
         }
     }
@@ -1645,6 +1962,78 @@ pub fn initialize_workspace(
     initialize_workspace_from_seed(Path::new(&path), &resource_dir.join("workspace-seed"))
 }
 
+#[cfg(windows)]
+fn validate_workspace_folder_prefix(path: &Path) -> Result<(), String> {
+    use std::path::Prefix;
+
+    // Only a plain drive-letter path (`D:\...`) is a folder the user can have
+    // picked in the directory dialog. Every other Windows prefix names
+    // something else: `\\server\share` is a remote share, `\\?\` and
+    // `\\?\UNC\` skip Win32 path normalisation, and `\\.\` addresses a device
+    // rather than a file. None of them belongs in a "show me my workspace"
+    // request, so they are refused rather than handed to the shell.
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_)) => Ok(()),
+        _ => Err("workspace folder must be on a local drive".to_owned()),
+    }
+}
+
+#[cfg(not(windows))]
+fn validate_workspace_folder_prefix(_path: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+/// Check that `path` is a real, directly named local directory.
+///
+/// Kept separate from [`open_workspace_folder`] so the rules below are unit
+/// testable without a `tauri::AppHandle` or a live file manager.
+fn validate_workspace_folder(path: &Path) -> Result<PathBuf, String> {
+    if !path.is_absolute() {
+        return Err("workspace folder must be an absolute path".to_owned());
+    }
+    validate_workspace_folder_prefix(path)?;
+
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("cannot inspect workspace folder: {error}"))?;
+    if metadata.file_type().is_symlink() {
+        return Err("workspace folder must not be a symlink".to_owned());
+    }
+    if !metadata.is_dir() {
+        return Err("workspace folder must be a directory".to_owned());
+    }
+
+    // Deliberately returned as given. `canonicalize` would follow links back
+    // to a target this function just refused to accept, and on Windows it
+    // yields a `\\?\` verbatim path — which the prefix rule above rejects and
+    // which some shells display badly.
+    Ok(path.to_path_buf())
+}
+
+/// Show a workspace **directory** in the platform file manager.
+///
+/// **Directory-only is the security control, not a convenience check.** The
+/// opener's `open_path` hands a *file* to the shell's association handler
+/// (`ShellExecute` on Windows), so a `.exe`, `.lnk`, `.bat` or `.desktop`
+/// reached through this command would be *run*, not revealed. This command
+/// must therefore never accept anything but a directory the caller named
+/// directly: no-follow metadata has to say directory and not symlink, which on
+/// Windows also rules out junctions and mount points — reparse points that
+/// resolve somewhere the caller never named.
+///
+/// The validation and the opener's own path resolution are not atomic. That
+/// TOCTOU window is accepted: swapping the directory for a link to an
+/// executable in between requires write access to the parent of a path the
+/// user picked themselves, and an attacker holding that can already drop
+/// executables the user will open by hand.
+#[tauri::command]
+pub fn open_workspace_folder(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let folder = validate_workspace_folder(Path::new(&path))?;
+
+    app.opener()
+        .open_path(folder.to_string_lossy(), None::<&str>)
+        .map_err(|error| format!("cannot open workspace folder: {error}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1816,6 +2205,34 @@ mod tests {
         assert!(workspace.join("reports").is_dir());
         assert!(workspace.join("output").is_dir());
         assert!(workspace.join("jds").is_dir());
+    }
+
+    #[test]
+    fn missing_root_hook_failure_removes_the_staging_directory() {
+        let parent = TempDir::new("missing-hook-failure");
+        let workspace = parent.path().join("CareerOps");
+        let seed = seed();
+
+        let error = initialize_workspace_from_seed_with_hook(&workspace, seed.path(), |event| {
+            if matches!(event, BootstrapEvent::BeforeMissingRootInstall(_)) {
+                return Err("injected pre-install failure".to_owned());
+            }
+            Ok(())
+        })
+        .expect_err("the hook failure must abort initialization");
+
+        assert!(error.contains("injected pre-install failure"));
+        assert!(!workspace.exists());
+        let remaining = fs::read_dir(parent.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<Vec<_>>();
+        assert!(
+            remaining.iter().all(|name| !name
+                .to_string_lossy()
+                .starts_with(".careerops-workspace-stage-")),
+            "staging entries were left behind: {remaining:?}"
+        );
     }
 
     #[test]
@@ -2546,7 +2963,11 @@ mod tests {
 
         assert_eq!(listed, vec![
             folder.join("cv.pdf").to_string_lossy().into_owned(),
-            folder.join("nested/reference.md").to_string_lossy().into_owned(),
+            folder
+                .join("nested")
+                .join("reference.md")
+                .to_string_lossy()
+                .into_owned(),
             root.path().join("single.txt").to_string_lossy().into_owned(),
         ]);
     }
@@ -2602,5 +3023,115 @@ mod tests {
             .unwrap()
             .file_type()
             .is_symlink());
+    }
+
+    #[test]
+    fn validate_workspace_folder_accepts_an_existing_directory() {
+        let root = tempfile::tempdir().unwrap();
+
+        let actual = validate_workspace_folder(root.path()).unwrap();
+
+        assert_eq!(actual, root.path().to_path_buf());
+    }
+
+    #[test]
+    fn validate_workspace_folder_rejects_a_regular_file() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("cv.md");
+        fs::write(&file, "not a directory\n").unwrap();
+
+        let error = validate_workspace_folder(&file).unwrap_err();
+
+        assert!(error.contains("directory"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn validate_workspace_folder_rejects_a_relative_path() {
+        let error = validate_workspace_folder(Path::new("relative/dir")).unwrap_err();
+
+        assert!(error.contains("absolute"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn validate_workspace_folder_rejects_a_missing_path() {
+        let root = tempfile::tempdir().unwrap();
+
+        let error = validate_workspace_folder(&root.path().join("nope")).unwrap_err();
+
+        assert!(!error.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_directory_symlink() {
+        let root = tempfile::tempdir().unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let link = root.path().join("workspace-link");
+        std::os::unix::fs::symlink(target.path(), &link).unwrap();
+
+        assert!(target.path().is_dir());
+
+        let error = validate_workspace_folder(&link).unwrap_err();
+
+        assert!(error.contains("symlink"), "unexpected error: {error}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_directory_junction() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("real-workspace");
+        fs::create_dir_all(&target).unwrap();
+        let link = root.path().join("workspace-link");
+
+        let status = std::process::Command::new("cmd")
+            .arg("/c")
+            .arg("mklink")
+            .arg("/J")
+            .arg(&link)
+            .arg(&target)
+            .status()
+            .unwrap();
+        assert!(status.success(), "mklink /J failed");
+        assert!(target.is_dir(), "junction target directory must exist");
+
+        let error = validate_workspace_folder(&link).unwrap_err();
+
+        assert!(
+            error.contains("symlink") || error.contains("link"),
+            "unexpected error: {error}",
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_drive_relative_path() {
+        let error = validate_workspace_folder(Path::new(r"D:foo")).unwrap_err();
+
+        assert!(error.contains("absolute"), "unexpected error: {error}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_unc_share() {
+        let error = validate_workspace_folder(Path::new(r"\\server\share\dir")).unwrap_err();
+
+        assert!(error.contains("local drive"), "unexpected error: {error}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_verbatim_path() {
+        let error = validate_workspace_folder(Path::new(r"\\?\C:\Windows")).unwrap_err();
+
+        assert!(error.contains("local drive"), "unexpected error: {error}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_workspace_folder_rejects_a_device_namespace_path() {
+        let error = validate_workspace_folder(Path::new(r"\\.\C:\Windows")).unwrap_err();
+
+        assert!(error.contains("local drive"), "unexpected error: {error}");
     }
 }

@@ -9,6 +9,7 @@ import { defaultUiLanguage, getUiLanguage, loadUiLanguage, saveUiLanguage, setUi
 import type { FilterKey } from './lib/filters';
 import { batchArgs, batchTaskLabel } from './lib/batch';
 import { nextAfterTask } from './lib/batchDriver';
+import { finishedTrackerWriterIds } from './lib/trackerRefresh';
 import { dismiss, getTask, initTaskStore, startTask, useRunningTasks, useTasks } from './lib/taskStore';
 import { initialState, startPolling, stopPolling, downloadAndInstall, type UpdateState } from './lib/updater';
 import Header from './components/Header';
@@ -102,9 +103,12 @@ export default function App() {
     }
   }, []);
 
-  const reload = useCallback(async (path = root) => {
-    if (!path) return null;
-    const r = await listApplications(path);
+  // Callers may pass a workspace path; anything else (a click event handed
+  // straight from an onClick) means the active root.
+  const reload = useCallback(async (path?: unknown) => {
+    const target = typeof path === 'string' && path ? path : root;
+    if (!target) return null;
+    const r = await listApplications(target);
     if (isError(r)) { setError(r.message); return null; }
     setData(r);
     return r;
@@ -207,13 +211,11 @@ export default function App() {
     }
   }, [root]);
 
-  // The chain: when a scan or a batch turn finishes, re-read the inbox and
-  // let batchDriver decide whether another turn starts. Keyed on the joined
-  // ids of finished scan/batch tasks so it runs once per completion.
-  const finishedChainTaskIds = tasks
-    .filter((t) => t.state !== 'running' && (t.taskType === 'scan' || t.taskType === 'batch') && !t.hydrated)
-    .map((t) => t.taskId)
-    .join(',');
+  // When a task that writes the tracker finishes (an evaluation, a scan, a
+  // batch turn), re-read the board even if another screen is open, then let
+  // batchDriver decide whether another batch turn starts. Keyed on the
+  // joined ids of finished tasks so it runs once per completion.
+  const finishedChainTaskIds = finishedTrackerWriterIds(tasks).join(',');
 
   useEffect(() => {
     if (!root) return;
@@ -375,7 +377,16 @@ export default function App() {
   function renderScreen() {
     switch (screen) {
       case 'home':
-        return <Home root={root!} data={data!} onNavigate={navigate} batchStarting={batchStartInFlight} batchRunning={batchRunning} />;
+        return (
+          <Home
+            root={root!}
+            data={data!}
+            onNavigate={navigate}
+            onReload={reload}
+            batchStarting={batchStartInFlight}
+            batchRunning={batchRunning}
+          />
+        );
       case 'pipeline':
         return (
           <Pipeline

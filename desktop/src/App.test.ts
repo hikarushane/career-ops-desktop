@@ -3,6 +3,7 @@ import App from './App';
 import Scanner from './screens/Scanner';
 import Evaluate from './screens/Evaluate';
 import Home from './screens/Home';
+import Header from './components/Header';
 import Interview from './screens/Interview';
 import ProfileSettings from './screens/ProfileSettings';
 import { setUiLanguage } from './lib/i18n';
@@ -215,6 +216,18 @@ function renderAt(screen: string) {
   hooks.beginRender();
   return App() as ElementNode;
 }
+
+describe('reload', () => {
+  it('re-reads the active workspace even when a caller passes something that is not a path', async () => {
+    // Header used to hand reload its click event; the sidecar call then
+    // rejected silently and the board never refreshed.
+    mocks.listApplications.mockResolvedValue({ ok: true, ...data, metrics: { ...data.metrics, Total: 2 } });
+    const header = findByType(renderAt('pipeline'), Header) as unknown as { props: { onReload: (arg?: unknown) => Promise<unknown> } } | null;
+    await header!.props.onReload({ type: 'click', target: {} });
+    expect(mocks.listApplications).toHaveBeenCalledWith('/workspace');
+    expect((hooks.current()[5] as { metrics: { Total: number } }).metrics.Total).toBe(2);
+  });
+});
 
 describe('coming back to a running task', () => {
   it('reopens the running scan when Find matching jobs is visited again', () => {

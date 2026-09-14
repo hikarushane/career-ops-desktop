@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { isError, setStatus, type Application, type ListResult } from '../api';
+import { type ListResult } from '../api';
 import {
   applyFilterAndSort, countForFilter, matchesInboxSearch, TABS,
   type FilterKey, type SortKey, type ViewMode,
 } from '../lib/filters';
-import { isTaskForReport } from '../lib/documentTasks';
 import { t } from '../lib/i18n';
 import { loadReportWidth, saveReportWidth } from '../lib/splitResize';
-import { startTask, useRunningTasks, useTasks } from '../lib/taskStore';
+import { useTasks } from '../lib/taskStore';
+import { useReportActions } from '../lib/useReportActions';
 import AppTable from '../components/AppTable';
 import Drawer from '../components/Drawer';
 import InboxTable from '../components/InboxTable';
@@ -38,12 +38,11 @@ export default function Pipeline({
   const [view, setView] = useState<ViewMode>('grouped');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(initialSelected ?? null);
-  const [pendingRow, setPendingRow] = useState<string | null>(null);
-  const [writeError, setWriteError] = useState<{ stale: boolean; message: string } | null>(null);
   // Report panel width, shared by the drawer and the Flat split; dragged by
   // the user and remembered across visits (lib/splitResize.ts).
   const [reportWidth, setReportWidth] = useState(() => loadReportWidth(window.innerWidth));
-  const running = useRunningTasks();
+  const { pendingRow, writeError, setWriteError, changeStatus, onStartTask, runningTaskFor } =
+    useReportActions(root, onReload);
   const tasks = useTasks();
   const handledTaskIds = useRef<Set<string>>(new Set());
   const splitRef = useRef<HTMLDivElement | null>(null);
@@ -67,43 +66,6 @@ export default function Pipeline({
     out.inbox = inbox.filter((e) => matchesInboxSearch(e, query)).length;
     return out;
   }, [data.applications, inbox, query]);
-
-  const changeStatus = useCallback(
-    async (app: Application, next: string) => {
-      setWriteError(null);
-      setPendingRow(app.reportNumber);
-      try {
-        // expectStatus is the value this UI last read. The sidecar refuses the
-        // write if the file says something else.
-        const r = await setStatus(root, app.reportNumber, app.status, next);
-        if (isError(r)) {
-          setWriteError({ stale: r.error === 'stale', message: r.message });
-          return;
-        }
-        await onReload();
-      } catch (e) {
-        setWriteError({ stale: false, message: String(e) });
-      } finally {
-        setPendingRow(null);
-      }
-    },
-    [root, onReload],
-  );
-
-  const onStartTask = useCallback(
-    async (taskType: 'pdf' | 'cover', args: Record<string, string>, label: string) => {
-      await startTask(taskType, args, root, label);
-    },
-    [root],
-  );
-
-  const runningTaskFor = useCallback(
-    (taskType: 'pdf' | 'cover') => {
-      if (!selectedApp) return null;
-      return running.find((t) => isTaskForReport(t, taskType, selectedApp.reportNumber, selectedApp.company)) ?? null;
-    },
-    [running, selectedApp],
-  );
 
   // Once a pdf/cover task the report pane is watching finishes, reload so
   // pdfPath/coverLetterPath (resolved server-side) come back and the action
@@ -171,7 +133,7 @@ export default function Pipeline({
               root={root}
               app={selectedApp}
               onStartTask={onStartTask}
-              runningTaskFor={runningTaskFor}
+              runningTaskFor={(type) => runningTaskFor(selectedApp, type)}
               onStatusChange={changeStatus}
               pending={selectedApp !== null && pendingRow === selectedApp.reportNumber}
             />
@@ -203,7 +165,7 @@ export default function Pipeline({
                 root={root}
                 app={selectedApp}
                 onStartTask={onStartTask}
-                runningTaskFor={runningTaskFor}
+                runningTaskFor={(type) => runningTaskFor(selectedApp, type)}
                 onStatusChange={changeStatus}
                 pending={pendingRow === selectedApp.reportNumber}
               />

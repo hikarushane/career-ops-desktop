@@ -26,7 +26,16 @@ type UpdaterDependencies = {
 
 type StateListener = (state: UpdateState) => void;
 
+/** One caller waiting on the check in flight, with the trigger it came from. */
+type Waiter = { listener: StateListener; manual: boolean };
+
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
+/**
+ * Upper bound on one update request. The updater plugin sets no timeout of
+ * its own, so a stalled connection would otherwise leave "Checking…" on
+ * screen indefinitely and make every later check join the stuck one.
+ */
+export const CHECK_TIMEOUT_MS = 30_000;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 export function initialState(): UpdateState {
@@ -36,7 +45,7 @@ export function initialState(): UpdateState {
 export function createUpdaterController(dependencies: UpdaterDependencies) {
   let state = initialState();
   let pendingUpdate: Update | null = null;
-  let checkInFlight: Promise<void> | null = null;
+  let checkInFlight: { promise: Promise<void>; waiters: Waiter[] } | null = null;
   let installInFlight: Promise<void> | null = null;
 
   const publish = (listener: StateListener, next: UpdateState) => {
@@ -60,42 +69,50 @@ export function createUpdaterController(dependencies: UpdaterDependencies) {
     deferUpdate: () => state,
 
     checkForUpdate(listener: StateListener, currentVersion: string, manual: boolean): Promise<void> {
-      if (checkInFlight) return checkInFlight;
-
       const knownAvailable = availableState(currentVersion);
       if (manual || !knownAvailable) {
         publish(listener, { status: 'checking', currentVersion });
       }
 
-      checkInFlight = (async () => {
+      // A check already running (the background poll, typically) is shared
+      // rather than duplicated, but every caller still gets the outcome on
+      // its own listener: Settings › About mounts a fresh one, and a Check
+      // Now that joined a poll must not stay blank when the poll settles.
+      if (checkInFlight) {
+        checkInFlight.waiters.push({ listener, manual });
+        return checkInFlight.promise;
+      }
+
+      const waiters: Waiter[] = [{ listener, manual }];
+      const promise = (async () => {
         try {
           const update = await dependencies.check();
-          if (!update) {
-            pendingUpdate = null;
-            publish(listener, { status: 'up_to_date', currentVersion });
-            return;
-          }
-
-          pendingUpdate = update;
-          publish(listener, availableState(currentVersion, update)!);
+          pendingUpdate = update ?? null;
+          const next: UpdateState = update
+            ? availableState(currentVersion, update)!
+            : { status: 'up_to_date', currentVersion };
+          for (const waiter of waiters) publish(waiter.listener, next);
         } catch (error) {
           const preserved = availableState(currentVersion);
-          if (!manual && preserved) {
-            publish(listener, preserved);
-          } else if (manual) {
-            publish(listener, {
-              ...(preserved ?? { currentVersion }),
-              status: 'error',
-              error: String(error),
-            });
-          } else {
-            publish(listener, { status: 'idle', currentVersion });
+          for (const waiter of waiters) {
+            if (waiter.manual) {
+              publish(waiter.listener, {
+                ...(preserved ?? { currentVersion }),
+                status: 'error',
+                error: String(error),
+              });
+            } else if (preserved) {
+              publish(waiter.listener, preserved);
+            } else {
+              publish(waiter.listener, { status: 'idle', currentVersion });
+            }
           }
         } finally {
           checkInFlight = null;
         }
       })();
-      return checkInFlight;
+      checkInFlight = { promise, waiters };
+      return promise;
     },
 
     downloadAndInstall(listener: StateListener, currentVersion: string): Promise<void> {
@@ -122,7 +139,10 @@ export function createUpdaterController(dependencies: UpdaterDependencies) {
   };
 }
 
-const defaultController = createUpdaterController({ check, relaunch });
+const defaultController = createUpdaterController({
+  check: (options) => check({ timeout: CHECK_TIMEOUT_MS, ...options }),
+  relaunch,
+});
 
 export async function checkForUpdate(
   onStateChange: StateListener,

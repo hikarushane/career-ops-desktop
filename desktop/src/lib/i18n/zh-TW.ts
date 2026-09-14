@@ -61,6 +61,7 @@ export const ZH_TW: Record<string, string> = {
   'Running': '執行中',
   'Failed': '失敗',
   '{n} tasks running': '{n} 個任務執行中',
+  'Running tasks': '執行中的任務',
   'Activity': '活動記錄',
   'Provider output (raw)': 'AI 原始輸出',
   'Waiting for the AI provider to start': '等待 AI 啟動',

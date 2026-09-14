@@ -36,7 +36,9 @@ export default function Header({
       <div className="app-header-right">
         <div className="app-header-utilities">
           <TaskChip tasks={tasks} onOpen={onOpenTask} onDismiss={onDismissTask} />
-          <button type="button" className="icon-button" onClick={onReload} title={t('Reload')} aria-label={t('Reload')}>
+          {/* Call with no arguments: App's reload takes an optional path, and a
+              click event in that slot made the sidecar call reject silently. */}
+          <button type="button" className="icon-button" onClick={() => onReload()} title={t('Reload')} aria-label={t('Reload')}>
             <ReloadIcon />
           </button>
           <button type="button" className="icon-button" onClick={onChangeFolder} title={t('Change folder')} aria-label={t('Change folder')}>

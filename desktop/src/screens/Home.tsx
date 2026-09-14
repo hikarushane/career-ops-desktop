@@ -1,22 +1,42 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ListResult } from '../api';
 import { processPendingLabel } from '../lib/batch';
 import { t } from '../lib/i18n';
+import { loadReportWidth, saveReportWidth } from '../lib/splitResize';
+import { useReportActions } from '../lib/useReportActions';
 import { SearchIcon } from '../components/icons';
+import Drawer from '../components/Drawer';
+import ReportPane from '../components/ReportPane';
 
 type Props = {
   root: string;
   data: ListResult;
   onNavigate: (screen: string, params?: Record<string, string>) => void;
+  /** Reloads the workspace data; same reload the Jobs screen uses after a status write. */
+  onReload: () => Promise<unknown>;
   /** A batch start is in flight: the button is disabled to stop a double start. */
   batchStarting?: boolean;
   /** A batch is already running: the button reopens it instead of starting another. */
   batchRunning?: boolean;
 };
 
-export default function Home({ root: _root, data, onNavigate, batchStarting, batchRunning }: Props) {
+export default function Home({ root, data, onNavigate, onReload, batchStarting, batchRunning }: Props) {
   const [url, setUrl] = useState('');
+  // The report number of the recent-activity row opened as a drawer, same
+  // pattern as Pipeline's Kanban view (STITCH-PROMPT.md §6.3) — kept as a
+  // report number, not the row itself, so a reload or status change that
+  // updates data.applications is reflected without extra wiring.
+  const [selected, setSelected] = useState<string | null>(null);
+  const [reportWidth, setReportWidth] = useState(() => loadReportWidth(window.innerWidth));
+  const { pendingRow, onStartTask, runningTaskFor, changeStatus } = useReportActions(root, onReload);
   const m = data.metrics;
+
+  const selectedApp = useMemo(
+    () => data.applications.find((a) => a.reportNumber === selected) ?? null,
+    [data.applications, selected],
+  );
+
+  const persistReportWidth = useCallback(() => saveReportWidth(reportWidth), [reportWidth]);
 
   const evaluate = useCallback(() => {
     if (url.trim()) onNavigate('evaluate', { url: url.trim() });
@@ -77,7 +97,7 @@ export default function Home({ root: _root, data, onNavigate, batchStarting, bat
         <h3>{t('Recent activity')}</h3>
         <div className="recent-list">
           {data.applications.slice(0, 5).map((a) => (
-            <div key={a.number} className="recent-item" onClick={() => onNavigate('pipeline', { selected: a.reportNumber })}>
+            <div key={a.number} className="recent-item" onClick={() => setSelected(a.reportNumber)}>
               <span className="recent-company">{a.company}</span>
               <span className="recent-role">{a.role}</span>
               <span className={`status-dot status-${a.normStatus}`} />
@@ -85,6 +105,25 @@ export default function Home({ root: _root, data, onNavigate, batchStarting, bat
           ))}
         </div>
       </section>
+
+      {/* Opens the same report drawer Jobs' Kanban view uses, without
+          leaving Home — closing it just clears `selected`. */}
+      <Drawer
+        open={selectedApp !== null}
+        onClose={() => setSelected(null)}
+        width={reportWidth}
+        onResize={setReportWidth}
+        onResizeEnd={persistReportWidth}
+      >
+        <ReportPane
+          root={root}
+          app={selectedApp}
+          onStartTask={onStartTask}
+          runningTaskFor={(type) => runningTaskFor(selectedApp, type)}
+          onStatusChange={changeStatus}
+          pending={selectedApp !== null && pendingRow === selectedApp.reportNumber}
+        />
+      </Drawer>
     </div>
   );
 }

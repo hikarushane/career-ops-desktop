@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { open } from '@tauri-apps/plugin-dialog';
-import { openPath } from '@tauri-apps/plugin-opener';
+import { invoke } from '@tauri-apps/api/core';
 import { initializeWorkspace, inspectWorkspace } from '../api';
 import { saveWorkspacePath } from '../lib/workspace';
 import WorkspaceSettings from './WorkspaceSettings';
@@ -30,15 +30,15 @@ vi.mock('react', async (importOriginal) => {
   return { ...actual, useState: hooks.useState };
 });
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
-vi.mock('@tauri-apps/plugin-opener', () => ({ openPath: vi.fn() }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 vi.mock('../api', () => ({ initializeWorkspace: vi.fn(), inspectWorkspace: vi.fn() }));
 vi.mock('../lib/workspace', () => ({
-  openWorkspaceFolder: (path: string) => openPath(path),
+  openWorkspaceFolder: (path: string) => invoke('open_workspace_folder', { path }),
   saveWorkspacePath: vi.fn(),
 }));
 
 const mockedOpen = vi.mocked(open);
-const mockedOpenPath = vi.mocked(openPath);
+const mockedInvoke = vi.mocked(invoke);
 const mockedInitializeWorkspace = vi.mocked(initializeWorkspace);
 const mockedInspectWorkspace = vi.mocked(inspectWorkspace);
 const mockedSaveWorkspacePath = vi.mocked(saveWorkspacePath);
@@ -98,16 +98,16 @@ describe('WorkspaceSettings', () => {
     expect(button(tree, 'Change Location')).toBeDefined();
   });
 
-  it('opens the current workspace folder with the Tauri opener', async () => {
+  it('opens the current workspace folder through the validating Rust command', async () => {
     const tree = renderComponent(() => WorkspaceSettings({ path: currentPath, onWorkspaceChanged: vi.fn() }));
 
     await button(tree, 'Open Folder').props?.onClick?.();
 
-    expect(mockedOpenPath).toHaveBeenCalledWith(currentPath);
+    expect(mockedInvoke).toHaveBeenCalledWith('open_workspace_folder', { path: currentPath });
   });
 
-  it('surfaces an opener scope failure instead of an unhandled rejection', async () => {
-    mockedOpenPath.mockRejectedValue(new Error('ForbiddenPath'));
+  it('surfaces an opener failure instead of an unhandled rejection', async () => {
+    mockedInvoke.mockRejectedValue(new Error('ForbiddenPath'));
     const initial = renderComponent(() => WorkspaceSettings({ path: currentPath, onWorkspaceChanged: vi.fn() }));
 
     await button(initial, 'Open Folder').props?.onClick?.();
