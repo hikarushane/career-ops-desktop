@@ -40,7 +40,7 @@ brew install --cask <owner>/<tap>/career-ops
 
 Download `CareerOps_<version>_Windows.exe` or `CareerOps-Windows-<version>.zip` from [GitHub Releases](https://github.com/hikarushane/career-ops-desktop/releases), then run the NSIS installer.
 
-> **0.5.0 and 0.5.1 ship for macOS only.** The Windows installer follows in a later release: the Windows sidecar and runtime verification already build in CI, but the workspace-initialization tests do not pass on Windows yet (the atomic install renames a directory while a handle is still open). It will be published once that is fixed and hand-tested on Windows.
+> **The Windows installer ships from 0.5.2** (0.5.0 and 0.5.1 were macOS only). It is an NSIS installer without an Authenticode signature yet: on first run SmartScreen shows "Windows protected your PC" — choose *More info* → *Run anyway*. Some antivirus products flag unsigned installers (Avira is a known case); add an exclusion or report a false positive.
 
 > Until signed public releases are available, macOS or Windows may show the operating system's standard warning for unsigned applications.
 
