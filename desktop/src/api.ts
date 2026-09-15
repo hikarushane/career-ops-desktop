@@ -128,16 +128,8 @@ export type ProviderEntry = {
   version?: string;
   path?: string;
   error?: string;
-  installCmd?: string;
   website?: string;
   authHint?: string;
-};
-
-export type InstallResult = {
-  ok: boolean;
-  id: string;
-  output?: string;
-  error?: string;
 };
 
 export type ProvidersResult = {
@@ -417,8 +409,15 @@ export function providers() {
   return invokeSidecar<ProvidersResult | SidecarError>('providers');
 }
 
-export function installProvider(id: string) {
-  return invokeSidecar<InstallResult | SidecarError>('install_provider', { id });
+/**
+ * Opens a visible terminal running the provider's official installer followed
+ * by its login command, and resolves with the command line that was launched
+ * (the UI shows it, so the user can copy it if the terminal never appeared).
+ * Not a sidecar call: the command table lives in Rust, and `id` is only a
+ * lookup key there — never interpolated into anything executed.
+ */
+export function openProviderInstaller(id: string): Promise<string> {
+  return invoke<string>('open_provider_installer', { id });
 }
 
 export function doctor(root: string) {

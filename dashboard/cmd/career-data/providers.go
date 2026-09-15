@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -28,7 +27,6 @@ type ProviderEntry struct {
 	Version     string        `json:"version,omitempty"`
 	Path        string        `json:"path,omitempty"`
 	Error       string        `json:"error,omitempty"`
-	InstallCmd  string        `json:"installCmd,omitempty"`
 	Website     string        `json:"website,omitempty"`
 	AuthHint    string        `json:"authHint,omitempty"`
 }
@@ -38,28 +36,29 @@ type ProvidersResult struct {
 	Providers []ProviderEntry `json:"providers"`
 }
 
+// providerSpec carries detection data only. Installation is not a sidecar
+// concern: the desktop app opens a visible terminal running the vendor's
+// official installer (desktop/src-tauri/src/provider_install.rs owns that
+// table), so there is deliberately no install command here to drift from it.
 type providerSpec struct {
 	id          string
 	displayName string
 	binary      string
 	headlessCmd string
 	versionArgs []string
-	installCmd  string
 	website     string
 	authHint    string
 }
 
 var knownProviders = []providerSpec{
 	{"claude", "Claude Code", "claude", "claude -p", []string{"--version"},
-		"npm install -g @anthropic-ai/claude-code",
 		"https://docs.anthropic.com/en/docs/claude-code/getting-started",
-		"Open Terminal and run: claude login"},
+		"Open Terminal and run: claude auth login"},
 	{"codex", "Codex", "codex", "codex exec", []string{"--version"},
-		"npm install -g @openai/codex",
 		"https://github.com/openai/codex",
-		"Open Terminal and run: codex"},
+		"Open Terminal and run: codex login"},
 	{"agy", "Antigravity CLI", "agy", "agy -p", []string{"--version"},
-		"", "https://agentskills.io",
+		"https://agentskills.io",
 		"Open Terminal and run: agy"},
 }
 
@@ -110,7 +109,6 @@ func detectProvider(spec providerSpec) ProviderEntry {
 		DisplayName: spec.displayName,
 		Binary:      spec.binary,
 		HeadlessCmd: spec.headlessCmd,
-		InstallCmd:  spec.installCmd,
 		Website:     spec.website,
 		AuthHint:    spec.authHint,
 	}
@@ -142,57 +140,4 @@ func detectProvider(spec providerSpec) ProviderEntry {
 		e.State = StateInstalled
 	}
 	return e
-}
-
-type InstallResult struct {
-	OK      bool   `json:"ok"`
-	ID      string `json:"id"`
-	Output  string `json:"output,omitempty"`
-	Error   string `json:"error,omitempty"`
-}
-
-func userShell() string {
-	if sh := os.Getenv("SHELL"); sh != "" {
-		return sh
-	}
-	if runtime.GOOS == "windows" {
-		return "cmd"
-	}
-	return "/bin/sh"
-}
-
-func installProvider(id string) InstallResult {
-	augmentUserPATH()
-
-	var spec *providerSpec
-	for i := range knownProviders {
-		if knownProviders[i].id == id {
-			spec = &knownProviders[i]
-			break
-		}
-	}
-	if spec == nil {
-		return InstallResult{OK: false, ID: id, Error: "unknown provider: " + id}
-	}
-	if spec.installCmd == "" {
-		return InstallResult{OK: false, ID: id, Error: "no install command available; visit " + spec.website}
-	}
-
-	sh := userShell()
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, sh, "-l", "-c", spec.installCmd)
-	cmd.Env = append(os.Environ(), "NONINTERACTIVE=1")
-	out, err := cmd.CombinedOutput()
-	output := strings.TrimSpace(string(out))
-
-	if err != nil {
-		msg := err.Error()
-		if output != "" {
-			msg = output
-		}
-		return InstallResult{OK: false, ID: id, Output: output, Error: msg}
-	}
-	return InstallResult{OK: true, ID: id, Output: output}
 }

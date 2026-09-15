@@ -1,30 +1,66 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { ProviderEntry } from '../api';
-import { detectProviders, getReadyProviders, setPreferredId, installProviderById } from '../lib/providers';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { openProviderInstaller, type ProviderEntry } from '../api';
+import { detectProviders, getReadyProviders, setPreferredId } from '../lib/providers';
 import { CheckIcon } from '../components/icons';
 import { t } from '../lib/i18n';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 type Props = { onComplete: () => void };
 
-type InstallState = { id: string; phase: 'installing' | 'done' | 'error'; message?: string };
+/**
+ * `launching` covers only the moment between the click and the terminal
+ * appearing. The install itself happens in that terminal, where the user can
+ * read it — the app never claims to know whether it succeeded, it just keeps
+ * re-detecting until the provider reports ready.
+ */
+type InstallState = { id: string; phase: 'launching' | 'launched' | 'error'; command?: string; message?: string };
+
+const POLL_INTERVAL_MS = 5_000;
+const POLL_TIMEOUT_MS = 10 * 60 * 1_000;
 
 export default function AiSetup({ onComplete }: Props) {
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [install, setInstall] = useState<InstallState | null>(null);
+  const poll = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (poll.current !== null) {
+      clearInterval(poll.current);
+      poll.current = null;
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
+    stopPolling();
     setLoading(true);
     const ps = await detectProviders();
     setProviders(ps);
     setLoading(false);
     const ready = ps.filter((p) => p.state === 'ready');
     if (ready.length > 0 && !selected) setSelected(ready[0].id);
-  }, [selected]);
+  }, [selected, stopPolling]);
 
   useEffect(() => { refresh(); }, []);
+  useEffect(() => stopPolling, [stopPolling]);
+
+  /**
+   * The installer runs outside the app, so the card can only turn Ready by
+   * re-detecting. Polling stops as soon as it does, and gives up after
+   * POLL_TIMEOUT_MS rather than re-detecting forever behind an abandoned
+   * terminal window.
+   */
+  const startPolling = useCallback((id: string) => {
+    stopPolling();
+    const startedAt = Date.now();
+    poll.current = setInterval(async () => {
+      const ps = await detectProviders();
+      setProviders(ps);
+      const entry = ps.find((p) => p.id === id);
+      if (entry?.state === 'ready' || Date.now() - startedAt >= POLL_TIMEOUT_MS) stopPolling();
+    }, POLL_INTERVAL_MS);
+  }, [stopPolling]);
 
   const confirm = useCallback(async () => {
     if (selected) {
@@ -34,19 +70,16 @@ export default function AiSetup({ onComplete }: Props) {
   }, [selected, onComplete]);
 
   const handleInstall = useCallback(async (provider: ProviderEntry) => {
-    if (!provider.installCmd) {
-      if (provider.website) openUrl(provider.website);
-      return;
+    setInstall({ id: provider.id, phase: 'launching' });
+    try {
+      const command = await openProviderInstaller(provider.id);
+      setInstall({ id: provider.id, phase: 'launched', command });
+      startPolling(provider.id);
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : String(reason);
+      setInstall({ id: provider.id, phase: 'error', message: message || t('Install failed.') });
     }
-    setInstall({ id: provider.id, phase: 'installing' });
-    const result = await installProviderById(provider.id);
-    if (result.ok) {
-      setInstall({ id: provider.id, phase: 'done', message: t('Installed successfully.') });
-      await refresh();
-    } else {
-      setInstall({ id: provider.id, phase: 'error', message: result.error ?? t('Install failed.') });
-    }
-  }, [refresh]);
+  }, [startPolling]);
 
   const ready = getReadyProviders();
 
@@ -75,23 +108,19 @@ export default function AiSetup({ onComplete }: Props) {
                 {p.state === 'installed' && t('Installed — needs auth')}
                 {p.state === 'error' && t('Error: {message}', { message: p.error ?? '' })}
                 {p.state === 'not_installed' && (
-                  install?.id === p.id && install.phase === 'installing'
-                    ? <span className="animated-dots">{t('Installing')}</span>
+                  install?.id === p.id && install.phase === 'launching'
+                    ? <span className="animated-dots">{t('Opening terminal')}</span>
                     : null
                 )}
               </span>
             </div>
             <div className="provider-actions">
               {p.state === 'not_installed' && (
-                install?.id === p.id && install.phase === 'installing' ? (
+                install?.id === p.id && install.phase === 'launching' ? (
                   <span className="provider-spinner" />
                 ) : (
-                  <button
-                    className="btn-install"
-                    onClick={() => handleInstall(p)}
-                    title={p.installCmd ?? t('Open website')}
-                  >
-                    {p.installCmd ? t('Install') : t('Get it')}
+                  <button className="btn-install" onClick={() => handleInstall(p)}>
+                    {t('Install')}
                   </button>
                 )
               )}
@@ -112,20 +141,16 @@ export default function AiSetup({ onComplete }: Props) {
         </p>
       )}
 
-      {install?.phase === 'done' && (
+      {install?.phase === 'launched' && (
         <p className="setup-hint" role="status">
-          {install.message}
+          {t('Installer opened in a terminal window. Finish the install and sign-in there, then come back.')}
           {' '}
-          {providers.find((p) => p.id === install.id)?.authHint && (
-            <strong>{providers.find((p) => p.id === install.id)!.authHint}</strong>
-          )}
+          <code className="install-command">{install.command}</code>
         </p>
       )}
 
       {ready.length === 0 && !install && (
         <p className="setup-hint">
-          {t('Most providers install with a single command.')}
-          {' '}
           {t('If you already have Claude Code or Codex installed, click Refresh below.')}
         </p>
       )}
