@@ -1,3 +1,4 @@
+mod provider_install;
 mod runner;
 mod sidecar;
 mod task_events;
@@ -47,6 +48,7 @@ pub fn run() {
             sidecar::resolve_job_language,
             sidecar::fetch_posting,
             sidecar::models,
+            provider_install::open_provider_installer,
             runner::run_task,
             runner::cancel_task,
             runner::list_tasks,
