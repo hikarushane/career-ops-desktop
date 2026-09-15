@@ -74,6 +74,10 @@ vi.mock('./ProfileGeneration', () => {
   function ProfileGeneration(props: Record<string, unknown>) { return { type: 'ProfileGeneration', props }; }
   return { default: ProfileGeneration };
 });
+vi.mock('./BackgroundImport', () => {
+  function BackgroundImport(props: Record<string, unknown>) { return { type: 'BackgroundImport', props }; }
+  return { default: BackgroundImport };
+});
 const preferencesLib = vi.hoisted(() => ({
   EMPTY_PREFERENCES: { regions: '', keywords: '', industries: '', salary: '', relocation: 'maybe', preferredCities: '', notes: '' },
   loadPreferences: vi.fn(async () => ({})),
@@ -187,7 +191,7 @@ const CATALOG = [
 describe('ProfileSettings AI tab', () => {
   it('disables fast mode for non-opus models and lists only available models', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
-      CATALOG, 'ready', false, true, null, false]);
+      CATALOG, 'ready', false, true, null, 'idle']);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const toggle = findByRole(tree, 'switch');
@@ -199,7 +203,7 @@ describe('ProfileSettings AI tab', () => {
 
   it('enables fast mode for an opus model', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'opus', 'medium', false, { status: 'idle' },
-      CATALOG, 'ready', false, true, null, false]);
+      CATALOG, 'ready', false, true, null, 'idle']);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const toggle = findByRole(tree, 'switch');
@@ -208,7 +212,7 @@ describe('ProfileSettings AI tab', () => {
 
   it('shows a degraded-probe hint when the catalog could not be verified', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
-      CATALOG, 'error', false, true, null, false]);
+      CATALOG, 'error', false, true, null, 'idle']);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     expect(textContent(tree)).toMatch(/Could not verify models; showing defaults\./);
@@ -222,7 +226,7 @@ describe('ProfileSettings AI tab', () => {
   // never calls setCustomModel(false)).
   it('keeps an explicit Custom selection when the model is already in the catalog', () => {
     hooks.reset(['ai', [CLAUDE_PROVIDER], 'claude', 'haiku', 'medium', false, { status: 'idle' },
-      CATALOG, 'ready', true, true, null, false]);
+      CATALOG, 'ready', true, true, null, 'idle']);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const select = findSelect(tree, 'ai-model');
@@ -233,24 +237,44 @@ describe('ProfileSettings AI tab', () => {
 });
 
 describe('ProfileSettings background tab', () => {
-  it('shows Regenerate profile button that switches to ProfileGeneration', () => {
-    hooks.reset(['background', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, false]);
+  it('shows Regenerate profile button that opens the background import first, then ProfileGeneration', () => {
+    hooks.reset(['background', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, 'idle']);
     hooks.beginRender();
     const tree = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
     const btn = findButton(tree, 'Regenerate profile');
     expect(btn).toBeDefined();
+    expect(findByType(tree, 'BackgroundImport')).toBeUndefined();
 
     btn?.props?.onClick?.();
 
+    // Someone who skipped the onboarding import has an empty documents/ folder;
+    // the same dropzone must be offered here before anything is generated.
     hooks.beginRender();
-    const updated = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
-    expect(findButton(updated, 'Regenerate profile')).toBeUndefined();
-    expect(findByType(updated, 'ProfileGeneration')).toBeDefined();
+    const importing = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    expect(findButton(importing, 'Regenerate profile')).toBeUndefined();
+    const importScreen = findByType(importing, 'BackgroundImport');
+    expect(importScreen).toBeDefined();
+    expect(importScreen?.props).toMatchObject({ root: '/w', initialStaged: [] });
+    expect(findByType(importing, 'ProfileGeneration')).toBeUndefined();
+
+    (importScreen?.props as { onComplete: (result: unknown) => void }).onComplete({ staged: [] });
+
+    hooks.beginRender();
+    const generating = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    expect(findByType(generating, 'BackgroundImport')).toBeUndefined();
+    const generation = findByType(generating, 'ProfileGeneration');
+    expect(generation).toBeDefined();
+
+    (generation?.props as { onSkip: () => void }).onSkip();
+
+    hooks.beginRender();
+    const back = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
+    expect(findButton(back, 'Regenerate profile')).toBeDefined();
   });
 
   it('surfaces an opener scope failure when opening raw files fails', async () => {
     workspaceLib.openWorkspaceFolder.mockRejectedValue(new Error('ForbiddenPath'));
-    hooks.reset(['background', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, false]);
+    hooks.reset(['background', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, 'idle']);
     hooks.beginRender();
     const initial = ProfileSettings({ root: '/w', onWorkspaceChanged: vi.fn() }) as ElementNode;
 
@@ -263,7 +287,7 @@ describe('ProfileSettings background tab', () => {
 });
 
 describe('ProfileSettings language tab', () => {
-  const base = ['language', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, false];
+  const base = ['language', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, 'idle'];
 
   it('is a wordless globe tab between AI and About that switches the interface language', () => {
     const onUiLanguageChange = vi.fn();
@@ -282,7 +306,7 @@ describe('ProfileSettings language tab', () => {
 
 describe('ProfileSettings job search tab', () => {
   const prefs = { ...preferencesLib.EMPTY_PREFERENCES, regions: 'Netherlands' };
-  const base = ['preferences', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, false];
+  const base = ['preferences', [], null, '', 'medium', false, { status: 'idle' }, [], 'ready', false, true, null, 'idle'];
 
   function findButtonByText(node: unknown, label: string): ElementNode | undefined {
     if (Array.isArray(node)) {

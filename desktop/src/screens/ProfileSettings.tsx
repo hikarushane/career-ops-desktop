@@ -12,6 +12,7 @@ import { checkForUpdate, type UpdateState, initialState } from '../lib/updater';
 import { openWorkspaceFolder } from '../lib/workspace';
 import AnalysisLanguageField from '../components/AnalysisLanguageField';
 import WorkspaceSettings from './WorkspaceSettings';
+import BackgroundImport from './BackgroundImport';
 import ProfileGeneration from './ProfileGeneration';
 import JobPreferences from './JobPreferences';
 import { EMPTY_PREFERENCES, loadPreferences, savePreferences, type JobPreferences as Preferences } from '../lib/jobPreferences';
@@ -42,7 +43,10 @@ export default function ProfileSettings({ root, onWorkspaceChanged, uiLanguage =
   const [customModel, setCustomModel] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [rawFilesError, setRawFilesError] = useState<string | null>(null);
-  const [regenerating, setRegenerating] = useState(false);
+  // My Background tab: Regenerate profile first shows the same import screen
+  // as onboarding (so someone who skipped it there can still add documents),
+  // then the generation preview. Same useState index as the old boolean.
+  const [regenerating, setRegenerating] = useState<'idle' | 'import' | 'generate'>('idle');
   // Job Search tab: the remembered answers, and whether the AI is rewriting
   // the targeting files from them. Declared last so the positional useState
   // mocks in ProfileSettings.test.ts keep their existing indices.
@@ -161,7 +165,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged, uiLanguage =
       </nav>
 
       <div className="profile-content">
-        {tab === 'background' && !regenerating && (
+        {tab === 'background' && regenerating === 'idle' && (
           <div>
             <h2>{t('My Background')}</h2>
             <p>{t('Your career profile is stored in')} <code>cv.md</code> {t('and')} <code>config/profile.yml</code>.</p>
@@ -169,7 +173,7 @@ export default function ProfileSettings({ root, onWorkspaceChanged, uiLanguage =
               {t('Edit your profile through the AI assistant, or open the raw files for advanced editing.')}
             </p>
             <div className="setup-actions">
-              <button className="btn-primary" onClick={() => setRegenerating(true)}>
+              <button className="btn-primary" onClick={() => setRegenerating('import')}>
                 {t('Regenerate profile')}
               </button>
               <button className="btn-secondary" onClick={openRawFiles}>
@@ -179,12 +183,19 @@ export default function ProfileSettings({ root, onWorkspaceChanged, uiLanguage =
             {rawFilesError && <p className="intake-error" role="alert">{rawFilesError}</p>}
           </div>
         )}
-        {tab === 'background' && regenerating && (
+        {tab === 'background' && regenerating === 'import' && (
+          <BackgroundImport
+            root={root}
+            initialStaged={[]}
+            onComplete={() => setRegenerating('generate')}
+          />
+        )}
+        {tab === 'background' && regenerating === 'generate' && (
           <ProfileGeneration
             root={root}
             preferences={EMPTY_PREFERENCES}
-            onComplete={() => setRegenerating(false)}
-            onSkip={() => setRegenerating(false)}
+            onComplete={() => setRegenerating('idle')}
+            onSkip={() => setRegenerating('idle')}
           />
         )}
 
