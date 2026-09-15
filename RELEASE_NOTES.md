@@ -5,6 +5,9 @@
 Released 2026-09-14.
 
 - **First Windows installer.** `CareerOps_0.5.2_Windows.exe` (NSIS, x64); the in-app updater downloads that same installer and checks it against `CareerOps_0.5.2_Windows.exe.sig`. The installer and the executables it installs are code-signed: free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org) (the publisher shown by Windows is "SignPath Foundation"). SmartScreen may still show "Windows protected your PC" until the publisher earns reputation: choose *More info* → *Run anyway*. The code signing policy is in the README.
+- Set up AI › **Install** opens a visible terminal window that runs the provider's official install script and then its sign-in command (`claude auth login`, `codex login`, `agy`); the card turns Ready on its own once the CLI is detected, and shows the exact command line as a copyable fallback.
+- Settings › My Background › **Regenerate profile** now shows the same document import step as onboarding before generating, so documents can be added after skipping it during setup.
+- The hidden `npm install -g` provider install path in the sidecar is gone; installs only ever happen in a terminal the user can read.
 - Creating a workspace at the default path on Windows no longer fails with os error 32 and no longer leaves a `.careerops-workspace-stage-*` folder behind: the staged copy releases its directory handles before the atomic install and verifies the installed directory's identity afterwards.
 - AI tasks on Windows no longer flash an empty console window; Cancel now terminates the whole task process tree (`taskkill /T`) instead of calling a `kill` that does not exist there.
 - Settings › Workspace *Open Folder* and Settings › My Background *Open raw files* work for a workspace on any local drive (the opener scope was limited to the home directory).
