@@ -1,4 +1,4 @@
-import { providers, installProvider as apiInstall, isError, type ProviderEntry, type InstallResult } from '../api';
+import { providers, isError, type ProviderEntry } from '../api';
 import { load } from '@tauri-apps/plugin-store';
 
 const STORE_KEY = 'preferred-provider';
@@ -99,12 +99,4 @@ export async function getFastMode(): Promise<boolean> {
 
 export async function setFastMode(on: boolean): Promise<void> {
   await setPerProviderSetting(FAST_KEY, on);
-}
-
-export async function installProviderById(id: string): Promise<InstallResult> {
-  const result = await apiInstall(id);
-  if (isError(result)) {
-    return { ok: false, id, error: result.message };
-  }
-  return result;
 }

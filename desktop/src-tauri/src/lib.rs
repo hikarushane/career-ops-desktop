@@ -38,7 +38,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             sidecar::contracts,
             sidecar::providers,
-            sidecar::install_provider,
             sidecar::doctor,
             sidecar::list_applications,
             sidecar::read_report,

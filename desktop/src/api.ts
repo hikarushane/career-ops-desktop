@@ -128,16 +128,8 @@ export type ProviderEntry = {
   version?: string;
   path?: string;
   error?: string;
-  installCmd?: string;
   website?: string;
   authHint?: string;
-};
-
-export type InstallResult = {
-  ok: boolean;
-  id: string;
-  output?: string;
-  error?: string;
 };
 
 export type ProvidersResult = {
@@ -415,10 +407,6 @@ export function contracts() {
 
 export function providers() {
   return invokeSidecar<ProvidersResult | SidecarError>('providers');
-}
-
-export function installProvider(id: string) {
-  return invokeSidecar<InstallResult | SidecarError>('install_provider', { id });
 }
 
 export function doctor(root: string) {
